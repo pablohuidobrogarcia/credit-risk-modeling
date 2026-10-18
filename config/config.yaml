@@ -1,0 +1,31 @@
+seed: 42
+
+data:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  accepted_csv: data/raw/accepted_2007_to_2018Q4.csv
+  rejected_csv: data/raw/rejected_2007_to_2018Q4.csv
+  accepted_parquet: data/processed/accepted.parquet
+  modeling_parquet: data/processed/modeling_sample.parquet
+  sample_size: 500000
+  resolved_statuses:
+    - Fully Paid
+    - Charged Off
+    - Default
+  default_statuses:
+    - Charged Off
+    - Default
+
+modeling:
+  oot_split_year: 2017
+  train_years: [2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016]
+  test_years: [2017, 2018]
+
+simulation:
+  n_simulations: 100000
+  asset_correlation: 0.12
+  pd_shocks:
+    - 0.30
+    - 0.50
+  lgd_shocks:
+    - 0.10

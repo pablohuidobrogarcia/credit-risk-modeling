@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# Data (never commit raw or processed data)
+# ---------------------------------------------------------------------------
+data/
+
+# Archives / downloads
+*.zip
+*.gz
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.venv*/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.coverage.*
+.coverage.*
+.coverage
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+.ruff_cache
+.ruff_cache/*
+.ruff_cache/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.pem
+*.key
+.secrets/

@@ -1,0 +1,13 @@
+# Normalise line endings in the repository to LF.
+* text=auto eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.pdf binary
+*.parquet binary
+*.gz binary
+*.zip binary
+
+# Keep notebooks and generated reports diff-friendly
+*.ipynb text eol=lf

@@ -1,0 +1,13 @@
+{
+  "n_rows": 500000,
+  "n_columns": 62,
+  "n_defaults": 99948,
+  "default_rate": 0.1999,
+  "origination_years": [
+    2007,
+    2018
+  ],
+  "features_used": 30,
+  "numeric_features": 22,
+  "categorical_features": 8
+}

@@ -1,0 +1,657 @@
+"""End-to-end pipeline: data -> quality -> EDA -> PD -> LGD/EAD -> clustering -> simulation.
+
+Usage
+-----
+    python -m src.pipeline all
+    python -m src.pipeline data quality sql eda pd
+
+Every stage writes small artifacts (CSV/JSON) under ``reports/results`` and
+figures under ``reports/figures``. The final ``reports/results/summary.json``
+collects every headline number quoted in the README and the model validation
+report, so those documents never state an un-computed figure.
+"""
+from __future__ import annotations
+
+import argparse
+import time
+from typing import Any, Dict, List, Optional, Tuple
+
+import duckdb
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.metrics import roc_curve
+
+from . import (
+    clustering,
+    data_prep,
+    features,
+    interpret,
+    lgd_ead,
+    pd_model,
+    quality,
+    scorecard,
+    selection,
+    sql_runner,
+    timeseries,
+    validation,
+)
+from . import metrics as M
+from . import simulation as sim
+from .config import Config
+from .utils import ensure_dirs, save_fig, save_json, save_table, set_seeds
+from .woe_iv import fit_encoders, iv_summary, transform_frame
+
+STAGES = ["data", "quality", "sql", "eda", "pd", "lgd", "clustering", "simulation"]
+
+# Borrower / bureau variables used for the behavioural segmentation. They are
+# all known at origination, so a segment can be assigned to a new applicant.
+CLUSTER_FEATURES: List[str] = [
+    "loan_amnt",
+    "annual_inc",
+    "dti",
+    "revol_util",
+    "open_acc",
+    "total_acc",
+    "credit_history_months",
+    "installment_to_income",
+    "loan_amnt_to_income",
+    "tot_cur_bal",
+    "revol_bal",
+    "total_rev_hi_lim",
+]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def _jsonable(obj: Any) -> Any:
+    """Recursively replace NaN/inf and numpy scalars so JSON is always valid."""
+    if isinstance(obj, dict):
+        return {str(k): _jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_jsonable(v) for v in obj]
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating, float)):
+        value = float(obj)
+        return value if np.isfinite(value) else None
+    if isinstance(obj, (np.bool_, bool)):
+        return bool(obj)
+    if isinstance(obj, np.ndarray):
+        return _jsonable(obj.tolist())
+    if isinstance(obj, pd.DataFrame):
+        return _records(obj)
+    if isinstance(obj, pd.Series):
+        return _jsonable(obj.tolist())
+    return obj
+
+
+def _records(df: pd.DataFrame, ndigits: int = 4) -> List[Dict[str, Any]]:
+    """DataFrame -> list of JSON-safe records (NaN becomes null)."""
+    if df is None or df.empty:
+        return []
+    return _jsonable(df.round(ndigits).to_dict(orient="records"))
+
+
+def load_modeling_frame(cfg: Config) -> pd.DataFrame:
+    """Load the stratified modeling sample and engineer origination-time features."""
+    parquet = cfg.path("modeling_parquet")
+    if not parquet.exists():
+        data_prep.build_modeling_sample(force=False)
+    con = duckdb.connect()
+    con.execute("SET threads TO 4")
+    df = con.execute(f"SELECT * FROM '{parquet.as_posix()}'").df()
+    con.close()
+    return features.engineer_features(df)
+
+
+def train_oot_split(df: pd.DataFrame, cfg: Config) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Chronological split: fit on early vintages, validate on later ones."""
+    split_year = int(cfg.modeling.get("oot_split_year", 2017))
+    train = df[df["issue_year"] < split_year].copy()
+    oot = df[df["issue_year"] >= split_year].copy()
+    return train, oot
+
+
+# ---------------------------------------------------------------------------
+# Stage 1: data and quality
+# ---------------------------------------------------------------------------
+def stage_data() -> None:
+    """Build the parquet extract and the stratified modeling sample."""
+    print("[data] building parquet extract and modeling sample ...")
+    data_prep.build_accepted_parquet(force=False)
+    data_prep.build_modeling_sample(force=False)
+
+
+def stage_quality(df: pd.DataFrame) -> Dict[str, Any]:
+    """Missingness, outlier and leakage-control reports."""
+    print("[quality] data-quality and leakage reports ...")
+    quality.build_reports(df)
+    return quality.quality_summary(df)
+
+
+def stage_sql() -> Dict[str, pd.DataFrame]:
+    """Execute the documented HiveQL-style query suite with DuckDB."""
+    print("[sql] executing the documented HiveQL-style queries ...")
+    return sql_runner.run_all_sql()
+
+
+# ---------------------------------------------------------------------------
+# Stage 2: EDA and time-series modelling
+# ---------------------------------------------------------------------------
+def stage_eda(df: pd.DataFrame) -> Dict[str, Any]:
+    """Vintage analysis, decomposition and SARIMAX forecast."""
+    print("[eda] vintage analysis and SARIMAX forecast ...")
+    save_table(timeseries.vintage_table(df), "vintage_table.csv")
+    out = timeseries.run_timeseries(df)
+    metrics = _jsonable(out["metrics"])
+    lb = out["ljung_box"].reset_index()
+    return {
+        "n_months": int(len(out["series"])),
+        "series_first": str(out["series"].index.min().date()),
+        "series_last": str(out["series"].index.max().date()),
+        "mean_default_rate": round(float(out["series"].mean()), 4),
+        "min_default_rate": round(float(out["series"].min()), 4),
+        "max_default_rate": round(float(out["series"].max()), 4),
+        "stationarity": _records(out["stationarity"]),
+        "sarimax": metrics,
+        "ljung_box": _records(lb),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stage 2b: PD scorecard and challengers
+# ---------------------------------------------------------------------------
+def _ks_optimal_cutoff(y: pd.Series, p: np.ndarray) -> float:
+    """Threshold maximising the KS statistic (selected on the training sample)."""
+    fpr, tpr, thr = roc_curve(np.asarray(y), np.asarray(p))
+    best = int(np.argmax(tpr - fpr))
+    return float(thr[min(best, len(thr) - 1)])
+
+
+def _score_histogram(score_train: np.ndarray, score_oot: np.ndarray, name: str = "scorecard_distribution.png") -> None:
+    """Points-score distribution on the train window vs out of time."""
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.hist(score_train, bins=60, alpha=0.55, label="Train score", color="steelblue", density=True)
+    ax.hist(score_oot, bins=60, alpha=0.55, label="Out-of-time score", color="orange", density=True)
+    ax.set_xlabel("Scorecard points (higher = lower risk)")
+    ax.set_ylabel("Density")
+    ax.set_title("Scorecard distribution: training vs out-of-time")
+    ax.legend()
+    save_fig(fig, name)
+
+
+def _fit_all_pd_models(
+    train: pd.DataFrame,
+    X: pd.DataFrame,
+    y: pd.Series,
+    num_feats: List[str],
+    cat_feats: List[str],
+    encoders: Dict[str, Any],
+    cfg: Config,
+) -> Tuple[List[pd_model.FittedModel], pd.DataFrame]:
+    """Fit the scorecard logit/probit, the regularised logits and the tree challengers."""
+    models: List[pd_model.FittedModel] = []
+
+    logit, coef_table = pd_model.fit_statsmodels_woe("logit", "logit", X, y, encoders)
+    save_table(coef_table, "pd_logit_coefficients.csv")
+    models.append(logit)
+    print(f"    logit    pseudo-R2={logit.params['pseudo_r2']:.4f}")
+
+    probit, coef_probit = pd_model.fit_statsmodels_woe("probit", "probit", X, y, encoders)
+    save_table(coef_probit, "pd_probit_coefficients.csv")
+    models.append(probit)
+    print(f"    probit   pseudo-R2={probit.params['pseudo_r2']:.4f}")
+
+    for penalty in ("l2", "l1"):
+        reg, coef_reg, grid = pd_model.fit_regularised_logit(
+            X, y, encoders, penalty=penalty, seed=cfg.seed, cv_sample_size=150_000
+        )
+        save_table(coef_reg, f"pd_logit_{penalty}_coefficients.csv")
+        save_table(grid, f"pd_logit_{penalty}_cv_grid.csv")
+        models.append(reg)
+        print(f"    logit_{penalty}: C={reg.params['C']:.4g}  cv_auc={reg.cv_auc:.4f}")
+
+    cv_sub = train.sample(n=min(100_000, len(train)), random_state=cfg.seed)
+    for name in ("decision_tree", "random_forest", "lightgbm"):
+        columns = num_feats + cat_feats
+        cv_auc, cv_std = pd_model.cross_validate_pipeline(
+            pd_model.make_tree_pipeline(name, num_feats, cat_feats, cfg.seed),
+            cv_sub[columns],
+            cv_sub["default_flag"],
+            seed=cfg.seed,
+        )
+        model = pd_model.fit_tree_model(
+            name, X[columns], y, num_feats, cat_feats, cfg.seed, run_cv=False
+        )
+        model.cv_auc, model.cv_auc_std = cv_auc, cv_std
+        models.append(model)
+        print(f"    {name}: cv_auc={cv_auc:.4f}")
+    return models, coef_table
+
+
+def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
+    """WoE binning, variable selection, PD models and out-of-time validation."""
+    print("[pd] binning, variable selection, PD models and OOT validation ...")
+    train, oot = train_oot_split(df, cfg)
+
+    X_all, y_all, num_all, cat_all = features.build_model_matrix(train)
+    X_oot_all, y_oot, _, _ = features.build_model_matrix(oot)
+
+    # Winsorisation bounds learned on the training window only (no leakage).
+    bounds = features.fit_clip_bounds(X_all, num_all)
+    X_all = features.apply_clip_bounds(X_all, bounds)
+    X_oot_all = features.apply_clip_bounds(X_oot_all, bounds)
+
+    encoders = fit_encoders(X_all, y_all, num_all, cat_all, n_bins=20, min_bin_pct=0.05, max_bins=8)
+    W = transform_frame(X_all, encoders)
+    iv_tab = iv_summary(encoders)
+    save_table(iv_tab, "pd_iv_summary.csv")
+
+    sel = selection.select_variables(encoders, W, iv_min=0.02, corr_max=0.7, vif_max=5.0)
+    selected = list(sel["selected"])
+    save_table(sel["iv_table"], "pd_variable_selection.csv")
+    save_table(sel["correlation_dropped"], "pd_correlation_dropped.csv")
+    save_table(sel["vif_final"], "pd_vif_final.csv")
+    save_json({"selected": selected, "iv_pass": sel["iv_pass"]}, "pd_selected_variables.json")
+    print(f"    binned {len(encoders)} variables, kept {len(selected)} after IV/corr/VIF")
+
+    sel_num = [c for c in num_all if c in selected]
+    sel_cat = [c for c in cat_all if c in selected]
+    cols = sel_num + sel_cat
+    encoders_sel = {k: encoders[k] for k in cols}
+
+    models, coef_table = _fit_all_pd_models(train, X_all[cols], y_all, sel_num, sel_cat, encoders_sel, cfg)
+
+    X_oot = X_oot_all[cols]
+    X_tr = X_all[cols]
+    comparison = validation.comparison_table(models, X_oot, y_oot, X_tr, y_all, label="oot")
+    save_table(comparison, "pd_model_comparison.csv")
+    print(comparison[["model", "auc", "gini", "ks"]].to_string(index=False))
+
+    champion = max(models, key=lambda m: M.auc(y_oot, m.predict_proba(X_oot)))
+    pd_oot = champion.predict_proba(X_oot)
+    print(f"    champion: {champion.name}  AUC={M.auc(y_oot, pd_oot):.4f}")
+
+    validation.roc_plot(models, X_oot, y_oot)
+    validation.ks_plot(champion, X_oot, y_oot)
+    validation.score_distribution_plot(champion, X_oot, y_oot)
+
+    calib = M.calibration_table(y_oot, pd_oot, n_bins=10)
+    save_table(calib, "pd_calibration_champion.csv")
+    validation.calibration_plot(champion, X_oot, y_oot)
+
+    psi = validation.stability_report(champion, X_tr, X_oot, sel_num, sel_cat)
+    save_table(psi, "pd_psi_champion.csv")
+
+    # Cut-off chosen on the TRAIN sample (KS-optimal) and applied out of time.
+    cutoff = _ks_optimal_cutoff(y_all, champion.predict_proba(X_tr))
+    confusion = M.confusion_at_cutoff(y_oot, pd_oot, cutoff)
+    save_json(_jsonable(confusion), "pd_confusion_oot.json")
+
+    # Points-based scorecard from the interpretable logit.
+    scaler = scorecard.ScorecardScaler(base_score=600, base_odds=50, pdo=20)
+    betas = dict(zip(coef_table["variable"], coef_table["coefficient"]))
+    intercept = float(betas.pop("const", 0.0))
+    points = scorecard.build_points_table(encoders_sel, betas, intercept, scaler)
+    save_table(points, "pd_scorecard_points.csv")
+    save_json(_jsonable(scaler.to_dict()), "pd_scorecard_scaler.json")
+
+    woe_tr = transform_frame(X_tr, encoders_sel)
+    woe_oot = transform_frame(X_oot, encoders_sel)
+    score_tr = scorecard.score_from_logit(woe_tr, betas, intercept, scaler)
+    score_oot = scorecard.score_from_logit(woe_oot, betas, intercept, scaler)
+    _score_histogram(score_tr, score_oot)
+
+    # Benchmark sensitivity: what does the lender's own grade/rate add on top?
+    benchmark = None
+    try:
+        Xb, yb, numb, catb = features.build_model_matrix(train, include_lender_grade=True)
+        Xb = features.apply_clip_bounds(Xb, features.fit_clip_bounds(Xb, numb))
+        enc_b = fit_encoders(Xb, yb, numb, catb, n_bins=20, min_bin_pct=0.05, max_bins=8)
+        bmodel, _ = pd_model.fit_statsmodels_woe("logit_lender_grade", "logit", Xb, yb, enc_b)
+        Xb_oot, yb_oot, _, _ = features.build_model_matrix(oot, include_lender_grade=True)
+        benchmark = round(float(M.auc(yb_oot, bmodel.predict_proba(Xb_oot))), 4)
+        print(f"    benchmark (with lender grade/int_rate): AUC={benchmark:.4f}")
+    except Exception as exc:  # pragma: no cover - defensive
+        print(f"    benchmark sensitivity skipped: {exc}")
+
+    shap_importance = None
+    lgbm_model = next((m for m in models if m.name == "lightgbm"), None)
+    if lgbm_model is not None:
+        try:
+            shap_importance = interpret.shap_summary(lgbm_model, X_oot, sample_size=5000, seed=cfg.seed)
+            save_table(shap_importance, "pd_shap_importance.csv")
+            save_table(interpret.logistic_vs_shap(shap_importance, coef_table), "pd_shap_vs_logit.csv")
+        except Exception as exc:  # pragma: no cover - defensive
+            print(f"    SHAP summary skipped: {exc}")
+
+    return {
+        "n_train": int(len(train)),
+        "n_oot": int(len(oot)),
+        "train_years": [int(train["issue_year"].min()), int(train["issue_year"].max())],
+        "oot_years": [int(oot["issue_year"].min()), int(oot["issue_year"].max())],
+        "default_rate_train": round(float(y_all.mean()), 4),
+        "default_rate_oot": round(float(y_oot.mean()), 4),
+        "n_variables_binned": len(encoders),
+        "n_features_used": len(cols),
+        "selected": selected,
+        "iv_table": iv_tab,
+        "selection": sel,
+        "comparison": comparison,
+        "champion": champion.name,
+        "champion_auc": round(float(M.auc(y_oot, pd_oot)), 4),
+        "champion_gini": round(float(M.gini(y_oot, pd_oot)), 4),
+        "champion_ks": round(float(M.ks(y_oot, pd_oot)), 4),
+        "cutoff": round(float(cutoff), 6),
+        "confusion": confusion,
+        "psi": psi,
+        "calibration": calib,
+        "scorecard_points": points,
+        "scaler": scaler.to_dict(),
+        "score_psi": round(float(M.psi(score_tr, score_oot)), 4),
+        "benchmark_auc_lender_grade": benchmark,
+        "shap": shap_importance,
+        "coef_table": coef_table,
+        "pd_oot": np.asarray(pd_oot, dtype=float),
+        "X_oot": X_oot,
+        "y_oot": y_oot,
+        "oot_frame": oot,
+        "models": models,
+    }
+
+
+def _summarise_pd(res: Dict[str, Any]) -> Dict[str, Any]:
+    """Reduce the PD stage result to JSON-safe headline numbers."""
+    return {
+        "n_train": res["n_train"],
+        "n_oot": res["n_oot"],
+        "train_years": res["train_years"],
+        "oot_years": res["oot_years"],
+        "default_rate_train": res["default_rate_train"],
+        "default_rate_oot": res["default_rate_oot"],
+        "n_variables_binned": res["n_variables_binned"],
+        "n_features_used": res["n_features_used"],
+        "selected_variables": res["selected"],
+        "models": _records(res["comparison"]),
+        "champion": res["champion"],
+        "champion_auc": res["champion_auc"],
+        "champion_gini": res["champion_gini"],
+        "champion_ks": res["champion_ks"],
+        "benchmark_auc_lender_grade": res["benchmark_auc_lender_grade"],
+        "cutoff": res["cutoff"],
+        "confusion_oot": _jsonable(res["confusion"]),
+        "calibration_oot": _records(res["calibration"]),
+        "psi": _records(res["psi"]),
+        "score_psi_train_vs_oot": res["score_psi"],
+        "iv_top": _records(res["iv_table"].head(15)),
+        "shap_top": None if res["shap"] is None else _records(res["shap"].head(15)),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stage 3: LGD, EAD and expected loss
+# ---------------------------------------------------------------------------
+def _lgd_feature_frame(df: pd.DataFrame, num: List[str], cat: List[str]) -> pd.DataFrame:
+    """Origination features for LGD scoring on an arbitrary loan sample."""
+    X = df[num + cat].copy()
+    for c in num:
+        X[c] = pd.to_numeric(X[c], errors="coerce")
+    for c in cat:
+        X[c] = X[c].astype(str)
+    return X
+
+
+def _el_by_grade_plot(el_by_grade: pd.DataFrame, name: str = "el_by_grade.png") -> None:
+    """Expected-loss rate and mean PD side by side for each lender grade."""
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(el_by_grade["grade"].astype(str), el_by_grade["el_rate"] * 100.0, color="steelblue", label="Expected loss / EAD")
+    ax.set_xlabel("Lender grade (A = lowest risk)")
+    ax.set_ylabel("Expected loss (% of EAD)")
+    ax2 = ax.twinx()
+    ax2.plot(el_by_grade["grade"].astype(str), el_by_grade["mean_pd"] * 100.0, "o--", color="crimson", label="Mean PD")
+    ax2.set_ylabel("Mean PD (%)", color="crimson")
+    ax2.grid(False)
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=8)
+    ax.set_title("Expected loss and PD by lender grade (out-of-time portfolio)")
+    save_fig(fig, name)
+
+
+def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[str, Any]:
+    """LGD model (Gamma GLM vs boosting), EAD and expected loss per grade."""
+    print("[lgd] loss given default, exposure at default and expected loss ...")
+    d = lgd_ead.compute_lgd_ead(df)
+    save_table(lgd_ead.lgd_eda_table(d), "lgd_distribution.csv")
+    lgd_ead.lgd_distribution_plot(d)
+    lgd_ead.lgd_distribution_plot_by_grade(d)
+
+    split_year = int(cfg.modeling.get("oot_split_year", 2017))
+    num, cat = list(features.NUMERIC_FEATURES), list(features.CATEGORICAL_FEATURES)
+    defaults = d[d["lgd"].notna()]
+    train_def = defaults[defaults["issue_year"] < split_year]
+    oot_def = defaults[defaults["issue_year"] >= split_year]
+
+    X_tr, y_tr = lgd_ead.prepare_lgd_matrix(train_def, num, cat)
+    X_te, y_te = lgd_ead.prepare_lgd_matrix(oot_def, num, cat)
+    save_json(
+        {
+            "n_defaults_train": int(len(y_tr)),
+            "n_defaults_oot": int(len(y_te)),
+            "mean_lgd_train": round(float(y_tr.mean()), 4),
+            "mean_lgd_oot": round(float(y_te.mean()), 4),
+            "median_lgd_oot": round(float(y_te.median()), 4),
+        },
+        "lgd_sample.json",
+    )
+
+    gamma_res, gamma_coef = lgd_ead.fit_lgd_gamma(X_tr, y_tr, num, cat)
+    save_table(gamma_coef, "lgd_gamma_coefficients.csv")
+    pred_gamma = lgd_ead.predict_lgd_gamma(gamma_res, X_te, num, cat)
+
+    tree = lgd_ead.fit_lgd_tree(X_tr, y_tr, num, cat, seed=cfg.seed)
+    pred_tree = np.clip(np.asarray(tree.predict(X_te), dtype=float), 0.0, 1.0)
+
+    m_gamma = lgd_ead.regression_metrics(y_te.to_numpy(), pred_gamma)
+    m_tree = lgd_ead.regression_metrics(y_te.to_numpy(), pred_tree)
+    comparison = pd.DataFrame(
+        [{"model": "gamma_glm", **m_gamma}, {"model": "lightgbm", **m_tree}]
+    )
+    save_table(comparison, "lgd_model_comparison.csv")
+    lgd_ead.lgd_scatter_plot(y_te.to_numpy(), pred_gamma, pred_tree)
+    print(comparison.to_string(index=False))
+
+    best = "gamma_glm" if m_gamma["mae"] <= m_tree["mae"] else "lightgbm"
+
+    # Score LGD for the whole out-of-time portfolio (EL = PD x LGD x EAD).
+    oot_frame = pd_result["oot_frame"]
+    X_all = _lgd_feature_frame(oot_frame, num, cat)
+    if best == "gamma_glm":
+        lgd_hat = lgd_ead.predict_lgd_gamma(gamma_res, X_all, num, cat)
+    else:
+        lgd_hat = np.clip(np.asarray(tree.predict(X_all), dtype=float), 0.0, 1.0)
+
+    el_loan = lgd_ead.expected_loss_table(oot_frame, pd_result["pd_oot"], lgd_hat)
+    el = lgd_ead.aggregate_el(el_loan)
+    save_table(el["by_grade"], "el_by_grade.csv")
+    save_table(el["portfolio"], "el_portfolio.csv")
+    _el_by_grade_plot(el["by_grade"])
+
+    portfolio = el["portfolio"].iloc[0]
+    return {
+        "n_defaults_train": int(len(y_tr)),
+        "n_defaults_oot": int(len(y_te)),
+        "realised_lgd_train": round(float(y_tr.mean()), 4),
+        "realised_lgd_oot": round(float(y_te.mean()), 4),
+        "median_lgd_oot": round(float(y_te.median()), 4),
+        "model_comparison": comparison,
+        "best_lgd_model": best,
+        "ead_total_oot": round(float(portfolio["ead"]), 2),
+        "mean_pd_oot": round(float(portfolio["mean_pd"]), 4),
+        "mean_lgd_oot": round(float(portfolio["mean_lgd"]), 4),
+        "expected_loss_oot": round(float(portfolio["expected_loss"]), 2),
+        "el_rate_oot": round(float(portfolio["el_rate"]), 4),
+        "el_by_grade": el["by_grade"],
+        "lgd_hat_oot": np.asarray(lgd_hat, dtype=float),
+    }
+
+
+def _summarise_lgd(res: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: _jsonable(v) for k, v in res.items() if k in {
+        "n_defaults_train", "n_defaults_oot", "realised_lgd_train", "realised_lgd_oot",
+        "median_lgd_oot", "best_lgd_model", "ead_total_oot", "mean_pd_oot",
+        "mean_lgd_oot", "expected_loss_oot", "el_rate_oot",
+    }} | {
+        "model_comparison": _records(res["model_comparison"]),
+        "el_by_grade": _records(res["el_by_grade"]),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stage 4: behavioural segmentation
+# ---------------------------------------------------------------------------
+def stage_clustering(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
+    """k-means (auto-k), hierarchical clustering and a PCA projection."""
+    print("[clustering] k-means + hierarchical segmentation ...")
+    out = clustering.run_clustering(
+        df, CLUSTER_FEATURES, k=None, k_range=range(2, 9), seed=cfg.seed, max_rows=120_000
+    )
+    print(out["kmeans_profile"].to_string(index=False))
+    return out
+
+
+def _summarise_clustering(res: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "k": res["k"],
+        "features": CLUSTER_FEATURES,
+        "k_selection": _records(res["k_selection"]),
+        "kmeans_profile": _records(res["kmeans_profile"]),
+        "hierarchical_profile": _records(res["hierarchical_profile"]),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stage 5: Monte Carlo portfolio simulation
+# ---------------------------------------------------------------------------
+def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict[str, Any]:
+    """Single-factor Vasicek loss simulation, convergence, variance reduction, stress."""
+    print("[simulation] Monte Carlo portfolio loss distribution ...")
+    pd_res, lgd_res = ctx["pd"], ctx["lgd"]
+    oot = pd_res["oot_frame"]
+
+    portfolio = sim.build_portfolio(
+        oot, pd_res["pd_oot"], lgd_res["lgd_hat_oot"], ead_col="funded_amnt", n_detile=10
+    )
+    save_table(portfolio.summary().round(6), "sim_portfolio_buckets.csv")
+    print(f"    buckets={len(portfolio.labels)}  total EAD={portfolio.total_ead:,.0f}")
+
+    rho = float(cfg.simulation.get("asset_correlation", 0.12))
+    n_sim = int(cfg.simulation.get("n_simulations", 100_000))
+    run = sim.simulate_losses(portfolio, rho=rho, n_simulations=n_sim, seed=cfg.seed, antithetic=True)
+    stats = run["stats"]
+    save_json(_jsonable(stats), "sim_loss_statistics.json")
+    save_table(pd.DataFrame([stats]), "sim_loss_statistics.csv")
+    sim.loss_distribution_plot(run["losses"], stats)
+
+    vrr = sim.variance_reduction_report(portfolio, rho=rho, n_max=n_sim, seed=cfg.seed)
+    save_table(vrr.round(4), "sim_variance_reduction.csv")
+    plain = sim.convergence_study(portfolio, rho=rho, n_max=n_sim, seed=cfg.seed, antithetic=False)
+    anti = sim.convergence_study(portfolio, rho=rho, n_max=n_sim, seed=cfg.seed, antithetic=True)
+    sim.convergence_plot({"plain": plain, "antithetic": anti})
+    save_table(vrr.round(4), "sim_convergence.csv")
+
+    stress = sim.stress_test(
+        portfolio,
+        pd_shocks=tuple(cfg.simulation.get("pd_shocks", (0.30, 0.50))),
+        lgd_shocks=tuple(cfg.simulation.get("lgd_shocks", (0.10,))),
+        rho=rho,
+        seed=cfg.seed,
+    )
+    save_table(stress.round(6), "sim_stress_test.csv")
+    sim.stress_plot(stress)
+    print(
+        stress[["scenario", "expected_loss", "var_0.999", "es_0.99"]].round(0).to_string(index=False)
+    )
+
+    return {
+        "n_buckets": int(len(portfolio.labels)),
+        "total_ead": float(portfolio.total_ead),
+        "n_simulations": int(run["n_simulations"]),
+        "asset_correlation": rho,
+        "antithetic": bool(run["antithetic"]),
+        "statistics": {k: _jsonable(v) for k, v in stats.items()},
+        "variance_reduction": _records(vrr),
+        "stress": _records(stress),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Orchestration
+# ---------------------------------------------------------------------------
+def main(argv: Optional[List[str]] = None) -> None:
+    parser = argparse.ArgumentParser(description="Credit-risk modeling pipeline")
+    parser.add_argument("stages", nargs="*", default=["all"], help=f"stages: {', '.join(STAGES)} or all")
+    args = parser.parse_args(argv)
+
+    cfg = Config.load()
+    set_seeds(cfg.seed)
+    ensure_dirs()
+
+    requested = STAGES if ("all" in args.stages or not args.stages) else args.stages
+    unknown = [s for s in requested if s not in STAGES]
+    if unknown:
+        raise SystemExit(f"Unknown stage(s): {unknown}. Valid: {STAGES}")
+
+    t0 = time.time()
+    summary: Dict[str, Any] = {"seed": cfg.seed, "stages": requested}
+    ctx: Dict[str, Any] = {}
+
+    if "data" in requested:
+        stage_data()
+
+    need_frame = any(s in requested for s in ("quality", "eda", "pd", "lgd", "clustering", "simulation"))
+    df: Optional[pd.DataFrame] = None
+    if need_frame:
+        print("[load] reading modeling sample and engineering features ...")
+        df = load_modeling_frame(cfg)
+        summary["data"] = {
+            "n_rows": int(len(df)),
+            "default_rate": round(float(df["default_flag"].mean()), 4),
+            "years": [int(df["issue_year"].min()), int(df["issue_year"].max())],
+        }
+
+    if "quality" in requested and df is not None:
+        summary["quality"] = _jsonable(stage_quality(df))
+    if "sql" in requested:
+        summary["sql"] = {k: list(v.shape) for k, v in stage_sql().items()}
+    if "eda" in requested and df is not None:
+        summary["eda"] = stage_eda(df)
+
+    if "pd" in requested and df is not None:
+        ctx["pd"] = stage_pd(df, cfg)
+        summary["pd"] = _summarise_pd(ctx["pd"])
+    if "lgd" in requested and df is not None:
+        if "pd" not in ctx:
+            ctx["pd"] = stage_pd(df, cfg)
+        ctx["lgd"] = stage_lgd(df, ctx["pd"], cfg)
+        summary["lgd"] = _summarise_lgd(ctx["lgd"])
+    if "clustering" in requested and df is not None:
+        ctx["clustering"] = stage_clustering(df, cfg)
+        summary["clustering"] = _summarise_clustering(ctx["clustering"])
+    if "simulation" in requested and df is not None:
+        if "pd" not in ctx:
+            ctx["pd"] = stage_pd(df, cfg)
+        if "lgd" not in ctx:
+            ctx["lgd"] = stage_lgd(df, ctx["pd"], cfg)
+        ctx["simulation"] = stage_simulation(df, ctx, cfg)
+        summary["simulation"] = ctx["simulation"]
+
+    summary["elapsed_seconds"] = round(time.time() - t0, 1)
+    save_json(summary, "summary.json")
+    print(f"\n[done] pipeline finished in {summary['elapsed_seconds']}s")
+
+
+if __name__ == "__main__":
+    main()

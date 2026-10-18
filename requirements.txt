@@ -1,0 +1,21 @@
+# Core data layer
+duckdb>=1.0
+pyarrow>=14.0
+pandas>=2.2
+numpy>=1.26,<3
+scipy>=1.11
+PyYAML>=6.0
+
+# Modelling
+scikit-learn>=1.4
+statsmodels>=0.14
+lightgbm>=4.0
+shap>=0.44
+
+# Visualisation
+matplotlib>=3.8
+seaborn>=0.13
+
+# Notebooks / quality
+jupyterlab>=4.0
+pytest>=8.0

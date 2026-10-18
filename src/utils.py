@@ -5,7 +5,7 @@ import json
 import os
 import random
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict
 
 import matplotlib
 
@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
-from .config import Config, project_root  # noqa: E402
+from .config import project_root  # noqa: E402
 
 # Consistent, professional look for every figure in the project.
 plt.rcParams.update(
@@ -89,9 +89,9 @@ def _json_default(o: Any) -> Any:
     if isinstance(o, (np.bool_, bool)):
         return bool(o)
     if isinstance(o, np.ndarray):
-        return obj.tolist()
-    if isinstance(obj, Path):
-        return str(obj)
-    if isinstance(obj, (pd.Timestamp,)):
-        return obj.isoformat()
-    return str(obj)
+        return o.tolist()
+    if isinstance(o, Path):
+        return str(o)
+    if isinstance(o, (pd.Timestamp,)):
+        return o.isoformat()
+    return str(o)

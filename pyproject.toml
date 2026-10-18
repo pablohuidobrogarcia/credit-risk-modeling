@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credit-risk-lending-club"
+version = "1.0.0"
+description = "Probability of Default, LGD/EAD, expected loss and Monte Carlo portfolio risk on Lending Club data"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Pablo Huidobro Garcia" }]
+keywords = ["credit-risk", "pd", "lgd", "ead", "vasicek", "monte-carlo", "scorecard", "basel"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Mathematics",
+  "Intended Audience :: Financial and Insurance Industry",
+]
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.2",
+  "scipy>=1.11",
+  "scikit-learn>=1.4",
+  "statsmodels>=0.14",
+  "duckdb>=1.0",
+  "pyarrow>=14",
+  "lightgbm>=4.0",
+  "shap>=0.44",
+  "matplotlib>=3.8",
+  "seaborn>=0.13",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "jupyter>=1.0"]
+
+[project.scripts]
+credit-risk = "src.pipeline:main"
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --disable-warnings"
+filterwarnings = [
+  "ignore::FutureWarning",
+  "ignore::UserWarning",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+exclude = ["notebooks", "data", "reports"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "C4"]
+ignore = ["E501", "B008", "B905"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

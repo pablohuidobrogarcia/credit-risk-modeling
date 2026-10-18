@@ -1,0 +1,400 @@
+{
+  "seed": 42,
+  "stages": [
+    "pd"
+  ],
+  "data": {
+    "n_rows": 500000,
+    "default_rate": 0.1999,
+    "years": [
+      2007,
+      2018
+    ]
+  },
+  "pd": {
+    "n_train": 416141,
+    "n_oot": 83859,
+    "train_years": [
+      2007,
+      2016
+    ],
+    "oot_years": [
+      2017,
+      2018
+    ],
+    "default_rate_train": 0.1973,
+    "default_rate_oot": 0.2129,
+    "n_variables_binned": 30,
+    "n_features_used": 10,
+    "selected_variables": [
+      "term",
+      "loan_amnt_to_income",
+      "dti",
+      "verification_status",
+      "tot_cur_bal",
+      "loan_amnt",
+      "annual_inc",
+      "total_rev_hi_lim",
+      "home_ownership",
+      "revol_util"
+    ],
+    "models": [
+      {
+        "model": "lightgbm",
+        "sample": "oot",
+        "n": 83859,
+        "default_rate": 0.2129,
+        "auc": 0.6736,
+        "gini": 0.3473,
+        "ks": 0.2524,
+        "mean_pd": 0.1907,
+        "cv_auc": 0.6734,
+        "train_auc": 0.7024
+      },
+      {
+        "model": "random_forest",
+        "sample": "oot",
+        "n": 83859,
+        "default_rate": 0.2129,
+        "auc": 0.6678,
+        "gini": 0.3356,
+        "ks": 0.2447,
+        "mean_pd": 0.1914,
+        "cv_auc": 0.677,
+        "train_auc": 0.7129
+      },
+      {
+        "model": "logit_l2",
+        "sample": "oot",
+        "n": 83859,
+        "default_rate": 0.2129,
+        "auc": 0.6609,
+        "gini": 0.3217,
+        "ks": 0.2332,
+        "mean_pd": 0.1894,
+        "cv_auc": 0.6715,
+        "train_auc": 0.6717
+      },
+      {
+        "model": "logit_l1",
+        "sample": "oot",
+        "n": 83859,
+        "default_rate": 0.2129,
+        "auc": 0.6608,
+        "gini": 0.3215,
+        "ks": 0.2332,
+        "mean_pd": 0.1895,
+        "cv_auc": 0.6715,
+        "train_auc": 0.6717
+      },
+      {
+        "model": "logit",
+        "sample": "oot",
+        "n": 83859,
+        "default_rate": 0.2129,
+        "auc": 0.6608,
+        "gini": 0.3215,
+        "ks": 0.2332,
+        "mean_pd": 0.1895,
+        "cv_auc": null,
+        "train_auc": 0.6717
+      },
+      {
+        "model": "probit",
+        "sample": "oot",
+        "n": 83859,
+        "default_rate": 0.2129,
+        "auc": 0.6604,
+        "gini": 0.3209,
+        "ks": 0.2326,
+        "mean_pd": 0.1895,
+        "cv_auc": null,
+        "train_auc": 0.6717
+      },
+      {
+        "model": "decision_tree",
+        "sample": "oot",
+        "n": 83859,
+        "default_rate": 0.2129,
+        "auc": 0.6146,
+        "gini": 0.2292,
+        "ks": 0.1733,
+        "mean_pd": 0.1993,
+        "cv_auc": 0.6431,
+        "train_auc": 0.6448
+      }
+    ],
+    "champion": "lightgbm",
+    "champion_auc": 0.6736,
+    "champion_gini": 0.3473,
+    "champion_ks": 0.2524,
+    "benchmark_auc_lender_grade": 0.7022,
+    "cutoff": 0.201619,
+    "confusion_oot": {
+      "cutoff": 0.20161890867171667,
+      "tp": 9881,
+      "fp": 20664,
+      "fn": 7970,
+      "tn": 45344,
+      "precision": 0.32348993288590605,
+      "recall": 0.5535264130861016,
+      "approval_rate": 0.7871307790457792,
+      "bad_rate_approved": 0.3130529632771785
+    },
+    "calibration_oot": [
+      {
+        "n": 8386,
+        "predicted": 0.0571,
+        "observed": 0.0657,
+        "diff": -0.0086
+      },
+      {
+        "n": 8386,
+        "predicted": 0.0888,
+        "observed": 0.0952,
+        "diff": -0.0063
+      },
+      {
+        "n": 8386,
+        "predicted": 0.1118,
+        "observed": 0.1353,
+        "diff": -0.0235
+      },
+      {
+        "n": 8386,
+        "predicted": 0.1329,
+        "observed": 0.1548,
+        "diff": -0.0219
+      },
+      {
+        "n": 8386,
+        "predicted": 0.1545,
+        "observed": 0.1932,
+        "diff": -0.0387
+      },
+      {
+        "n": 8385,
+        "predicted": 0.1782,
+        "observed": 0.2177,
+        "diff": -0.0395
+      },
+      {
+        "n": 8386,
+        "predicted": 0.2064,
+        "observed": 0.2473,
+        "diff": -0.041
+      },
+      {
+        "n": 8386,
+        "predicted": 0.2444,
+        "observed": 0.2949,
+        "diff": -0.0505
+      },
+      {
+        "n": 8386,
+        "predicted": 0.3056,
+        "observed": 0.314,
+        "diff": -0.0084
+      },
+      {
+        "n": 8386,
+        "predicted": 0.4274,
+        "observed": 0.4107,
+        "diff": 0.0167
+      }
+    ],
+    "psi": [
+      {
+        "variable": "__model_score__",
+        "psi": 0.0133,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "revol_util",
+        "psi": 0.1436,
+        "interpretation": "monitor"
+      },
+      {
+        "variable": "loan_amnt_to_income",
+        "psi": 0.0386,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "loan_amnt",
+        "psi": 0.0307,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "verification_status",
+        "psi": 0.0241,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "total_rev_hi_lim",
+        "psi": 0.0175,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "tot_cur_bal",
+        "psi": 0.0101,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "home_ownership",
+        "psi": 0.0085,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "annual_inc",
+        "psi": 0.0073,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "dti",
+        "psi": 0.0068,
+        "interpretation": "stable"
+      },
+      {
+        "variable": "term",
+        "psi": 0.0006,
+        "interpretation": "stable"
+      }
+    ],
+    "score_psi_train_vs_oot": NaN,
+    "iv_top": [
+      {
+        "variable": "term",
+        "iv": 0.1968,
+        "n_bins": 2,
+        "band": "medium"
+      },
+      {
+        "variable": "loan_amnt_to_income",
+        "iv": 0.1196,
+        "n_bins": 8,
+        "band": "medium"
+      },
+      {
+        "variable": "installment_to_income",
+        "iv": 0.0906,
+        "n_bins": 8,
+        "band": "weak"
+      },
+      {
+        "variable": "dti",
+        "iv": 0.0739,
+        "n_bins": 8,
+        "band": "weak"
+      },
+      {
+        "variable": "verification_status",
+        "iv": 0.0532,
+        "n_bins": 3,
+        "band": "weak"
+      },
+      {
+        "variable": "tot_cur_bal",
+        "iv": 0.0373,
+        "n_bins": 4,
+        "band": "weak"
+      },
+      {
+        "variable": "loan_amnt",
+        "iv": 0.0339,
+        "n_bins": 5,
+        "band": "weak"
+      },
+      {
+        "variable": "annual_inc",
+        "iv": 0.0306,
+        "n_bins": 8,
+        "band": "weak"
+      },
+      {
+        "variable": "total_rev_hi_lim",
+        "iv": 0.0303,
+        "n_bins": 8,
+        "band": "weak"
+      },
+      {
+        "variable": "home_ownership",
+        "iv": 0.0264,
+        "n_bins": 5,
+        "band": "weak"
+      },
+      {
+        "variable": "revol_util",
+        "iv": 0.02,
+        "n_bins": 8,
+        "band": "weak"
+      },
+      {
+        "variable": "inq_last_6mths",
+        "iv": 0.0171,
+        "n_bins": 3,
+        "band": "useless"
+      },
+      {
+        "variable": "purpose",
+        "iv": 0.0149,
+        "n_bins": 6,
+        "band": "useless"
+      },
+      {
+        "variable": "credit_history_months",
+        "iv": 0.0102,
+        "n_bins": 7,
+        "band": "useless"
+      },
+      {
+        "variable": "open_acc",
+        "iv": 0.008,
+        "n_bins": 8,
+        "band": "useless"
+      }
+    ],
+    "shap_top": [
+      {
+        "variable": "term",
+        "mean_abs_shap": 0.3504
+      },
+      {
+        "variable": "dti",
+        "mean_abs_shap": 0.2195
+      },
+      {
+        "variable": "total_rev_hi_lim",
+        "mean_abs_shap": 0.1662
+      },
+      {
+        "variable": "verification_status",
+        "mean_abs_shap": 0.1403
+      },
+      {
+        "variable": "home_ownership",
+        "mean_abs_shap": 0.1306
+      },
+      {
+        "variable": "tot_cur_bal",
+        "mean_abs_shap": 0.1141
+      },
+      {
+        "variable": "loan_amnt_to_income",
+        "mean_abs_shap": 0.1112
+      },
+      {
+        "variable": "revol_util",
+        "mean_abs_shap": 0.0701
+      },
+      {
+        "variable": "loan_amnt",
+        "mean_abs_shap": 0.0648
+      },
+      {
+        "variable": "annual_inc",
+        "mean_abs_shap": 0.0494
+      }
+    ]
+  },
+  "elapsed_seconds": 417.1
+}

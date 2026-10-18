@@ -118,10 +118,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     out["revol_bal_to_income"] = out["revol_bal"] / inc
     out["limit_utilisation"] = out["revol_bal"] / out["total_rev_hi_lim"].replace(0, np.nan)
 
-    # --- term as a number of months ---
-    out["term"] = out["term"].astype(str).str.strip()
-    out["term"] = out["term"].str.replace("months", "", regex=False).str.strip()
-    out["term"] = pd.to_numeric(out["term"], errors="coerce")
+    # --- term: normalise "36 months" -> "36" (kept as a categorical level) ---
+    out["term"] = out["term"].astype(str).str.replace("months", "", regex=False).str.strip()
 
     # --- ordinal employment length ---
     out["emp_length"] = out["emp_length"].astype(str).str.strip()

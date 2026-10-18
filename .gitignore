@@ -58,3 +58,6 @@ Thumbs.db
 *.pem
 *.key
 .secrets/
+
+# Pipeline run logs (not artefacts)
+reports/results/_*.log

@@ -1,3 +1,3 @@
 test,statistic,p_value,crit_5pct,n_lags,H0,conclusion
-ADF,-0.5568045649635855,0.8804468069058318,-2.8884437992971588,0.0,unit root (non-stationary),fail to reject unit root
-KPSS,0.5651719244528964,0.026988305303401697,0.463,,trend-stationary,reject stationarity
+ADF,-1.2496095452403182,0.6518994592433514,-2.8881954545454547,11.0,unit root (non-stationary),fail to reject unit root
+KPSS,0.6835790930813687,0.01503826426533012,0.463,,trend-stationary,reject stationarity

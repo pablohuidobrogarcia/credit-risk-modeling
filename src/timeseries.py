@@ -26,6 +26,44 @@ from statsmodels.tsa.stattools import adfuller, kpss
 from .utils import save_fig, save_json, save_table
 
 
+def _contiguous_monthly(series: pd.Series) -> pd.Series:
+    """Return the longest gap-free monthly block of ``series``.
+
+    The vintage series is built with a volume threshold, so a handful of very
+    early months (fewer than the minimum number of resolved loans) can leave
+    *interior* holes once the series is put on a monthly frequency. A hole is not
+    a zero - it is a month with almost no data - and every forecast method here
+    (seasonal naive, last-value naive, ETS, SARIMAX) needs an unbroken monthly
+    grid to be compared fairly. This keeps only the longest contiguous run and
+    drops the leading/trailing incomplete stubs.
+    """
+    s = pd.Series(series).asfreq("MS")
+    if s.empty:
+        return s
+    # A month is present when it has data (not NaN); a run is contiguous when the
+    # month ordinals step by exactly 1. Keep the longest present+contiguous run.
+    ordinals = s.index.to_period("M").astype("int64")
+    present = s.notna().to_numpy()
+    runs: list[list[int]] = []
+    current: list[int] = []
+    for i in range(len(s)):
+        if present[i] and (not current or ordinals[i] - ordinals[i - 1] == 1):
+            current.append(i)
+        elif present[i]:
+            runs.append(current)
+            current = [i]
+        else:
+            if current:
+                runs.append(current)
+            current = []
+    if current:
+        runs.append(current)
+    if not runs:  # pragma: no cover - defensive
+        return s.dropna()
+    best = max(runs, key=len)
+    return s.iloc[best]
+
+
 def monthly_default_series(df: pd.DataFrame) -> pd.Series:
     """Monthly default rate by origination vintage (a proper time series).
 
@@ -134,13 +172,14 @@ def fit_sarimax(
         enforce_stationarity=False,
         enforce_invertibility=False,
     )
-    res = model.fit(disp=False)
+    res = model.fit(disp=False, maxiter=200)
 
     forecast = res.get_forecast(steps=len(test))
     pred_mean = forecast.predicted_mean
     ci = forecast.conf_int(alpha=0.05)
 
-    lb = acorr_ljungbox(res.resid, lags=[10, 20], return_df=True)
+    resid = pd.Series(np.asarray(res.resid, dtype=float)).dropna()
+    lb = acorr_ljungbox(resid.to_numpy(), lags=[10, 20], return_df=True)
 
     metrics = {
         "order": list(order),
@@ -225,6 +264,128 @@ def censoring_plot(
     return save_fig(fig, name)
 
 
+def fit_ets(series: pd.Series, train_frac: float = 0.8) -> Dict[str, object]:
+    """Holt-Winters (ETS) benchmark on the same chronological split.
+
+    Additive trend and seasonality, the standard automatic ETS recipe for a
+    monthly series with a seasonal shape. Used purely as a benchmark against
+    which SARIMAX is judged on the temporal holdout.
+    """
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+
+    s = series.dropna().asfreq("MS")
+    n_train = int(len(s) * train_frac)
+    train, test = s.iloc[:n_train], s.iloc[n_train:]
+    model = ExponentialSmoothing(
+        train, trend="add", seasonal="add", seasonal_periods=12, initialization_method="estimated"
+    )
+    res = model.fit()
+    fc = res.forecast(len(test))
+    fc_vals = np.asarray(fc.values, dtype=float)
+    # Holt-Winters can fail to converge on a short, noisy series, in which case
+    # the forecast comes back as NaN. Report that honestly as NaN rather than
+    # dropping the arm, so the benchmark table still shows ETS was attempted.
+    if not np.isfinite(fc_vals).all():
+        test_rmse = float("nan")
+        test_mae = float("nan")
+    else:
+        test_rmse = float(np.sqrt(np.mean((test.values - fc_vals) ** 2)))
+        test_mae = float(np.mean(np.abs(test.values - fc_vals)))
+    return {
+        "train": train,
+        "test": test,
+        "forecast": fc,
+        "metrics": {
+            "method": "ETS(add,add,12)",
+            "n_train": int(len(train)),
+            "n_test": int(len(test)),
+            "train_rmse": float(np.sqrt(np.mean((train - res.fittedvalues) ** 2))),
+            "test_rmse": test_rmse,
+            "test_mae": test_mae,
+        },
+    }
+
+
+def _mase(y_train: np.ndarray, y_test: np.ndarray, y_pred: np.ndarray, period: int = 12) -> float:
+    """Mean absolute scaled error: test MAE divided by the in-sample seasonal-naive MAE."""
+    y_train = np.asarray(y_train, dtype=float)
+    scale = np.mean(np.abs(y_train[period:] - y_train[:-period])) if len(y_train) > period else np.mean(np.abs(np.diff(y_train)))
+    if not np.isfinite(scale) or scale == 0:
+        return float("nan")
+    return float(np.mean(np.abs(np.asarray(y_test) - np.asarray(y_pred))) / scale)
+
+
+def benchmark_forecasts(series: pd.Series, train_frac: float = 0.8) -> pd.DataFrame:
+    """Temporal-holdout comparison: SARIMAX vs seasonal naive vs ETS.
+
+    All three are fitted on the *same* chronological split (first ``train_frac``
+    of the mature series) and scored on the same holdout, so the RMSE and MASE
+    columns are directly comparable. The honest question - does the ARIMA
+    machinery earn its keep over a naive seasonal benchmark? - is answered here.
+    """
+    s = series.dropna().asfreq("MS")
+    n_train = int(len(s) * train_frac)
+    train, test = s.iloc[:n_train], s.iloc[n_train:]
+
+    rows: list[Dict[str, object]] = []
+
+    # 1. Seasonal naive: y_hat(t) = y(t - 12).
+    if len(train) >= 12:
+        naive_vals = [train.iloc[len(train) - 12 + (i % 12)] for i in range(len(test))]
+    else:  # pragma: no cover - defensive
+        naive_vals = [float(train.iloc[-1])] * len(test)
+    naive = np.asarray(naive_vals, dtype=float)
+    # 2. Random-walk / last-value naive (the non-seasonal benchmark).
+    lastval = np.full(len(test), float(train.iloc[-1]))
+    # 3. SARIMAX.
+    sar = fit_sarimax(series, train_frac=train_frac)
+    sar_fc = np.asarray(sar["forecast"].values, dtype=float)
+    # 4. ETS.
+    ets = fit_ets(series, train_frac=train_frac)
+    ets_fc = np.asarray(ets["forecast"].values, dtype=float)
+
+    for name, pred in (
+        ("seasonal_naive", naive),
+        ("last_value_naive", lastval),
+        ("ets", ets_fc),
+        ("sarimax", sar_fc),
+    ):
+        if not np.isfinite(pred).all():
+            # ETS can fail to converge on a short series; keep the row so the
+            # benchmark shows the attempt, but leave its scores as NaN.
+            rows.append(
+                {"method": name, "n_train": int(len(train)), "n_test": int(len(test)),
+                 "rmse": float("nan"), "mae": float("nan"), "mase": float("nan")}
+            )
+            continue
+        rmse = float(np.sqrt(np.mean((test.values - pred) ** 2)))
+        mae = float(np.mean(np.abs(test.values - pred)))
+        rows.append(
+            {
+                "method": name,
+                "n_train": int(len(train)),
+                "n_test": int(len(test)),
+                "rmse": round(rmse, 6),
+                "mae": round(mae, 6),
+                "mase": round(_mase(train.values, test.values, pred), 4),
+            }
+        )
+    table = pd.DataFrame(rows).sort_values("rmse", na_position="last").reset_index(drop=True)
+    return table
+
+
+def forecast_benchmark_plot(table: pd.DataFrame, name: str = "ts_forecast_benchmark.png") -> None:
+    """Bar chart of holdout RMSE for SARIMAX and the naive/ETS benchmarks."""
+    fig, ax = plt.subplots(figsize=(8, 5))
+    colors = ["crimson" if m == "sarimax" else "steelblue" for m in table["method"]]
+    ax.bar(table["method"], table["rmse"], color=colors)
+    ax.set_ylabel("Holdout RMSE (monthly default rate)")
+    ax.set_title("Forecast benchmark: SARIMAX vs seasonal naive and ETS")
+    for i, v in enumerate(table["rmse"]):
+        ax.text(i, v, f"{v:.4f}", ha="center", va="bottom", fontsize=8)
+    return save_fig(fig, name)
+
+
 def run_timeseries(
     df: pd.DataFrame, train_frac: float = 0.8, mature_max_year: int = 2015
 ) -> Dict[str, object]:
@@ -245,8 +406,11 @@ def run_timeseries(
     series_full = series_all[series_all.index.isin(keep)]
     save_table(series_full.rename("default_rate").reset_index(name="month"), "ts_monthly_default_rate_full.csv")
 
-    # Primary series = mature vintages only.
-    series = series_full[series_full.index.year <= int(mature_max_year)]
+    # Primary series = mature vintages only, made gap-free so every forecast arm
+    # (seasonal naive / last-value / ETS / SARIMAX) is compared on the same
+    # unbroken monthly grid. Interior holes - months below the volume threshold -
+    # are dropped rather than treated as zeros.
+    series = _contiguous_monthly(series_full[series_full.index.year <= int(mature_max_year)])
     save_table(series.rename("default_rate").reset_index(name="month"), "ts_monthly_default_rate.csv")
 
     dec = decompose_series(series)
@@ -258,6 +422,12 @@ def run_timeseries(
     save_json(out["metrics"], "ts_sarimax_metrics.json")
     save_table(out["ljung_box"].reset_index(), "ts_ljung_box.csv")
     forecast_plot(out)
+
+    # Benchmark comparison (block 5): does SARIMAX beat seasonal naive / ETS?
+    bench = benchmark_forecasts(series, train_frac=train_frac)
+    save_table(bench, "ts_forecast_benchmark.csv")
+    forecast_benchmark_plot(bench)
+    out["forecast_benchmark"] = bench
 
     # Secondary: the same model on the full series (immature tail included), plus
     # the resolved-share diagnostic that motivates the choice.

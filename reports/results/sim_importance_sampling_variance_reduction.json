@@ -3,9 +3,9 @@
   "shift": 1.5,
   "n_paths": 20000,
   "n_replications": 40,
-  "mean_var_importance_sampling": 734180264.1396961,
-  "mean_var_naive": 732998040.2963575,
-  "rmse_importance_sampling": 3234208.8979118476,
-  "rmse_naive": 14103970.525526477,
-  "rmse_reduction_factor": 4.36087184554858
+  "mean_var_importance_sampling": 2120104705.851982,
+  "mean_var_naive": 2108339101.2467217,
+  "rmse_importance_sampling": 9247072.106815461,
+  "rmse_naive": 47278730.84442153,
+  "rmse_reduction_factor": 5.112832505066681
 }

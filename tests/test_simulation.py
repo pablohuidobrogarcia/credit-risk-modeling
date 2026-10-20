@@ -198,3 +198,75 @@ def test_importance_sampling_reduces_variance_on_a_realistic_portfolio():
     assert cmp["rmse_reduction_factor"] > 1.0
 
 
+# ---------------------------------------------------------------------------
+# Stratified sampling of the systematic factor (block 7)
+# ---------------------------------------------------------------------------
+def test_stratified_draws_match_the_standard_normal_quantiles():
+    rng = np.random.default_rng(0)
+    z = sim._systematic_draws(rng, 20_000, antithetic=False, stratified=True)
+    # One draw per equal-probability stratum -> empirical CDF tracks N(0,1) tightly.
+    assert abs(float(np.mean(z))) < 0.02
+    assert abs(float(np.std(z)) - 1.0) < 0.02
+    for q in (0.001, 0.5, 0.999):
+        assert abs(float(np.quantile(z, q)) - sim.norm.ppf(q)) < 0.05
+
+
+def test_stratified_draws_one_per_stratum_in_order():
+    rng = np.random.default_rng(1)
+    n = 1000
+    z = sim._systematic_draws(rng, n, antithetic=False, stratified=True)
+    assert len(z) == n
+    # Sorted, draw i must fall inside stratum i (one uniform per stratum, mapped
+    # through the normal quantile function).
+    lo = sim.norm.ppf(np.arange(n) / n)
+    hi = sim.norm.ppf((np.arange(n) + 1) / n)
+    zs = np.sort(z)
+    assert np.all(zs >= lo - 1e-9)
+    assert np.all(zs <= hi + 1e-9)
+
+
+def test_stratified_reduces_standard_error_versus_plain_over_replications():
+    """The block-7 claim: stratified sampling of Z lowers the Monte Carlo error."""
+    port = sim.BucketedPortfolio(
+        ead=np.linspace(1_000, 30_000, 30),
+        lgd=np.full(30, 0.85),
+        pd=np.clip(np.linspace(0.03, 0.20, 30), 1e-3, 0.9),
+        n=np.full(30, 1_500.0),
+        labels=[f"b{i}" for i in range(30)],
+    )
+    n_paths = 8_000
+    reps = 30
+    plain, strat = [], []
+    for s in range(reps):
+        plain.append(
+            sim.simulate_losses(port, rho=0.15, n_simulations=n_paths, seed=s, antithetic=False)["stats"][
+                "expected_loss"
+            ]
+        )
+        strat.append(
+            sim.simulate_losses(
+                port, rho=0.15, n_simulations=n_paths, seed=s, antithetic=False, stratified=True
+            )["stats"]["expected_loss"]
+        )
+    se_plain = float(np.std(plain, ddof=1))
+    se_strat = float(np.std(strat, ddof=1))
+    assert se_strat < se_plain
+
+
+def test_variance_reduction_report_has_both_arms():
+    rep = sim.variance_reduction_report(_portfolio(0.08), rho=0.12, n_max=20_000, seed=5)
+    assert {"se_plain", "se_antithetic", "se_stratified"} <= set(rep.columns)
+    assert {"se_reduction_antithetic_pct", "se_reduction_stratified_pct"} <= set(rep.columns)
+    # The report compares three arms on the same seed; the *replicated* test above
+    # is the one that asserts stratified actually reduces the error, because a
+    # single-seed comparison on a one-bucket portfolio is noisy.
+    assert (rep[["se_plain", "se_antithetic", "se_stratified"]] >= 0).all().all()
+    assert (rep["mean_plain"] > 0).all()
+
+
+def test_simulate_losses_records_the_sampling_scheme():
+    out = sim.simulate_losses(_portfolio(0.08), rho=0.12, n_simulations=5_000, seed=2, stratified=True)
+    assert out["stratified"] is True
+    assert out["stats"]["stratified"] is True
+
+

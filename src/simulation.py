@@ -127,7 +127,29 @@ def conditional_pd(pd_draws: np.ndarray, z: np.ndarray, rho: float) -> np.ndarra
     return norm.cdf((a - np.sqrt(rho) * z) / np.sqrt(1.0 - rho))
 
 
-def _systematic_draws(rng: np.random.Generator, n_simulations: int, antithetic: bool) -> np.ndarray:
+def _systematic_draws(
+    rng: np.random.Generator, n_simulations: int, antithetic: bool, stratified: bool = False
+) -> np.ndarray:
+    """Draws of the systematic factor Z.
+
+    Three schemes:
+
+    * ``stratified=True`` - *stratified sampling* of Z. The unit interval is cut
+      into ``n`` equal-probability strata, one uniform draw is placed in each,
+      and the draws are mapped through ``norm.ppf``. The empirical distribution
+      of Z then matches the theoretical N(0,1) quantiles exactly, so the tail of
+      the factor is sampled in proportion rather than by luck. This is the
+      variance-reduction technique the report measures against plain sampling.
+    * ``antithetic=True`` - antithetic variates (kept as a reported *negative*
+      result: on a 100k-path portfolio it barely moves the estimate).
+    * otherwise plain i.i.d. standard normal draws.
+    """
+    if stratified:
+        # One uniform per stratum, then a random permutation so the strata do not
+        # line up with any ordering of the loss computation.
+        u = (np.arange(n_simulations) + rng.random(n_simulations)) / n_simulations
+        rng.shuffle(u)
+        return norm.ppf(u)
     if antithetic:
         half = n_simulations // 2
         z_half = rng.standard_normal(half)
@@ -150,15 +172,17 @@ def simulate_losses(
     n_simulations: int = 100_000,
     seed: int = 42,
     antithetic: bool = True,
+    stratified: bool = False,
 ) -> Dict[str, object]:
     """Simulate the portfolio-loss distribution and summarise it."""
     rng = np.random.default_rng(seed)
-    z = _systematic_draws(rng, n_simulations, antithetic)
+    z = _systematic_draws(rng, n_simulations, antithetic, stratified=stratified)
     losses = _loss_paths(portfolio, rng, z, rho)
     stats = loss_statistics(losses, portfolio.total_ead)
     stats["n_simulations"] = int(len(z))
     stats["asset_correlation"] = float(rho)
     stats["antithetic"] = bool(antithetic)
+    stats["stratified"] = bool(stratified)
     return {
         "losses": losses,
         "z": z,
@@ -168,6 +192,7 @@ def simulate_losses(
         "rho": rho,
         "n_simulations": len(z),
         "antithetic": antithetic,
+        "stratified": stratified,
     }
 
 
@@ -206,14 +231,16 @@ def convergence_study(
     n_max: int = 100_000,
     seed: int = 42,
     antithetic: bool = True,
+    stratified: bool = False,
 ) -> pd.DataFrame:
     """Running mean and standard error of the loss estimate vs number of paths.
 
-    Plain Monte Carlo error decays as ``1/sqrt(N)``; antithetic variates reduce
-    the constant for the same ``N``.
+    Plain Monte Carlo error decays as ``1/sqrt(N)``; both antithetic variates and
+    stratified sampling of the systematic factor reduce the constant for the same
+    ``N``. Run both at the same seed and compare ``running_se``.
     """
     rng = np.random.default_rng(seed)
-    z = _systematic_draws(rng, n_max, antithetic)
+    z = _systematic_draws(rng, n_max, antithetic, stratified=stratified)
     losses = _loss_paths(portfolio, rng, z, rho)
 
     n = np.arange(1, len(losses) + 1)
@@ -236,15 +263,25 @@ def convergence_study(
 def variance_reduction_report(
     portfolio: BucketedPortfolio, rho: float = 0.12, n_max: int = 100_000, seed: int = 42
 ) -> pd.DataFrame:
-    """Compare the standard error with and without antithetic variates."""
-    plain = convergence_study(portfolio, rho=rho, n_max=n_max, seed=seed, antithetic=False)
-    anti = convergence_study(portfolio, rho=rho, n_max=n_max, seed=seed, antithetic=True)
+    """Compare plain, antithetic and stratified-fold sampling of the factor.
+
+    Both variance-reduction arms use the SAME seed as the plain arm, so the
+    ``running_se`` columns are directly comparable. Antithetic variates are kept
+    as an honest negative result (they barely move a 100k-path estimate);
+    stratified sampling of Z is the technique that does reduce the error.
+    """
+    plain = convergence_study(portfolio, rho=rho, n_max=n_max, seed=seed, antithetic=False, stratified=False)
+    anti = convergence_study(portfolio, rho=rho, n_max=n_max, seed=seed, antithetic=True, stratified=False)
+    strat = convergence_study(portfolio, rho=rho, n_max=n_max, seed=seed, antithetic=False, stratified=True)
     out = plain[["n_paths", "running_mean", "running_se"]].rename(
         columns={"running_mean": "mean_plain", "running_se": "se_plain"}
     )
     out["mean_antithetic"] = anti["running_mean"].values
     out["se_antithetic"] = anti["running_se"].values
-    out["se_reduction_pct"] = (1 - out["se_antithetic"] / out["se_plain"]) * 100
+    out["mean_stratified"] = strat["running_mean"].values
+    out["se_stratified"] = strat["running_se"].values
+    out["se_reduction_antithetic_pct"] = (1 - out["se_antithetic"] / out["se_plain"]) * 100
+    out["se_reduction_stratified_pct"] = (1 - out["se_stratified"] / out["se_plain"]) * 100
     return out
 
 
@@ -574,7 +611,8 @@ def rho_sensitivity(
     names: Optional[Sequence[str]] = None,
     n_simulations: int = 100_000,
     seed: int = 42,
-    antithetic: bool = True,
+    antithetic: bool = False,
+    stratified: bool = True,
 ) -> pd.DataFrame:
     """Re-run the simulation over a grid of asset correlations.
 
@@ -585,7 +623,12 @@ def rho_sensitivity(
     for i, r in enumerate(rhos):
         label = names[i] if names is not None else f"rho={float(r):.2f}"
         out = simulate_losses(
-            portfolio, rho=float(r), n_simulations=n_simulations, seed=seed, antithetic=antithetic
+            portfolio,
+            rho=float(r),
+            n_simulations=n_simulations,
+            seed=seed,
+            antithetic=antithetic,
+            stratified=stratified,
         )
         row = {"label": label, "rho": float(r)}
         row.update(out["stats"])

@@ -17,6 +17,19 @@ data:
     - Default
 
 modeling:
+  # ---------------------------------------------------------------------
+  # Validation split
+  # ---------------------------------------------------------------------
+  # PRIMARY ("mature") split: train on the fully-resolved vintages, test on
+  # the immediately following vintages. Only the (year, term) cells whose
+  # population is >= min_resolved_share resolved enter this split; the rule is
+  # derived from data_prep.resolution_by_year_term() and printed at run time.
+  min_resolved_share: 0.90
+  mature_train_years: [2010, 2011, 2012, 2013]
+  mature_test_years: [2014, 2015]
+  mature_terms: ["36"]        # 60-month vintages of 2014-2015 are not mature
+  # SECONDARY ("immature") split: the original late window, kept side by side to
+  # show the effect of right-censoring.
   oot_split_year: 2017
   # Vintages after this year are heavily right-censored (data cut-off 2018-12).
   mature_max_year: 2015
@@ -29,6 +42,15 @@ simulation:
   asset_correlation: 0.12
   # Sensitivity grid spanning the Basel retail range (0.02-0.16).
   rho_sensitivity: [0.02, 0.05, 0.10, 0.15]
+  # Importance sampling on the systematic factor for the 99.9% VaR estimate.
+  # shift=1.5 keeps the effective sample size usable on this (granular)
+  # portfolio; larger shifts make the IS estimator noisier, which is reported.
+  importance_sampling:
+    n_tail_paths: 20000
+    shift: 1.5
+    shift_grid: [0.5, 1.0, 1.5, 2.0, 2.5]
+
+
   pd_shocks:
     - 0.30
     - 0.50

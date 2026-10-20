@@ -100,3 +100,22 @@ def test_rho_sensitivity_returns_one_row_per_rho_and_tighter_tails():
     assert sens["expected_loss"].iloc[0] > 0
     # Higher asset correlation fattens the tail without moving the mean much.
     assert sens["var_0.999"].iloc[1] > sens["var_0.999"].iloc[0]
+
+
+def test_importance_sampling_matches_the_naive_tail_estimate():
+    # Importance sampling is an unbiased reweighting of the systematic factor:
+    # its 99.9% VaR should be the same order of magnitude as the naive estimate
+    # (the loss distribution here is discrete, so exact equality is not expected).
+    out = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.999, n_paths=40_000, shift=2.5, seed=11)
+    naive = out["var_naive_same_paths"]
+    assert out["var_importance_sampling"] > 0
+    assert 0.5 * naive <= out["var_importance_sampling"] <= 1.5 * naive
+    assert out["es_importance_sampling"] >= out["var_importance_sampling"] * 0.99
+
+
+def test_importance_sampling_hits_the_tail_more_often_than_naive():
+    # The whole point: with the shift most paths are in the tail region.
+    out = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.999, n_paths=20_000, shift=2.5, seed=12)
+    assert 0 < out["effective_sample_size"] <= out["n_paths"]
+    assert out["var_pct_ead_is"] > 0
+

@@ -139,14 +139,34 @@ def build_accepted_parquet(force: bool = False) -> Path:
     return out_parquet
 
 
-def population_totals() -> Dict[str, int]:
-    """Population counts of the accepted file (documents the sampling fraction)."""
+class _AcceptedConnection:
+    """Thin wrapper exposing a DuckDB cursor plus the resolved parquet path."""
+
+    def __init__(self, con: duckdb.DuckDBPyConnection, acc_parquet: Path):
+        self._con = con
+        self._acc_parquet = acc_parquet
+
+    def execute(self, *args, **kwargs):
+        return self._con.execute(*args, **kwargs)
+
+    def close(self) -> None:
+        self._con.close()
+
+
+def _accepted_connection() -> _AcceptedConnection:
+    """Open a DuckDB connection to the accepted-loan parquet (building it if needed)."""
     c = Config.load()
     acc_parquet = c.path("accepted_parquet")
     if not acc_parquet.exists():
         acc_parquet = build_accepted_parquet(force=False)
     con = duckdb.connect()
     con.execute("SET threads TO 4")
+    return _AcceptedConnection(con, acc_parquet)
+
+
+def population_totals() -> Dict[str, int]:
+    """Population counts of the accepted file (documents the sampling fraction)."""
+    con = _accepted_connection()
     try:
         row = con.execute(
             f"""
@@ -155,7 +175,7 @@ def population_totals() -> Dict[str, int]:
                    SUM(CASE WHEN loan_status = 'Fully Paid'   THEN 1 ELSE 0 END) AS n_fully_paid,
                    SUM(CASE WHEN loan_status = 'Charged Off'  THEN 1 ELSE 0 END) AS n_charged_off,
                    SUM(CASE WHEN loan_status = 'Default'      THEN 1 ELSE 0 END) AS n_default_status
-            FROM '{acc_parquet.as_posix()}'
+            FROM '{con._acc_parquet.as_posix()}'
             """
         ).df()
     finally:
@@ -172,12 +192,7 @@ def resolution_by_year() -> pd.DataFrame:
     that selection explicit: ``resolved_share`` is the fraction of the
     *population* vintage that had a known outcome by the cut-off.
     """
-    c = Config.load()
-    acc_parquet = c.path("accepted_parquet")
-    if not acc_parquet.exists():
-        acc_parquet = build_accepted_parquet(force=False)
-    con = duckdb.connect()
-    con.execute("SET threads TO 4")
+    con = _accepted_connection()
     try:
         tab = con.execute(
             f"""
@@ -188,7 +203,7 @@ def resolution_by_year() -> pd.DataFrame:
                    ROUND(SUM(resolved_flag) * 1.0 / COUNT(*), 4) AS resolved_share,
                    ROUND(SUM(COALESCE(default_flag, 0)) * 1.0
                          / NULLIF(SUM(resolved_flag), 0), 4)     AS default_rate_resolved
-            FROM '{acc_parquet.as_posix()}'
+            FROM '{con._acc_parquet.as_posix()}'
             WHERE issue_year IS NOT NULL
             GROUP BY issue_year
             ORDER BY issue_year
@@ -197,6 +212,76 @@ def resolution_by_year() -> pd.DataFrame:
     finally:
         con.close()
     return tab
+
+
+def resolution_by_year_term() -> pd.DataFrame:
+    """Resolved share of every (origination year x term) cell of the population.
+
+    This is the table the validation split is built from. ``term`` is the
+    contractual tenor (36 or 60 months). A 60-month loan issued in 2014 reaches
+    its scheduled maturity in 2019 - past the 2018-12 data cut-off - so its
+    resolved share is much lower than a 36-month loan of the same vintage.
+    Splitting by *both* dimensions reveals exactly which cells are mature
+    enough for an unbiased out-of-time test.
+    """
+    con = _accepted_connection()
+    try:
+        tab = con.execute(
+            f"""
+            SELECT issue_year,
+                   regexp_replace(term, '[^0-9]', '', 'g')     AS term_months,
+                   COUNT(*)                                     AS n_loans,
+                   SUM(resolved_flag)                           AS n_resolved,
+                   ROUND(SUM(resolved_flag) * 1.0 / COUNT(*), 4) AS resolved_share,
+                   ROUND(SUM(COALESCE(default_flag, 0)) * 1.0
+                         / NULLIF(SUM(resolved_flag), 0), 4)      AS default_rate_resolved
+            FROM '{con._acc_parquet.as_posix()}'
+            WHERE issue_year IS NOT NULL AND term IS NOT NULL
+            GROUP BY issue_year, term_months
+            ORDER BY issue_year, term_months
+            """
+        ).df()
+    finally:
+        con.close()
+    return tab
+
+
+def mature_split_rule(
+    table: "pd.DataFrame | None" = None,
+    min_resolved_share: float = 0.90,
+) -> Dict[str, object]:
+    """Derive the primary validation split from the resolved-share table.
+
+    Rule
+    ----
+    A ``(year, term)`` cell is usable for the primary out-of-time test when at
+    least ``min_resolved_share`` (default 90%) of its population loans had a
+    *final* outcome by the data cut-off. Cells below the threshold are excluded
+    from the primary split and analysed separately as the "immature" window,
+    so their censoring bias cannot leak into the headline metrics.
+
+    The returned object records the rule, the threshold, every immature cell and
+    the per-term verdict, so the decision is fully auditable from
+    ``summary.json``.
+    """
+    tab = resolution_by_year_term() if table is None else table.copy()
+    tab["usable"] = tab["resolved_share"] >= float(min_resolved_share)
+    # A term is usable when *every* year it appears in is usable (conservative).
+    by_term = tab.groupby("term_months")["usable"].all().to_dict()
+    immature = tab[~tab["usable"]].copy()
+    mature = tab[tab["usable"]].copy()
+    return {
+        "min_resolved_share": float(min_resolved_share),
+        "rule": (
+            "A (issue_year, term) cell enters the primary split when at least "
+            f"{min_resolved_share:.0%} of its population loans are resolved."
+        ),
+        "terms_fully_mature": sorted(str(t) for t, ok in by_term.items() if ok),
+        "terms_with_immature_cells": sorted(str(t) for t, ok in by_term.items() if not ok),
+        "mature_cells": mature[["issue_year", "term_months", "resolved_share"]].to_dict("records"),
+        "immature_cells": immature[["issue_year", "term_months", "resolved_share"]].to_dict("records"),
+        "mature_years": sorted(int(y) for y in mature["issue_year"].unique()),
+    }
 
 
 def build_modeling_sample(

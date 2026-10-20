@@ -61,3 +61,7 @@ Thumbs.db
 
 # Pipeline run logs (not artefacts)
 reports/results/_*.log
+*.log
+
+# Local, non-public notes (kept deliberately out of the public repository)
+INTERVIEW_NOTES.md

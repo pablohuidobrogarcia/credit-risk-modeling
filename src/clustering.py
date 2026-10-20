@@ -12,13 +12,18 @@ Design notes
   fitting samples where exact KMeans becomes the bottleneck, but it was measured
   on the 120k-row segmentation sample: exact KMeans fits in seconds and is
   clearly better (inertia 1,174,937 vs 1,184,469, silhouette 0.2200 vs 0.1889).
-  The threshold is therefore set well above the sample actually used, and the
-  elbow/silhouette study and the production fit stay algorithmically consistent.
+  The threshold is therefore set at 250k rows - well above the sample actually
+  used - so the elbow/silhouette/stability study and the production fit are
+  algorithmically consistent (exact KMeans for the shipped segmentation).
 * **Safe silhouette.** sklearn's ``silhouette_score(..., sample_size=N)``
   draws a plain random subsample; with very unbalanced clusters that subsample
   can contain a single label and the call raises ``ValueError``. The score is
   therefore computed on a *stratified* subsample that always includes every
   cluster (and on the full data when it is small enough).
+* **Stability, not just silhouette.** k is selected on silhouette *and* the
+  mean Adjusted Rand Index across bootstrap resamples (:func:`cluster_stability`),
+  and the selection refuses to return a bare grid boundary without justification
+  (:func:`select_k`), because a boundary optimum usually signals a truncated grid.
 * **Degenerate clusters.** Segments holding less than 1% of the sample are
   reported (``degenerate`` flag) instead of being silently presented as
   business segments.
@@ -38,7 +43,7 @@ from sklearn.preprocessing import StandardScaler
 
 from .utils import save_fig, save_table
 
-MINIBATCH_THRESHOLD = 100_000  # rows above which MiniBatchKMeans is used
+MINIBATCH_THRESHOLD = 250_000  # rows above which MiniBatchKMeans is used
 DEGENERATE_SHARE = 0.01        # a segment below 1% of the sample is flagged
 
 
@@ -145,26 +150,75 @@ def make_kmeans(k: int, seed: int, n_rows: int):
 # ---------------------------------------------------------------------------
 # Choosing k
 # ---------------------------------------------------------------------------
+def cluster_stability(
+    Z: np.ndarray, k: int, seed: int = 42, n_boot: int = 5, sample_size: int = 20_000
+) -> float:
+    """Stability of a k-means solution across bootstrap resamples (mean ARI).
+
+    Each bootstrap draws a fresh sample of rows *with replacement* from the
+    reference set, refits k-means and compares labels with the reference
+    solution. Because the bootstrap sample contains duplicated rows, the ARI is
+    computed on the unique rows shared with the reference labelling (the first
+    occurrence of each duplicated row). A high ARI means the segmentation is
+    reproducible rather than an artefact of one particular sample.
+    """
+    from sklearn.metrics import adjusted_rand_score
+
+    rng = np.random.default_rng(seed)
+    n = len(Z)
+    if n < 50:
+        return float("nan")
+    take = int(min(sample_size, n))
+    ref_idx = np.sort(rng.choice(n, size=take, replace=False))
+    ref = KMeans(n_clusters=int(k), n_init=10, random_state=seed).fit_predict(Z[ref_idx])
+    ref_lab = dict(zip(ref_idx.tolist(), ref.tolist()))
+
+    scores = []
+    for b in range(n_boot):
+        boot = rng.choice(n, size=take, replace=True)
+        try:
+            labels = KMeans(n_clusters=int(k), n_init=10, random_state=seed + b).fit_predict(Z[boot])
+        except Exception:  # pragma: no cover - degenerate bootstrap
+            continue
+        pred_lab: dict = {}
+        for row, lab in zip(boot.tolist(), labels.tolist()):
+            pred_lab.setdefault(row, lab)  # keep first occurrence of duplicated rows
+        common = [row for row in pred_lab if row in ref_lab]
+        if len(common) < 10:
+            continue
+        scores.append(
+            adjusted_rand_score(
+                [ref_lab[row] for row in common],
+                [pred_lab[row] for row in common],
+            )
+        )
+    return float(np.mean(scores)) if scores else float("nan")
+
+
 def choose_k(
     X: pd.DataFrame,
     k_range: range = range(2, 11),
     sample_size: int = 40000,
     seed: int = 42,
+    stability_sample: int = 20_000,
+    n_boot: int = 5,
 ) -> pd.DataFrame:
-    """Elbow (inertia), silhouette and cluster-balance diagnostics for each k."""
-    Z, _, _ = impute_and_scale(subsample(X, sample_size, seed))
+    """Elbow (inertia), silhouette, stability (ARI) and balance diagnostics per k."""
+    Z, _, _ = impute_and_scale(subsample(X, stability_sample, seed))
     rows = []
     for k in k_range:
         if int(k) >= len(Z):
             continue
         km = KMeans(n_clusters=int(k), n_init=10, random_state=seed)
         labels = km.fit_predict(Z)
-        shares = np.unique(labels, return_counts=True)[1] / len(labels)
+        counts = np.unique(labels, return_counts=True)[1]
+        shares = counts / len(labels)
         rows.append(
             {
                 "k": int(k),
                 "inertia": float(km.inertia_),
                 "silhouette": silhouette_safe(Z, labels, sample_size=10_000, seed=seed),
+                "stability_ari": round(cluster_stability(Z, int(k), seed=seed, n_boot=n_boot), 4),
                 "largest_cluster_share": round(float(shares.max()), 4),
                 "n_degenerate_clusters": int((shares < DEGENERATE_SHARE).sum()),
             }
@@ -173,16 +227,49 @@ def choose_k(
 
 
 def select_k(scores: pd.DataFrame, default: int = 4) -> int:
-    """k maximising the silhouette, falling back to ``default`` if all are NaN."""
-    if scores.empty or scores["silhouette"].isna().all():
+    """Choose k from silhouette *and* stability, never a bare grid boundary.
+
+    Selection rule (documented so it is reproducible):
+
+    1. Drop candidates with a degenerate cluster (<1% of the sample) or an
+       undefined silhouette/stability score.
+    2. Score each candidate by ``0.6 * silhouette + 0.4 * stability_ari``
+       (each normalised to its own range over the grid), so discrimination
+       structure dominates while stability breaks near-ties.
+    3. If the winner sits on the grid boundary (the first or last candidate),
+       move to the best *interior* k whenever its combined score is within 5%
+       of the boundary winner - a boundary optimum usually means the grid is
+       truncated, not that k is genuinely optimal.
+    """
+    if scores.empty:
         return int(default)
-    return int(scores.loc[scores["silhouette"].idxmax(), "k"])
+    grid = scores.dropna(subset=["silhouette", "stability_ari"]).copy()
+    grid = grid[grid["n_degenerate_clusters"] == 0]
+    if grid.empty:
+        return int(default)
+
+    def _norm(s: pd.Series) -> pd.Series:
+        lo, hi = float(s.min()), float(s.max())
+        return (s - lo) / (hi - lo) if hi > lo else s * 0.0 + 1.0
+
+    grid["combined"] = 0.6 * _norm(grid["silhouette"]) + 0.4 * _norm(grid["stability_ari"])
+    grid = grid.sort_values("k").reset_index(drop=True)
+    best = grid.loc[grid["combined"].idxmax()]
+    ks = list(grid["k"])
+    is_boundary = int(best["k"]) in (int(ks[0]), int(ks[-1]))
+    if is_boundary and len(ks) > 2:
+        interior = grid.iloc[1:-1]
+        if not interior.empty:
+            best_interior = interior.loc[interior["combined"].idxmax()]
+            if float(best_interior["combined"]) >= 0.95 * float(best["combined"]):
+                return int(best_interior["k"])
+    return int(best["k"])
 
 
 def elbow_silhouette_plot(
     scores: pd.DataFrame, chosen_k: int | None = None, name: str = "clustering_elbow.png"
 ) -> None:
-    """Inertia (elbow) and silhouette score side by side."""
+    """Inertia (elbow), silhouette and stability (ARI) side by side."""
     fig, ax1 = plt.subplots(figsize=(9, 5))
     ax1.plot(scores["k"], scores["inertia"], "o-", color="steelblue", label="Inertia (elbow)")
     ax1.set_xlabel("Number of clusters (k)")
@@ -191,13 +278,18 @@ def elbow_silhouette_plot(
 
     ax2 = ax1.twinx()
     ax2.plot(scores["k"], scores["silhouette"], "s--", color="crimson", label="Silhouette")
-    ax2.set_ylabel("Silhouette score", color="crimson")
+    if "stability_ari" in scores.columns:
+        ax2.plot(scores["k"], scores["stability_ari"], "^:", color="darkgreen", label="Stability (ARI)")
+    ax2.set_ylabel("Silhouette / stability (ARI)", color="crimson")
     ax2.tick_params(axis="y", labelcolor="crimson")
     ax2.grid(False)
     if chosen_k is not None:
         ax1.axvline(chosen_k, color="grey", ls=":", lw=1)
         ax1.annotate(f"chosen k={chosen_k}", xy=(chosen_k, float(scores["inertia"].max())), fontsize=9)
-    ax1.set_title("Choosing k: elbow (inertia) and silhouette")
+    ax1.set_title("Choosing k: elbow (inertia), silhouette and bootstrap stability")
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+    ax1.legend(h1 + h2, l1 + l2, fontsize=8, loc="upper right")
     return save_fig(fig, name)
 
 
@@ -353,6 +445,14 @@ def run_clustering(
     if n_deg:
         print(f"    WARNING: {n_deg} segment(s) below {DEGENERATE_SHARE:.0%} of the sample are flagged degenerate")
 
+    rates = kmeans_profile["default_rate"].dropna()
+    spread = {
+        "min_default_rate": round(float(rates.min()), 4) if len(rates) else None,
+        "max_default_rate": round(float(rates.max()), 4) if len(rates) else None,
+        "spread_pp": round(float(rates.max() - rates.min()) * 100.0, 2) if len(rates) else None,
+    }
+    print(f"    segment default-rate spread: {spread['spread_pp']} pp ({spread['min_default_rate']} -> {spread['max_default_rate']})")
+
     return {
         "k": int(k),
         "k_selection": scores,
@@ -364,4 +464,5 @@ def run_clustering(
         "labels": km_labels,
         "n_degenerate_segments": n_deg,
         "degenerate_share_threshold": DEGENERATE_SHARE,
+        "default_rate_spread": spread,
     }

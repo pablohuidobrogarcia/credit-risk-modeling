@@ -228,13 +228,25 @@ def censoring_plot(
 def run_timeseries(
     df: pd.DataFrame, train_frac: float = 0.8, mature_max_year: int = 2015
 ) -> Dict[str, object]:
-    """End-to-end vintage/trend pipeline used by the notebook and the report."""
+    """End-to-end vintage/trend pipeline used by the notebook and the report.
+
+    The **primary** series is restricted to the mature vintages
+    (``issue_year <= mature_max_year``): only those loans are old enough for
+    their outcome to be observed before the 2018-12 cut-off, so the resulting
+    default rates are not biased towards fast defaults. The full-sample series
+    (including the right-censored tail) is estimated in parallel as the
+    secondary, censoring-exposed analysis.
+    """
     series_all = monthly_default_series(df)
     # Truncate the immature tail: keep months with at least 200 resolved loans.
     counts = df.assign(m=df["issue_ym"].astype(str)).groupby("m", observed=True).size()
     counts.index = pd.to_datetime(counts.index, format="%Y-%m")
     keep = counts[counts >= 200].index
-    series = series_all[series_all.index.isin(keep)]
+    series_full = series_all[series_all.index.isin(keep)]
+    save_table(series_full.rename("default_rate").reset_index(name="month"), "ts_monthly_default_rate_full.csv")
+
+    # Primary series = mature vintages only.
+    series = series_full[series_full.index.year <= int(mature_max_year)]
     save_table(series.rename("default_rate").reset_index(name="month"), "ts_monthly_default_rate.csv")
 
     dec = decompose_series(series)
@@ -247,26 +259,37 @@ def run_timeseries(
     save_table(out["ljung_box"].reset_index(), "ts_ljung_box.csv")
     forecast_plot(out)
 
-    censoring_plot(series, mature_max_year=mature_max_year)
-    cens = censoring_sensitivity(series, mature_max_year=mature_max_year, train_frac=train_frac)
-    if "sarimax_mature" in cens:
-        save_json(
-            {
-                "mature_max_year": cens["mature_max_year"],
-                "n_months_mature": cens["n_months_mature"],
-                "full_sample": out["metrics"],
-                "mature_vintages_only": cens["sarimax_mature"],
-                "stationarity_full": _stationarity_records(tests),
-                "stationarity_mature": _stationarity_records(cens["stationarity_mature"]),
-            },
-            "ts_censoring_sensitivity.json",
-        )
-        save_table(
-            cens["stationarity_mature"], "ts_stationarity_tests_mature.csv"
-        )
+    # Secondary: the same model on the full series (immature tail included), plus
+    # the resolved-share diagnostic that motivates the choice.
+    censoring_plot(series_full, mature_max_year=mature_max_year)
+    full_out = fit_sarimax(series_full, train_frac=train_frac)
+    full_tests = stationarity_tests(series_full)
+    cens: Dict[str, object] = {
+        "mature_max_year": int(mature_max_year),
+        "n_months_mature": int(len(series)),
+        "n_months_full": int(len(series_full)),
+        "sarimax_full_sample": full_out["metrics"],
+        "stationarity_full": full_tests,
+        "sarimax_mature": out["metrics"],
+        "stationarity_mature": tests,
+    }
+    save_json(
+        {
+            "mature_max_year": cens["mature_max_year"],
+            "n_months_mature": cens["n_months_mature"],
+            "n_months_full": cens["n_months_full"],
+            "mature_vintages_only": cens["sarimax_mature"],
+            "full_sample": cens["sarimax_full_sample"],
+            "stationarity_mature": _stationarity_records(tests),
+            "stationarity_full": _stationarity_records(full_tests),
+        },
+        "ts_censoring_sensitivity.json",
+    )
+    save_table(full_tests, "ts_stationarity_tests_full.csv")
 
     # Values used in the README/report tables.
     out["series"] = series
+    out["series_full"] = series_full
     out["stationarity"] = tests
     out["decomposition"] = dec
     out["censoring"] = cens

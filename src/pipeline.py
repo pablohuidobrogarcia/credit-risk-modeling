@@ -106,12 +106,88 @@ def load_modeling_frame(cfg: Config) -> pd.DataFrame:
     return features.engineer_features(df)
 
 
-def train_oot_split(df: pd.DataFrame, cfg: Config) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Chronological split: fit on early vintages, validate on later ones."""
-    split_year = int(cfg.modeling.get("oot_split_year", 2017))
-    train = df[df["issue_year"] < split_year].copy()
-    oot = df[df["issue_year"] >= split_year].copy()
-    return train, oot
+def train_oot_split(
+    df: pd.DataFrame,
+    cfg: Config,
+    kind: str = "mature",
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """Chronological split: fit on early vintages, validate on later ones.
+
+    ``kind="mature"`` (primary) uses only the fully-resolved ``(year, term)``
+    cells configured under ``modeling.mature_*``; ``kind="immature"``
+    (secondary) reproduces the original late-vintage window. See
+    :func:`split_design` for the rule and the resolved-share evidence.
+    """
+    if kind == "immature":
+        split_year = int(cfg.modeling.get("oot_split_year", 2017))
+        train = df[df["issue_year"] < split_year].copy()
+        oot = df[df["issue_year"] >= split_year].copy()
+        return train, oot
+
+    train_years = {int(y) for y in cfg.modeling.get("mature_train_years", [2010, 2011, 2012, 2013])}
+    test_years = {int(y) for y in cfg.modeling.get("mature_test_years", [2014, 2015])}
+    terms = [str(t) for t in cfg.modeling.get("mature_terms", ["36"])]
+
+    def _restrict(frame: pd.DataFrame, years: set) -> pd.DataFrame:
+        m = frame["issue_year"].isin(years)
+        if terms and "term" in frame.columns:
+            m &= frame["term"].astype(str).isin(terms)
+        return frame[m].copy()
+
+    return _restrict(df, train_years), _restrict(df, test_years)
+
+
+def split_design(cfg: Config) -> Dict[str, Any]:
+    """Document the primary/secondary validation split from the resolved shares.
+
+    Combines the configured years/terms with the empirical ``(year, term)``
+    resolved-share table so every claim about "maturity" is backed by a number.
+    """
+    table = data_prep.resolution_by_year_term()
+    rule = data_prep.mature_split_rule(
+        table, min_resolved_share=float(cfg.modeling.get("min_resolved_share", 0.90))
+    )
+    train_years = [int(y) for y in cfg.modeling.get("mature_train_years", [2010, 2011, 2012, 2013])]
+    test_years = [int(y) for y in cfg.modeling.get("mature_test_years", [2014, 2015])]
+    terms = [str(t) for t in cfg.modeling.get("mature_terms", ["36"])]
+    immature_year = int(cfg.modeling.get("oot_split_year", 2017))
+
+    def _shares(years, terms_):
+        m = table["issue_year"].isin(years) & table["term_months"].astype(str).isin(terms_)
+        sub = table[m]
+        if sub.empty:
+            return None
+        n = float(sub["n_loans"].sum())
+        r = float(sub["n_resolved"].sum())
+        return {
+            "resolved_share": round(r / n, 4) if n else None,
+            "n_loans": int(n),
+            "n_resolved": int(r),
+        }
+
+    return {
+        "primary": {
+            "label": "mature",
+            "train_years": train_years,
+            "test_years": test_years,
+            "terms": terms,
+            "rule": rule["rule"],
+            "min_resolved_share": rule["min_resolved_share"],
+            "train_resolution": _shares(train_years, terms),
+            "test_resolution": _shares(test_years, terms),
+        },
+        "secondary": {
+            "label": "immature",
+            "train_years_before": immature_year,
+            "test_years": [immature_year, int(cfg.modeling.get("test_years", [2017, 2018])[-1])],
+            "rule": f"Issue year >= {immature_year} (the original split, heavily right-censored).",
+            "test_resolution_all_terms": _shares([immature_year, immature_year + 1], ["36", "60"]),
+        },
+        "resolved_share_by_year_term": _records(table),
+        "mature_cells": rule["mature_cells"],
+        "immature_cells": rule["immature_cells"],
+        "terms_with_immature_cells": rule["terms_with_immature_cells"],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -165,18 +241,21 @@ def stage_eda(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
         "max_default_rate": round(float(out["series"].max()), 4),
         "stationarity": _records(out["stationarity"]),
         "sarimax": metrics,
+        "sarimax_basis": f"mature vintages only (issue_year <= {mature_max_year})",
         "ljung_box": _records(lb),
         "resolution_by_year": _records(maturity),
+        "resolution_by_year_term": _records(data_prep.resolution_by_year_term()),
     }
     cens = out.get("censoring", {})
-    if "sarimax_mature" in cens:
+    if "sarimax_full_sample" in cens:
         result["censoring_sensitivity"] = {
             "mature_max_year": cens["mature_max_year"],
             "n_months_mature": int(cens["n_months_mature"]),
-            "sarimax_full_sample": metrics,
+            "n_months_full": int(cens.get("n_months_full", len(out.get("series_full", [])))),
             "sarimax_mature_vintages": _jsonable(cens["sarimax_mature"]),
-            "stationarity_full_sample": _records(out["stationarity"]),
+            "sarimax_full_sample": _jsonable(cens["sarimax_full_sample"]),
             "stationarity_mature_vintages": _records(cens["stationarity_mature"]),
+            "stationarity_full_sample": _records(cens["stationarity_full"]),
         }
     return result
 
@@ -273,9 +352,44 @@ def _fit_all_pd_models(
 
 
 def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
-    """WoE binning, variable selection, PD models and out-of-time validation."""
+    """PD scorecard on the primary (mature) window plus the secondary comparison.
+
+    The primary result drives every downstream stage (LGD/EAD, EL, Monte Carlo)
+    and the headline metrics. The secondary (immature) window is re-run with the
+    identical code path so the two are directly comparable; only the comparison
+    table and a couple of headline scalars are kept for the summary.
+    """
     print("[pd] binning, variable selection, PD models and OOT validation ...")
-    train, oot = train_oot_split(df, cfg)
+    design = split_design(cfg)
+    save_json(_jsonable(design), "pd_split_design.json")
+
+    primary = _run_pd_window(df, cfg, kind="mature", tag="")
+    print(f"    primary (mature) champion: {primary['champion']}  AUC={primary['champion_auc']:.4f}")
+
+    secondary = _run_pd_window(df, cfg, kind="immature", tag="secondary")
+    print(f"    secondary (immature) champion: {secondary['champion']}  AUC={secondary['champion_auc']:.4f}")
+
+    comparison = _window_comparison(primary, secondary)
+    save_table(comparison, "pd_window_comparison.csv")
+    print(comparison.to_string(index=False))
+
+    primary["split_design"] = design
+    primary["window_comparison"] = comparison
+    primary["secondary_summary"] = _secondary_summary(secondary)
+    return primary
+
+
+def _run_pd_window(
+    df: pd.DataFrame, cfg: Config, kind: str, tag: str
+) -> Dict[str, Any]:
+    """Fit and validate the full PD stack on one validation window.
+
+    ``tag`` is a filename suffix (``""`` for the primary window, ``"_secondary"``
+    for the immature one) so the two runs never overwrite each other's artifacts.
+    Every fit (winsorisation bounds, WoE bins, variable selection, the
+    calibrator, the KS cut-off) uses the training window only.
+    """
+    train, oot = train_oot_split(df, cfg, kind=kind)
 
     X_all, y_all, num_all, cat_all = features.build_model_matrix(train)
     X_oot_all, y_oot, _, _ = features.build_model_matrix(oot)
@@ -288,15 +402,15 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
     encoders = fit_encoders(X_all, y_all, num_all, cat_all, n_bins=20, min_bin_pct=0.05, max_bins=8)
     W = transform_frame(X_all, encoders)
     iv_tab = iv_summary(encoders)
-    save_table(iv_tab, "pd_iv_summary.csv")
+    save_table(iv_tab, f"pd_iv_summary{tag}.csv")
 
     sel = selection.select_variables(encoders, W, iv_min=0.02, corr_max=0.7, vif_max=5.0)
     selected = list(sel["selected"])
-    save_table(sel["iv_table"], "pd_variable_selection.csv")
-    save_table(sel["correlation_dropped"], "pd_correlation_dropped.csv")
-    save_table(sel["vif_final"], "pd_vif_final.csv")
-    save_json({"selected": selected, "iv_pass": sel["iv_pass"]}, "pd_selected_variables.json")
-    print(f"    binned {len(encoders)} variables, kept {len(selected)} after IV/corr/VIF")
+    save_table(sel["iv_table"], f"pd_variable_selection{tag}.csv")
+    save_table(sel["correlation_dropped"], f"pd_correlation_dropped{tag}.csv")
+    save_table(sel["vif_final"], f"pd_vif_final{tag}.csv")
+    save_json({"selected": selected, "iv_pass": sel["iv_pass"]}, f"pd_selected_variables{tag}.json")
+    print(f"    [{kind}] binned {len(encoders)} variables, kept {len(selected)} after IV/corr/VIF")
 
     sel_num = [c for c in num_all if c in selected]
     sel_cat = [c for c in cat_all if c in selected]
@@ -308,20 +422,20 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
     X_oot = X_oot_all[cols]
     X_tr = X_all[cols]
     comparison = validation.comparison_table(models, X_oot, y_oot, X_tr, y_all, label="oot")
-    save_table(comparison, "pd_model_comparison.csv")
+    save_table(comparison, f"pd_model_comparison{tag}.csv")
     print(comparison[["model", "auc", "gini", "ks"]].to_string(index=False))
 
     champion = max(models, key=lambda m: M.auc(y_oot, m.predict_proba(X_oot)))
     pd_oot = champion.predict_proba(X_oot)
-    print(f"    champion: {champion.name}  AUC={M.auc(y_oot, pd_oot):.4f}")
+    print(f"    [{kind}] champion: {champion.name}  AUC={M.auc(y_oot, pd_oot):.4f}")
 
-    validation.roc_plot(models, X_oot, y_oot)
-    validation.ks_plot(champion, X_oot, y_oot)
-    validation.score_distribution_plot(champion, X_oot, y_oot)
+    validation.roc_plot(models, X_oot, y_oot, name=f"roc_curves{tag}.png")
+    validation.ks_plot(champion, X_oot, y_oot, name=f"ks_curve{tag}.png")
+    validation.score_distribution_plot(champion, X_oot, y_oot, name=f"score_distribution{tag}.png")
 
     calib = M.calibration_table(y_oot, pd_oot, n_bins=10)
-    save_table(calib, "pd_calibration_champion.csv")
-    validation.calibration_plot(champion, X_oot, y_oot)
+    save_table(calib, f"pd_calibration_champion{tag}.csv")
+    validation.calibration_plot(champion, X_oot, y_oot, name=f"calibration{tag}.png")
 
     # Probability calibration. An isotonic (monotone) map is fitted on the
     # TRAINING window and applied out of time: it cannot change the ranking, so
@@ -338,38 +452,37 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
         "calibrated_oot": M.calibration_intercept_slope(y_oot, pd_oot_cal),
         "calibrated_train": M.calibration_intercept_slope(y_all, pd_tr_cal),
     }
-    save_json(_jsonable(calib_metrics), "pd_calibration_metrics.json")
-    save_table(M.calibration_table(y_oot, pd_oot_cal, n_bins=10), "pd_calibration_champion_calibrated.csv")
+    save_json(_jsonable(calib_metrics), f"pd_calibration_metrics{tag}.json")
+    save_table(M.calibration_table(y_oot, pd_oot_cal, n_bins=10), f"pd_calibration_champion_calibrated{tag}.csv")
     raw_brier = calib_metrics["raw_oot"]["brier"]
     cal_brier = calib_metrics["calibrated_oot"]["brier"]
     print(
-        f"    calibration (OOT) Brier raw={raw_brier:.5f} calibrated={cal_brier:.5f} "
-        f"| mean p raw={calib_metrics['raw_oot']['mean_predicted']:.4f} "
-        f"calibrated={calib_metrics['calibrated_oot']['mean_predicted']:.4f} "
-        f"observed={calib_metrics['raw_oot']['observed_rate']:.4f}"
+        f"    [{kind}] calibration (OOT) Brier raw={raw_brier:.5f} calibrated={cal_brier:.5f} "
+        f"| mean p calibrated={calib_metrics['calibrated_oot']['mean_predicted']:.4f} "
+        f"observed={calib_metrics['calibrated_oot']['observed_rate']:.4f}"
     )
 
     psi = validation.stability_report(champion, X_tr, X_oot, sel_num, sel_cat)
-    save_table(psi, "pd_psi_champion.csv")
+    save_table(psi, f"pd_psi_champion{tag}.csv")
 
     # Cut-off chosen on the TRAIN sample (KS-optimal) and applied out of time.
     cutoff = _ks_optimal_cutoff(y_all, champion.predict_proba(X_tr))
     confusion = M.confusion_at_cutoff(y_oot, pd_oot, cutoff)
-    save_json(_jsonable(confusion), "pd_confusion_oot.json")
+    save_json(_jsonable(confusion), f"pd_confusion_oot{tag}.json")
 
     # Points-based scorecard from the interpretable logit.
     scaler = scorecard.ScorecardScaler(base_score=600, base_odds=50, pdo=20)
     betas = dict(zip(coef_table["variable"], coef_table["coefficient"]))
     intercept = float(betas.pop("const", 0.0))
     points = scorecard.build_points_table(encoders_sel, betas, intercept, scaler)
-    save_table(points, "pd_scorecard_points.csv")
-    save_json(_jsonable(scaler.to_dict()), "pd_scorecard_scaler.json")
+    save_table(points, f"pd_scorecard_points{tag}.csv")
+    save_json(_jsonable(scaler.to_dict()), f"pd_scorecard_scaler{tag}.json")
 
     woe_tr = transform_frame(X_tr, encoders_sel)
     woe_oot = transform_frame(X_oot, encoders_sel)
     score_tr = scorecard.score_from_logit(woe_tr, betas, intercept, scaler)
     score_oot = scorecard.score_from_logit(woe_oot, betas, intercept, scaler)
-    _score_histogram(score_tr, score_oot)
+    _score_histogram(score_tr, score_oot, name=f"scorecard_distribution{tag}.png")
 
     # Benchmark sensitivity: what does the lender's own grade/rate add on top?
     benchmark = None
@@ -383,21 +496,22 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
         pb = np.asarray(bmodel.predict_proba(Xb_oot), dtype=float)
         benchmark = round(float(M.auc(yb_oot, pb)), 4)
         benchmark_gini = round(float(M.gini(yb_oot, pb)), 4)
-        print(f"    benchmark (with lender grade/int_rate): AUC={benchmark:.4f} Gini={benchmark_gini:.4f}")
+        print(f"    [{kind}] benchmark (with lender grade/int_rate): AUC={benchmark:.4f} Gini={benchmark_gini:.4f}")
     except Exception as exc:  # pragma: no cover - defensive
         print(f"    benchmark sensitivity skipped: {exc}")
 
     shap_importance = None
     lgbm_model = next((m for m in models if m.name == "lightgbm"), None)
-    if lgbm_model is not None:
+    if kind == "mature" and lgbm_model is not None:
         try:
             shap_importance = interpret.shap_summary(lgbm_model, X_oot, sample_size=5000, seed=cfg.seed)
-            save_table(shap_importance, "pd_shap_importance.csv")
-            save_table(interpret.logistic_vs_shap(shap_importance, coef_table), "pd_shap_vs_logit.csv")
+            save_table(shap_importance, f"pd_shap_importance{tag}.csv")
+            save_table(interpret.logistic_vs_shap(shap_importance, coef_table), f"pd_shap_vs_logit{tag}.csv")
         except Exception as exc:  # pragma: no cover - defensive
             print(f"    SHAP summary skipped: {exc}")
 
     return {
+        "window": kind,
         "n_train": int(len(train)),
         "n_oot": int(len(oot)),
         "train_years": [int(train["issue_year"].min()), int(train["issue_year"].max())],
@@ -436,6 +550,50 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
     }
 
 
+def _window_comparison(primary: Dict[str, Any], secondary: Dict[str, Any]) -> pd.DataFrame:
+    """Side-by-side headline metrics: mature (primary) vs immature (secondary)."""
+
+    def _row(res: Dict[str, Any], label: str) -> Dict[str, Any]:
+        cal = res["calibration_metrics"]["calibrated_oot"]
+        return {
+            "window": label,
+            "test_years": f"{res['oot_years'][0]}-{res['oot_years'][1]}",
+            "n_test": res["n_oot"],
+            "default_rate_test": res["default_rate_oot"],
+            "champion": res["champion"],
+            "auc": res["champion_auc"],
+            "gini": res["champion_gini"],
+            "ks": res["champion_ks"],
+            "calibration_gap": round(float(cal["mean_predicted"] - cal["observed_rate"]), 4),
+            "brier_calibrated": round(float(cal["brier"]), 5),
+            "benchmark_auc_lender_grade": res["benchmark_auc_lender_grade"],
+            "score_psi": res["score_psi"],
+        }
+
+    return pd.DataFrame([_row(primary, "mature (primary)"), _row(secondary, "immature (secondary)")])
+
+
+def _secondary_summary(res: Dict[str, Any]) -> Dict[str, Any]:
+    """Reduce the secondary-window run to the scalars quoted in the report."""
+    cal = res["calibration_metrics"]["calibrated_oot"]
+    return {
+        "window": res["window"],
+        "train_years": res["train_years"],
+        "oot_years": res["oot_years"],
+        "n_train": res["n_train"],
+        "n_oot": res["n_oot"],
+        "default_rate_train": res["default_rate_train"],
+        "default_rate_oot": res["default_rate_oot"],
+        "champion": res["champion"],
+        "champion_auc": res["champion_auc"],
+        "champion_gini": res["champion_gini"],
+        "champion_ks": res["champion_ks"],
+        "benchmark_auc_lender_grade": res["benchmark_auc_lender_grade"],
+        "calibration_gap": round(float(cal["mean_predicted"] - cal["observed_rate"]), 4),
+        "score_psi": res["score_psi"],
+    }
+
+
 def _summarise_pd(res: Dict[str, Any]) -> Dict[str, Any]:
     """Reduce the PD stage result to JSON-safe headline numbers."""
     return {
@@ -463,6 +621,9 @@ def _summarise_pd(res: Dict[str, Any]) -> Dict[str, Any]:
         "score_psi_train_vs_oot": res["score_psi"],
         "iv_top": _records(res["iv_table"].head(15)),
         "shap_top": None if res["shap"] is None else _records(res["shap"].head(15)),
+        "split_design": _jsonable(res.get("split_design", {})),
+        "window_comparison": _records(res["window_comparison"]) if "window_comparison" in res else [],
+        "secondary_window": _jsonable(res.get("secondary_summary", {})),
     }
 
 
@@ -504,11 +665,13 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
     lgd_ead.lgd_distribution_plot(d)
     lgd_ead.lgd_distribution_plot_by_grade(d)
 
-    split_year = int(cfg.modeling.get("oot_split_year", 2017))
     num, cat = list(features.NUMERIC_FEATURES), list(features.CATEGORICAL_FEATURES)
+    # Same primary (mature) window as the PD stage: fit on 2010-2013, test 2014-2015,
+    # 36-month loans only.
+    train, oot = train_oot_split(df, cfg, kind="mature")
     defaults = d[d["lgd"].notna()]
-    train_def = defaults[defaults["issue_year"] < split_year]
-    oot_def = defaults[defaults["issue_year"] >= split_year]
+    train_def = defaults.loc[defaults.index.intersection(train.index)]
+    oot_def = defaults.loc[defaults.index.intersection(oot.index)]
 
     X_tr, y_tr = lgd_ead.prepare_lgd_matrix(train_def, num, cat)
     X_te, y_te = lgd_ead.prepare_lgd_matrix(oot_def, num, cat)
@@ -601,7 +764,7 @@ def _summarise_lgd(res: Dict[str, Any]) -> Dict[str, Any]:
 # Stage 4: behavioural segmentation
 # ---------------------------------------------------------------------------
 def stage_clustering(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
-    """k-means (auto-k), hierarchical clustering and a PCA projection."""
+    """k-means (auto-k with silhouette + stability), hierarchical clustering, PCA."""
     print("[clustering] k-means + hierarchical segmentation ...")
     out = clustering.run_clustering(
         df, CLUSTER_FEATURES, k=None, k_range=range(2, 9), seed=cfg.seed, max_rows=120_000
@@ -619,6 +782,7 @@ def _summarise_clustering(res: Dict[str, Any]) -> Dict[str, Any]:
         "k_selection": _records(res["k_selection"]),
         "kmeans_profile": _records(res["kmeans_profile"]),
         "hierarchical_profile": _records(res["hierarchical_profile"]),
+        "default_rate_spread": _jsonable(res.get("default_rate_spread", {})),
     }
 
 
@@ -656,6 +820,35 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
     sim.convergence_plot({"plain": plain, "antithetic": anti})
     save_table(plain.round(4), "sim_convergence.csv")
     save_table(anti.round(4), "sim_convergence_antithetic.csv")
+
+    # Importance sampling on the systematic factor: an independent, stronger
+    # variance-reduction experiment aimed at the 99.9% VaR estimate.
+    is_cfg = cfg.simulation.get("importance_sampling", {}) or {}
+    is_out = sim.importance_sampling_var(
+        portfolio,
+        rho=rho,
+        level=0.999,
+        n_paths=int(is_cfg.get("n_tail_paths", 20_000)),
+        shift=float(is_cfg.get("shift", 2.5)),
+        seed=cfg.seed,
+    )
+    save_json(_jsonable(is_out), "sim_importance_sampling.json")
+    is_sens = sim.importance_sampling_sensitivity(
+        portfolio,
+        rhos_shift=tuple(is_cfg.get("shift_grid", (0.5, 1.0, 1.5, 2.0, 2.5))),
+        level=0.999,
+        n_paths=int(is_cfg.get("n_tail_paths", 20_000)),
+        rho=rho,
+        seed=cfg.seed,
+    )
+    save_table(is_sens.round(4), "sim_importance_sampling_sensitivity.csv")
+    print(
+        "    importance sampling (99.9%): VarIS={:,} vs naive={:,}  ESS={:,.0f}".format(
+            int(is_out["var_importance_sampling"]),
+            int(is_out["var_naive_same_paths"]),
+            is_out["effective_sample_size"],
+        )
+    )
 
     stress = sim.stress_test(
         portfolio,
@@ -711,6 +904,8 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
         "convergence": _records(plain),
         "rho_sensitivity": _records(sens),
         "variance_reduction": _records(vrr),
+        "importance_sampling": _jsonable(is_out),
+        "importance_sampling_sensitivity": _records(is_sens),
         "stress": _records(stress),
     }
 

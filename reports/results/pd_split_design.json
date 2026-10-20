@@ -1,0 +1,327 @@
+{
+  "primary": {
+    "label": "mature",
+    "train_years": [
+      2010,
+      2011,
+      2012,
+      2013
+    ],
+    "test_years": [
+      2014,
+      2015
+    ],
+    "terms": [
+      "36"
+    ],
+    "rule": "A (issue_year, term) cell enters the primary split when at least 90% of its population loans are resolved.",
+    "min_resolved_share": 0.9,
+    "train_resolution": {
+      "resolved_share": 0.9959,
+      "n_loans": 167149,
+      "n_resolved": 166459
+    },
+    "test_resolution": {
+      "resolved_share": 0.9997,
+      "n_loans": 445743,
+      "n_resolved": 445596
+    }
+  },
+  "secondary": {
+    "label": "immature",
+    "train_years_before": 2017,
+    "test_years": [
+      2017,
+      2018
+    ],
+    "rule": "Issue year >= 2017 (the original split, heavily right-censored).",
+    "test_resolution_all_terms": {
+      "resolved_share": 0.2403,
+      "n_loans": 938821,
+      "n_resolved": 225639
+    }
+  },
+  "resolved_share_by_year_term": [
+    {
+      "issue_year": 2007,
+      "term_months": "36",
+      "n_loans": 603,
+      "n_resolved": 251.0,
+      "resolved_share": 0.4163,
+      "default_rate_resolved": 0.1793
+    },
+    {
+      "issue_year": 2008,
+      "term_months": "36",
+      "n_loans": 2393,
+      "n_resolved": 1562.0,
+      "resolved_share": 0.6527,
+      "default_rate_resolved": 0.1581
+    },
+    {
+      "issue_year": 2009,
+      "term_months": "36",
+      "n_loans": 5281,
+      "n_resolved": 4716.0,
+      "resolved_share": 0.893,
+      "default_rate_resolved": 0.126
+    },
+    {
+      "issue_year": 2010,
+      "term_months": "36",
+      "n_loans": 9156,
+      "n_resolved": 8466.0,
+      "resolved_share": 0.9246,
+      "default_rate_resolved": 0.0995
+    },
+    {
+      "issue_year": 2010,
+      "term_months": "60",
+      "n_loans": 3381,
+      "n_resolved": 3070.0,
+      "resolved_share": 0.908,
+      "default_rate_resolved": 0.2101
+    },
+    {
+      "issue_year": 2011,
+      "term_months": "36",
+      "n_loans": 14101,
+      "n_resolved": 14101.0,
+      "resolved_share": 1.0,
+      "default_rate_resolved": 0.1063
+    },
+    {
+      "issue_year": 2011,
+      "term_months": "60",
+      "n_loans": 7620,
+      "n_resolved": 7620.0,
+      "resolved_share": 1.0,
+      "default_rate_resolved": 0.236
+    },
+    {
+      "issue_year": 2012,
+      "term_months": "36",
+      "n_loans": 43470,
+      "n_resolved": 43470.0,
+      "resolved_share": 1.0,
+      "default_rate_resolved": 0.1358
+    },
+    {
+      "issue_year": 2012,
+      "term_months": "60",
+      "n_loans": 9897,
+      "n_resolved": 9897.0,
+      "resolved_share": 1.0,
+      "default_rate_resolved": 0.277
+    },
+    {
+      "issue_year": 2013,
+      "term_months": "36",
+      "n_loans": 100422,
+      "n_resolved": 100422.0,
+      "resolved_share": 1.0,
+      "default_rate_resolved": 0.1233
+    },
+    {
+      "issue_year": 2013,
+      "term_months": "60",
+      "n_loans": 34392,
+      "n_resolved": 34382.0,
+      "resolved_share": 0.9997,
+      "default_rate_resolved": 0.2515
+    },
+    {
+      "issue_year": 2014,
+      "term_months": "36",
+      "n_loans": 162570,
+      "n_resolved": 162570.0,
+      "resolved_share": 1.0,
+      "default_rate_resolved": 0.1373
+    },
+    {
+      "issue_year": 2014,
+      "term_months": "60",
+      "n_loans": 73059,
+      "n_resolved": 60533.0,
+      "resolved_share": 0.8285,
+      "default_rate_resolved": 0.3114
+    },
+    {
+      "issue_year": 2015,
+      "term_months": "36",
+      "n_loans": 283173,
+      "n_resolved": 283026.0,
+      "resolved_share": 0.9995,
+      "default_rate_resolved": 0.1489
+    },
+    {
+      "issue_year": 2015,
+      "term_months": "60",
+      "n_loans": 137922,
+      "n_resolved": 92520.0,
+      "resolved_share": 0.6708,
+      "default_rate_resolved": 0.3639
+    },
+    {
+      "issue_year": 2016,
+      "term_months": "36",
+      "n_loans": 323495,
+      "n_resolved": 232361.0,
+      "resolved_share": 0.7183,
+      "default_rate_resolved": 0.1985
+    },
+    {
+      "issue_year": 2016,
+      "term_months": "60",
+      "n_loans": 110912,
+      "n_resolved": 60744.0,
+      "resolved_share": 0.5477,
+      "default_rate_resolved": 0.3643
+    },
+    {
+      "issue_year": 2017,
+      "term_months": "36",
+      "n_loans": 320419,
+      "n_resolved": 128551.0,
+      "resolved_share": 0.4012,
+      "default_rate_resolved": 0.2002
+    },
+    {
+      "issue_year": 2017,
+      "term_months": "60",
+      "n_loans": 123160,
+      "n_resolved": 40770.0,
+      "resolved_share": 0.331,
+      "default_rate_resolved": 0.3295
+    },
+    {
+      "issue_year": 2018,
+      "term_months": "36",
+      "n_loans": 344671,
+      "n_resolved": 41272.0,
+      "resolved_share": 0.1197,
+      "default_rate_resolved": 0.1325
+    },
+    {
+      "issue_year": 2018,
+      "term_months": "60",
+      "n_loans": 150571,
+      "n_resolved": 15046.0,
+      "resolved_share": 0.0999,
+      "default_rate_resolved": 0.2264
+    }
+  ],
+  "mature_cells": [
+    {
+      "issue_year": 2010,
+      "term_months": "36",
+      "resolved_share": 0.9246
+    },
+    {
+      "issue_year": 2010,
+      "term_months": "60",
+      "resolved_share": 0.908
+    },
+    {
+      "issue_year": 2011,
+      "term_months": "36",
+      "resolved_share": 1.0
+    },
+    {
+      "issue_year": 2011,
+      "term_months": "60",
+      "resolved_share": 1.0
+    },
+    {
+      "issue_year": 2012,
+      "term_months": "36",
+      "resolved_share": 1.0
+    },
+    {
+      "issue_year": 2012,
+      "term_months": "60",
+      "resolved_share": 1.0
+    },
+    {
+      "issue_year": 2013,
+      "term_months": "36",
+      "resolved_share": 1.0
+    },
+    {
+      "issue_year": 2013,
+      "term_months": "60",
+      "resolved_share": 0.9997
+    },
+    {
+      "issue_year": 2014,
+      "term_months": "36",
+      "resolved_share": 1.0
+    },
+    {
+      "issue_year": 2015,
+      "term_months": "36",
+      "resolved_share": 0.9995
+    }
+  ],
+  "immature_cells": [
+    {
+      "issue_year": 2007,
+      "term_months": "36",
+      "resolved_share": 0.4163
+    },
+    {
+      "issue_year": 2008,
+      "term_months": "36",
+      "resolved_share": 0.6527
+    },
+    {
+      "issue_year": 2009,
+      "term_months": "36",
+      "resolved_share": 0.893
+    },
+    {
+      "issue_year": 2014,
+      "term_months": "60",
+      "resolved_share": 0.8285
+    },
+    {
+      "issue_year": 2015,
+      "term_months": "60",
+      "resolved_share": 0.6708
+    },
+    {
+      "issue_year": 2016,
+      "term_months": "36",
+      "resolved_share": 0.7183
+    },
+    {
+      "issue_year": 2016,
+      "term_months": "60",
+      "resolved_share": 0.5477
+    },
+    {
+      "issue_year": 2017,
+      "term_months": "36",
+      "resolved_share": 0.4012
+    },
+    {
+      "issue_year": 2017,
+      "term_months": "60",
+      "resolved_share": 0.331
+    },
+    {
+      "issue_year": 2018,
+      "term_months": "36",
+      "resolved_share": 0.1197
+    },
+    {
+      "issue_year": 2018,
+      "term_months": "60",
+      "resolved_share": 0.0999
+    }
+  ],
+  "terms_with_immature_cells": [
+    "36",
+    "60"
+  ]
+}

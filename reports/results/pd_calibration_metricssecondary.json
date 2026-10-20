@@ -1,0 +1,25 @@
+{
+  "method": "isotonic_regression",
+  "fit_on": "training window (in-sample scores)",
+  "raw_oot": {
+    "mean_predicted": 0.1906954935788778,
+    "observed_rate": 0.21286922095422078,
+    "calibration_in_the_large": 0.1377809456618735,
+    "slope": 0.8951496726622559,
+    "brier": 0.1577002303011111
+  },
+  "calibrated_oot": {
+    "mean_predicted": 0.18992182642985095,
+    "observed_rate": 0.21286922095422078,
+    "calibration_in_the_large": 0.14280178820044132,
+    "slope": 0.7657663383441071,
+    "brier": 0.15816124088612604
+  },
+  "calibrated_train": {
+    "mean_predicted": 0.1972816907730793,
+    "observed_rate": 0.19728169058083678,
+    "calibration_in_the_large": -1.2139464988791815e-09,
+    "slope": 0.999766516000965,
+    "brier": 0.1440014254520537
+  }
+}

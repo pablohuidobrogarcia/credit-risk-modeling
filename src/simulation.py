@@ -243,6 +243,136 @@ def variance_reduction_report(
 
 
 # ---------------------------------------------------------------------------
+# Importance sampling on the systematic factor (tail / VaR estimation)
+# ---------------------------------------------------------------------------
+def importance_sampling_var(
+    portfolio: BucketedPortfolio,
+    rho: float = 0.12,
+    level: float = 0.999,
+    n_paths: int = 20_000,
+    shift: float = 2.5,
+    seed: int = 42,
+) -> Dict[str, float]:
+    """Estimate the tail VaR with importance sampling on the systematic factor Z.
+
+    Plain Monte Carlo needs very many paths to populate a 99.9% tail: with a
+    Gaussian systematic factor the loss quantile sits far out in the ``Z``
+    distribution, so only a tiny fraction of draws explore it. Losses rise when
+    the systematic factor is *low* (a bad macro state), so the sampling
+    distribution is shifted towards that region,
+    ``Z ~ N(-shift, 1)`` instead of ``N(0, 1)``, and every path is reweighted by
+    the likelihood ratio
+
+    .. math::
+        w(Z) = \\frac{\\phi(Z)}{\\phi(Z + \\text{shift})}
+             = \\exp\\!\\left(\\text{shift}\\,Z - \\tfrac{1}{2}\\text{shift}^2\\right),
+
+    where ``phi`` is the standard normal density. The loss quantile is then read
+    off the *weighted empirical* CDF.
+
+    Returns the IS estimate together with the naive estimate and the effective
+    sample size of the reweighted sample, so the variance reduction is verifiable.
+    """
+    rng = np.random.default_rng(seed)
+    z = rng.normal(loc=-float(shift), scale=1.0, size=int(n_paths))
+    losses = _loss_paths(portfolio, rng, z, rho)
+    # Likelihood ratio phi(z)/phi(z + shift).
+    log_w = float(shift) * z - 0.5 * float(shift) ** 2
+    w = np.exp(log_w - log_w.max())
+    w = w / w.sum()
+
+    order = np.argsort(losses)
+    losses_sorted = losses[order]
+    w_sorted = w[order]
+    cum_w = np.cumsum(w_sorted)
+    idx = int(np.searchsorted(cum_w, float(level)))
+    idx = min(idx, len(losses_sorted) - 1)
+    var_is = float(losses_sorted[idx])
+    tail_mask = losses >= var_is
+    if tail_mask.any():
+        w_tail = w[tail_mask]
+        es_is = float(np.sum(w_tail * losses[tail_mask]) / np.sum(w_tail))
+    else:
+        es_is = var_is
+
+    # Effective sample size and a crude standard error of the IS quantile.
+    ess = float(1.0 / np.sum(w**2)) if np.sum(w**2) > 0 else float("nan")
+    # Naive estimate on the same number of paths for an apples-to-apples comparison.
+    z_naive = rng.standard_normal(int(n_paths))
+    losses_naive = _loss_paths(portfolio, rng, z_naive, rho)
+    var_naive = float(np.quantile(losses_naive, float(level)))
+    se_naive = _quantile_se(losses_naive, float(level))
+    return {
+        "level": float(level),
+        "shift": float(shift),
+        "n_paths": int(n_paths),
+        "var_importance_sampling": var_is,
+        "es_importance_sampling": es_is,
+        "var_naive_same_paths": var_naive,
+        "effective_sample_size": ess,
+        "es_naive_same_paths": float(np.mean(losses_naive[losses_naive >= var_naive])) if np.any(losses_naive >= var_naive) else var_naive,
+        "se_importance_sampling": se_naive / np.sqrt(max(ess, 1.0)) * np.sqrt(len(losses_naive)),
+        "se_naive": se_naive,
+        "var_pct_ead_is": var_is / portfolio.total_ead if portfolio.total_ead else float("nan"),
+        "var_pct_ead_naive": var_naive / portfolio.total_ead if portfolio.total_ead else float("nan"),
+    }
+
+
+def _quantile_se(losses: np.ndarray, level: float) -> float:
+    """Asymptotic standard error of a sample quantile (kernel-free approximation)."""
+    losses = np.asarray(losses, dtype=float)
+    n = len(losses)
+    if n < 10:
+        return float("nan")
+    q = float(np.quantile(losses, level))
+    # Density estimate via a small bandwidth around the quantile.
+    h = 1.06 * losses.std(ddof=1) * n ** (-1 / 5)
+    if h <= 0:
+        return float("nan")
+    density = np.mean(np.abs(losses - q) <= h) / (2 * h)
+    if density <= 0:
+        return float("nan")
+    return float(np.sqrt(level * (1 - level) / n) / density)
+
+
+def importance_sampling_sensitivity(
+    portfolio: BucketedPortfolio,
+    rhos_shift: Sequence[float] = (0.5, 1.0, 1.5, 2.0, 2.5),
+    level: float = 0.999,
+    n_paths: int = 20_000,
+    rho: float = 0.12,
+    seed: int = 42,
+) -> pd.DataFrame:
+    """How the IS tail estimate and its effective sample size move with the shift.
+
+    A larger shift explores the tail more aggressively **but** concentrates the
+    likelihood-ratio weights on fewer paths (the effective sample size falls),
+    which can make the estimator *noisier* than plain Monte Carlo. Reporting the
+    whole curve - instead of a single tuned shift - makes that trade-off visible.
+    """
+    rows = []
+    for s in rhos_shift:
+        out = importance_sampling_var(
+            portfolio, rho=rho, level=level, n_paths=n_paths, shift=float(s), seed=seed
+        )
+        rows.append(
+            {
+                "shift": float(s),
+                "var_is": out["var_importance_sampling"],
+                "var_naive": out["var_naive_same_paths"],
+                "effective_sample_size": out["effective_sample_size"],
+                "ess_share": out["effective_sample_size"] / float(n_paths),
+                "se_is": out["se_importance_sampling"],
+                "se_naive": out["se_naive"],
+                "se_ratio_is_over_naive": (
+                    out["se_importance_sampling"] / out["se_naive"] if out["se_naive"] else float("nan")
+                ),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
 # Stress testing
 # ---------------------------------------------------------------------------
 def stress_test(

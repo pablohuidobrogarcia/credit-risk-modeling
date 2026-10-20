@@ -66,20 +66,59 @@ def test_stratified_sample_covers_every_cluster():
     assert set(np.unique(labels[idx])) == {0, 1}
 
 
-def test_select_k_prefers_the_max_silhouette_and_falls_back():
-    scores = pd.DataFrame({"k": [2, 3, 4], "silhouette": [0.10, 0.30, np.nan]})
+def test_select_k_uses_silhouette_and_stability():
+    scores = pd.DataFrame(
+        {
+            "k": [2, 3, 4],
+            "silhouette": [0.10, 0.30, 0.12],
+            "stability_ari": [0.80, 0.60, 0.90],
+            "n_degenerate_clusters": [0, 0, 0],
+        }
+    )
+    # Interior winner on the combined score (silhouette + stability).
     assert cl.select_k(scores) == 3
-    all_nan = pd.DataFrame({"k": [2, 3], "silhouette": [np.nan, np.nan]})
+
+
+def test_select_k_avoids_a_bare_grid_boundary():
+    scores = pd.DataFrame(
+        {
+            "k": [2, 3, 4],
+            "silhouette": [0.20, 0.199, 0.10],
+            "stability_ari": [0.90, 0.899, 0.80],
+            "n_degenerate_clusters": [0, 0, 0],
+        }
+    )
+    # k=2 is the grid boundary and only marginally better than k=3 -> interior k.
+    assert cl.select_k(scores) == 3
+
+
+def test_select_k_falls_back_when_scores_are_unusable():
+    all_nan = pd.DataFrame(
+        {"k": [2, 3], "silhouette": [np.nan, np.nan], "stability_ari": [np.nan, np.nan], "n_degenerate_clusters": [0, 0]}
+    )
     assert cl.select_k(all_nan, default=5) == 5
+    degenerate = pd.DataFrame(
+        {"k": [2, 3], "silhouette": [0.3, 0.3], "stability_ari": [0.9, 0.9], "n_degenerate_clusters": [1, 1]}
+    )
+    assert cl.select_k(degenerate, default=7) == 7
 
 
-def test_choose_k_reports_balance_and_degenerate_clusters():
-    scores = cl.choose_k(_frame(500, seed=4)[["a", "b"]], k_range=range(2, 5), sample_size=500, seed=4)
+def test_choose_k_reports_balance_stability_and_degenerate_clusters():
+    scores = cl.choose_k(_frame(500, seed=4)[["a", "b"]], k_range=range(2, 5), sample_size=500, seed=4, n_boot=2)
     assert list(scores["k"]) == [2, 3, 4]
-    assert {"inertia", "silhouette", "largest_cluster_share", "n_degenerate_clusters"} <= set(scores.columns)
+    assert {"inertia", "silhouette", "stability_ari", "largest_cluster_share", "n_degenerate_clusters"} <= set(
+        scores.columns
+    )
     assert (scores["silhouette"].between(-1.0, 1.0)).all()
     assert (scores["largest_cluster_share"] > 0.0).all()
     assert (scores["inertia"].diff().dropna() < 0).all()  # inertia always falls with k
+
+
+def test_cluster_stability_is_high_for_well_separated_blobs():
+    rng = np.random.default_rng(0)
+    Z = np.vstack([rng.normal(-5, 0.3, size=(150, 2)), rng.normal(5, 0.3, size=(150, 2))])
+    ari = cl.cluster_stability(Z, k=2, seed=1, n_boot=3, sample_size=200)
+    assert np.isfinite(ari) and ari > 0.9
 
 
 def test_profile_segments_flags_small_segments():

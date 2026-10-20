@@ -1,27 +1,21 @@
 {
   "selected": [
-    "term",
-    "loan_amnt_to_income",
-    "dti",
-    "verification_status",
-    "tot_cur_bal",
-    "loan_amnt",
     "annual_inc",
-    "total_rev_hi_lim",
-    "home_ownership",
-    "revol_util"
-  ],
-  "iv_pass": [
-    "term",
-    "loan_amnt_to_income",
     "installment_to_income",
     "dti",
-    "verification_status",
-    "tot_cur_bal",
-    "loan_amnt",
-    "annual_inc",
-    "total_rev_hi_lim",
+    "revol_util",
     "home_ownership",
-    "revol_util"
+    "credit_history_months",
+    "purpose"
+  ],
+  "iv_pass": [
+    "annual_inc",
+    "installment_to_income",
+    "loan_amnt_to_income",
+    "dti",
+    "revol_util",
+    "home_ownership",
+    "credit_history_months",
+    "purpose"
   ]
 }

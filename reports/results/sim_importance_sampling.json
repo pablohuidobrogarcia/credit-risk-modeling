@@ -1,0 +1,14 @@
+{
+  "level": 0.999,
+  "shift": 1.5,
+  "n_paths": 20000,
+  "var_importance_sampling": 733506011.5979015,
+  "es_importance_sampling": 797600747.5301304,
+  "var_naive_same_paths": 741538580.8026968,
+  "effective_sample_size": 2276.069392148001,
+  "es_naive_same_paths": 786164064.0264181,
+  "se_importance_sampling": 74003735.67608565,
+  "se_naive": 24964989.9024106,
+  "var_pct_ead_is": 0.3485067849571363,
+  "var_pct_ead_naive": 0.352323256566429
+}

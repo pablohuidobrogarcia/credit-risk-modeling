@@ -1075,12 +1075,17 @@ def stage_clustering(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
 
 
 def _summarise_clustering(res: Dict[str, Any]) -> Dict[str, Any]:
+    scores = res["k_selection"]
+    chosen = scores[scores["k"] == res["k"]]
+    chosen_row = chosen.iloc[0] if len(chosen) else None
     return {
         "k": res["k"],
         "features": CLUSTER_FEATURES,
+        "silhouette": (round(float(chosen_row["silhouette"]), 4) if chosen_row is not None else None),
+        "stability_ari": (round(float(chosen_row["stability_ari"]), 4) if chosen_row is not None else None),
         "n_degenerate_segments": res["n_degenerate_segments"],
         "degenerate_share_threshold": res["degenerate_share_threshold"],
-        "k_selection": _records(res["k_selection"]),
+        "k_selection": _records(scores),
         "kmeans_profile": _records(res["kmeans_profile"]),
         "gmm_profile": _records(res["gmm_profile"]) if res.get("gmm_profile") is not None else [],
         "gmm_stability_ari": res.get("gmm_stability_ari"),

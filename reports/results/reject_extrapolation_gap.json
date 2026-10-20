@@ -1,0 +1,7 @@
+{
+  "mean_pd_accepted": 0.1997,
+  "mean_pd_rejected": 0.2573,
+  "illustrative_gap": 0.0576,
+  "ratio_rejected_over_accepted": 1.289,
+  "note": "Illustrative only: the rejected applicants have no observed outcome, so the gap cannot be validated. Common variables are requested amount and DTI."
+}

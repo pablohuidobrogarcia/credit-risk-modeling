@@ -1,7 +1,7 @@
 {
-  "n_defaults_train": 7641,
-  "n_defaults_oot": 23953,
-  "mean_lgd_train": 0.8809,
-  "mean_lgd_oot": 0.8691,
+  "n_defaults_train": 20622,
+  "n_defaults_oot": 64445,
+  "mean_lgd_train": 0.8801,
+  "mean_lgd_oot": 0.8678,
   "median_lgd_oot": 0.8964
 }

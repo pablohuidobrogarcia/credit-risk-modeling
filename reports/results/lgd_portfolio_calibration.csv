@@ -1,0 +1,4 @@
+model,mean_predicted,mean_observed,gap
+gamma_glm,0.8668,0.8678,-0.0011
+lightgbm,0.8687,0.8678,0.0009
+two_part,0.8699,0.8678,0.0021

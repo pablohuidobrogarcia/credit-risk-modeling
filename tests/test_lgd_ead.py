@@ -55,3 +55,51 @@ def test_regression_metrics_perfect():
     m = lgd_ead.regression_metrics(y, y)
     assert m["mae"] == 0.0
     assert abs(m["r2"] - 1.0) < 1e-12
+
+
+def _two_part_frame(n: int = 4000, seed: int = 0):
+    rng = np.random.default_rng(seed)
+    dti = rng.uniform(0, 40, n)
+    inc = rng.lognormal(11, 0.5, n)
+    # Boundary (LGD == 1) more likely at high DTI / low income.
+    boundary_logit = -2.0 + 0.08 * dti - 0.00002 * inc
+    boundary = rng.binomial(1, 1 / (1 + np.exp(-boundary_logit)))
+    interior = np.clip(rng.beta(6, 2, n), 0.01, 0.99)  # severity on (0, 1)
+    lgd = np.where(boundary == 1, 1.0, interior)
+    x = pd.DataFrame({"dti": dti, "annual_inc": inc, "purpose": rng.choice(["a", "b"], n)})
+    return x, pd.Series(lgd), pd.Series(boundary)
+
+
+def test_lgd_boundary_flags():
+    y = pd.Series([0.0, 0.5, 1.0, 1.0])
+    flags = lgd_ead.lgd_boundary_flags(y)
+    assert flags.tolist() == [0, 0, 1, 1]
+
+
+def test_two_part_lgd_shapes_and_range():
+    X, y, _ = _two_part_frame()
+    model = lgd_ead.fit_lgd_two_part(X, y, ["dti", "annual_inc"], ["purpose"], seed=1)
+    pred = lgd_ead.predict_lgd_two_part(model, X, ["dti", "annual_inc"], ["purpose"])
+    assert pred.shape == (len(X),)
+    assert np.all(np.isfinite(pred))
+    assert np.all((pred >= 0) & (pred <= 1))
+    assert 0.0 < model["boundary_rate"] < 1.0
+
+
+def test_two_part_captures_boundary_mass():
+    """Loans the model expects at the boundary should on average get a higher
+    predicted LGD than loans it expects to recover something on."""
+    X, y, boundary = _two_part_frame(seed=3)
+    model = lgd_ead.fit_lgd_two_part(X, y, ["dti", "annual_inc"], ["purpose"], seed=1)
+    pred = lgd_ead.predict_lgd_two_part(model, X, ["dti", "annual_inc"], ["purpose"])
+    assert pred[boundary.to_numpy() == 1].mean() > pred[boundary.to_numpy() == 0].mean()
+
+
+def test_grade_calibration_table_shape():
+    df = pd.DataFrame({"grade": ["A", "A", "B", "B", "C"]})
+    y = np.array([0.2, 0.3, 0.5, 0.6, 0.9])
+    pred = np.array([0.25, 0.28, 0.55, 0.58, 0.8])
+    tab = lgd_ead.lgd_by_grade_calibration(df, y, pred)
+    assert {"grade", "n", "mean_observed", "mean_predicted", "gap"} <= set(tab.columns)
+    assert "portfolio" in set(tab["grade"])
+    assert len(tab) == 4  # A, B, C + portfolio

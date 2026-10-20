@@ -145,7 +145,7 @@ def _lgd_preprocessor(num_features, cat_features) -> Any:
 
     return ColumnTransformer(
         [
-            ("num", SimpleImputer(strategy="median"), list(num_features)),
+            ("num", SimpleImputer(strategy="median", keep_empty_features=True), list(num_features)),
             ("cat", OneHotEncoder(handle_unknown="ignore", min_frequency=0.02, sparse_output=False), list(cat_features)),
         ]
     )
@@ -157,6 +157,118 @@ def regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, floa
         "rmse": float(np.sqrt(mean_squared_error(y_true, y_pred))),
         "r2": float(r2_score(y_true, y_pred)),
     }
+
+
+# ---------------------------------------------------------------------------
+# Two-part LGD model (block 4)
+# ---------------------------------------------------------------------------
+# Realised LGD piles up at 0 (full recovery) and 1 (no recovery), which a single
+# regression cannot represent. The two-part model splits the problem:
+#   Part 1  P(boundary | x)  : logistic model for the event LGD == 1 (no recovery),
+#                              i.e. recoveries == 0.
+#   Part 2  E[LGD | x, LGD<1]: severity model on the strictly-interior LGD values,
+#                              fitted as a fractional (quasi-Beta) GLM on the
+#                              positive part, which respects the (0, 1) support.
+# The combined estimate is E[LGD] = P(LGD=1) * 1 + (1 - P(LGD=1)) * E[LGD | LGD<1].
+BOUNDARY_TOL = 1e-9
+
+
+def lgd_boundary_flags(y: pd.Series) -> pd.Series:
+    """Boolean flag: the loan realised the no-recovery boundary ``LGD == 1``."""
+    return (pd.to_numeric(y, errors="coerce") >= 1.0 - BOUNDARY_TOL).astype(int)
+
+
+def fit_lgd_two_part(
+    X_train: pd.DataFrame, y_train: pd.Series, num_features, cat_features, seed: int = 42
+) -> Dict[str, Any]:
+    """Fit the two-part LGD model (boundary logistic + interior fractional GLM).
+
+    Returns a dict holding both fitted components plus the boundary rate, so the
+    two parts can be scored and reported separately.
+    """
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.pipeline import Pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    y = pd.to_numeric(y_train, errors="coerce").to_numpy(dtype=float)
+    flag = (y >= 1.0 - BOUNDARY_TOL).astype(int)
+    boundary_rate = float(flag.mean())
+
+    # Part 1: logistic boundary model on the raw features.
+    pre = _lgd_preprocessor(num_features, cat_features)
+    clf = Pipeline(
+        [
+            ("prep", pre),
+            ("scale", StandardScaler(with_mean=False)),
+            ("clf", LogisticRegression(C=1.0, solver="lbfgs", max_iter=3000, random_state=seed)),
+        ]
+    )
+    clf.fit(X_train, flag)
+
+    # Part 2: fractional (quasi-Beta) GLM on the strictly-interior LGD values.
+    interior = flag == 0
+    sev_res = None
+    if interior.sum() >= 50:
+        X_int = X_train.loc[interior]
+        y_int = y[interior]
+        n = len(y_int)
+        # Squeeze into (0, 1) so the logit link is finite, then fit a Binomial
+        # (fractional-response / quasi-Beta) GLM: the standard two-part severity
+        # choice when the response is a continuous proportion.
+        y_frac = (y_int * (n - 1) + 0.5) / n
+        design = _one_hot_design(X_int, num_features, cat_features)
+        model = sm.GLM(y_frac, design, family=sm.families.Binomial())
+        sev_res = model.fit(maxiter=200)
+    return {"boundary": clf, "severity": sev_res, "boundary_rate": boundary_rate}
+
+
+def predict_lgd_two_part(model: Dict[str, Any], X: pd.DataFrame, num_features, cat_features) -> np.ndarray:
+    """Combined E[LGD] from the two-part model, clipped to ``[0, 1]``."""
+    p_boundary = model["boundary"].predict_proba(X)[:, 1]
+    sev_res = model["severity"]
+    if sev_res is None:  # pragma: no cover - defensive
+        interior = np.zeros(len(X))
+    else:
+        design = _one_hot_design(X, num_features, cat_features)
+        design = design.reindex(columns=sev_res.params.index, fill_value=0.0)
+        interior = np.asarray(sev_res.predict(design), dtype=float)
+    combined = p_boundary * 1.0 + (1.0 - p_boundary) * interior
+    return np.clip(combined, 0.0, 1.0)
+
+
+def lgd_by_grade_calibration(
+    df: pd.DataFrame, y_true: np.ndarray, y_pred: np.ndarray, grade_col: str = "grade"
+) -> pd.DataFrame:
+    """Mean predicted vs mean observed LGD by grade (the realistic use case).
+
+    Loan-level LGD is noisy; the portfolio/grade aggregation is what a bank
+    actually consumes, so this table is the primary LGD calibration check.
+    """
+    tab = pd.DataFrame(
+        {
+            "grade": df[grade_col].astype(str).to_numpy(),
+            "observed": np.asarray(y_true, dtype=float),
+            "predicted": np.asarray(y_pred, dtype=float),
+        }
+    )
+    out = (
+        tab.groupby("grade")
+        .agg(n=("observed", "size"), mean_observed=("observed", "mean"), mean_predicted=("predicted", "mean"))
+        .reset_index()
+    )
+    out["gap"] = out["mean_predicted"] - out["mean_observed"]
+    overall = pd.DataFrame(
+        [
+            {
+                "grade": "portfolio",
+                "n": int(len(tab)),
+                "mean_observed": round(float(tab["observed"].mean()), 4),
+                "mean_predicted": round(float(tab["predicted"].mean()), 4),
+                "gap": round(float(tab["predicted"].mean() - tab["observed"].mean()), 4),
+            }
+        ]
+    )
+    return pd.concat([out.round(4), overall], ignore_index=True)
 
 
 def lgd_distribution_plot(lgd_df: pd.DataFrame, name: str = "lgd_distribution.png"):

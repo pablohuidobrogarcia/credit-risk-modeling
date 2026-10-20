@@ -684,7 +684,9 @@ def _run_pd_window(
     woe_oot = transform_frame(X_oot, encoders_sel)
     # WoE matrix + target for the primary test window: exported so the optional R
     # script (r/replicate_scorecard.R) can refit the identical logit with glm().
-    woe_export = woe_oot.copy()
+    # WoE values are log-odds; rounding to 6 dp keeps the file small (loan-level,
+    # ~446k rows) without changing any refit result.
+    woe_export = woe_oot.round(6)
     woe_export.insert(0, "default_flag", np.asarray(y_oot, dtype=int))
     save_table(woe_export, f"pd_woe_oot{tag}.csv")
     score_tr = scorecard.score_from_logit(woe_tr, betas, intercept, scaler)

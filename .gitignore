@@ -61,6 +61,7 @@ Thumbs.db
 
 # Pipeline run logs (not artefacts)
 reports/results/_*.log
+reports/results/_summary_baseline.json
 *.log
 
 # Local, non-public notes (kept deliberately out of the public repository)

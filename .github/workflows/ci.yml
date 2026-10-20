@@ -34,5 +34,9 @@ jobs:
       - name: Lint
         run: ruff check src tests
 
+      - name: Docs number-integrity check
+        # Fails if the README results tables drift from reports/results/summary.json.
+        run: python -m src.report_tables --check
+
       - name: Run tests
         run: python -m pytest -q

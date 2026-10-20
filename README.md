@@ -1,6 +1,6 @@
 # Credit Risk Modeling Pipeline — Lending Club
 
-![CI](https://github.com/Pablo-dot1/credit-risk-lending-club/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/pablohuidobrogarcia/credit-risk-modeling/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
@@ -12,7 +12,7 @@ loan book (2007–2018):
 challengers → LGD / EAD / expected loss → customer segmentation → single-factor
 (Vasicek) Monte Carlo portfolio loss simulation.**
 
-> **Honesty rule for this repository:** every number quoted in this README and in
+> **Sourcing convention for this repository:** every number quoted in this README and in
 > [`reports/model_validation_report.md`](reports/model_validation_report.md) is read from
 > [`reports/results/summary.json`](reports/results/summary.json), which a single run of
 > `python -m src.pipeline all` regenerates. If a metric is not in that file, it is not
@@ -161,9 +161,9 @@ END
 * The modeling sample contains **resolved loans only** (`Fully Paid`, `Charged Off`,
   `Default`). Loans still `Current`, `In Grace`, `Late` or `Issued` are excluded:
   including them would mean training on a label that is only known *later*.
-* This is an **ever-green, time-inconsistent** definition in the literal sense that a
-  loan is labelled with its final state, but a loan that never completes its term can
-  only be "default" if it charged off early — see
+* This is an **as-of-observation ("evergreen") label**: a loan is labelled with its final
+  state, but a loan that never completes its term can only be "default" if it charged off
+  early — see
   [right-censoring](#71-right-censoring-is-now-handled-by-design).
 
 ---
@@ -416,7 +416,7 @@ measured censoring effect:
 | Immature (secondary) | 2017–2018 | 38.17 % / 11.37 % | lightgbm | **0.6736** | 0.3473 | 0.2524 | 21.29 % |
 
 Testing on the censored window **inflates AUC by +0.0579** (0.6736 vs 0.6157). That gap is
-a measurement artefact, not model quality — it is exactly why the earlier head-line figure
+a measurement artefact, not model quality — it is exactly why the earlier headline figure
 of 0.6736 is no longer quoted as the headline.
 
 Per-vintage resolved share (population, from `data/processed/accepted.parquet`):
@@ -489,10 +489,12 @@ vs OOT 0.6068) and lands below the penalised logits out of time.
 
 ### 7.3 The default-rate forecast is weak
 
-* ADF fails to reject a unit root (statistic −1.5506, p = 0.5083) and the series is **not
-  stationary**, so any ARIMA forecast is fragile. (On the mature series the KPSS p-value
-  falls outside the look-up table, i.e. it does not reject either — the mature series is
-  better behaved but not stationary in the ADF sense.)
+* Stationarity tests on the mature series (primary) point the same way: the **ADF fails to
+  reject a unit root** (statistic −1.5506, p = 0.5083, 5 % critical value −2.9044) and the
+  **KPSS rejects trend-stationarity** (statistic 1.0787, p = 0.01, 5 % critical value 0.4630).
+  The two tests agree, so the series is treated as non-stationary and the ARIMA forecast is
+  fragile. (For reference, on the full sample the ADF p-value is even higher at 0.8804 and
+  KPSS still rejects at p = 0.0270.)
 * **Ljung–Box rejects white-noise residuals** on the mature series too: lag 10 p = 0.0026,
   lag 20 p = 0.0365 — the model leaves serial structure unexplained.
 * Train RMSE **0.031061** vs test RMSE **0.014797**: on the *mature* series the
@@ -530,21 +532,23 @@ monotone, so AUC/Gini/KS are unchanged):
 
 | Basis (OOT, primary window) | Mean predicted | Observed | Calibration-in-the-large | Slope | Brier |
 |---|---|---|---|---|---|
-| raw champion score | 0.1196 | 0.1447 | 0.1218 | 0.5809 | **0.12176** |
-| isotonic-calibrated | 0.1196 | 0.1447 | 0.1196 | 0.3860 | **0.12370** |
+| raw champion score | 0.1213 | 0.1447 | 0.2034 | 0.9429 | **0.12176** |
+| isotonic-calibrated | 0.1196 | 0.1447 | 0.2194 | 0.3864 | **0.12370** |
 
-Two honest observations:
+Two observations:
 
-* The model **under-predicts the OOT default rate** (11.96 % predicted vs 14.47 %
-  observed). The 2014–2015 default rate is genuinely higher than the 2010–2013 training
-  rate (12.36 %), so part of this is a real level shift.
-* The calibrator was fitted on training-window scores, so it inherits an optimistic
-  in-sample fit; applied OOT its slope collapses to **0.3860** (vs 0.5809 raw) and its
-  Brier is **worse** (0.12370 vs 0.12176). The raw score is already conservatively
-  *low*, and the isotonic map makes the probabilities *flatter*, not better. The
-  calibrated PDs are used for EL/simulation because that is the operationally correct
-  pipeline, but the improvement is **not** taken for granted — and the EL is reported both
-  ways:
+* The model **under-predicts the OOT default rate** (11.96 % predicted vs 14.47 % observed on
+  the calibrated scale; the raw score averages 12.13 %). The 2014–2015 default rate is
+  higher than the 2010–2013 training rate (12.36 %), so part of this is a real level shift:
+  the ~2.5 pp gap between 11.96 % predicted and 14.47 % observed on the primary window is
+  consistent with the distribution shift between the 2010–2013 training window and the
+  2014–2015 test window, not with a defective fit.
+* The calibrator was fitted on training-window scores, so it inherits an in-sample fit;
+  applied OOT its slope falls to **0.3864** (vs 0.9429 raw) and its Brier is **worse**
+  (0.12370 vs 0.12176). The raw score is already conservatively *low*, and the isotonic map
+  makes the probabilities *flatter*, not better. The calibrated PDs are used for
+  EL/simulation because that is the operationally correct pipeline, but the improvement is
+  **not** taken for granted — and the EL is reported both ways:
   **$207.23M (calibrated PD, 9.85 % of EAD)** vs **$214.07M (raw PD, 10.17 % of EAD)**.
 
 ### 7.6 Everything else

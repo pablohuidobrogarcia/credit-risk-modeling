@@ -27,16 +27,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # The unit tests run on synthetic data and do not need the raw dataset.
-          # Heavy tree libraries are optional for the test suite, so they are
-          # installed only if available (LightGBM wheels exist on all runners).
-          pip install numpy pandas scipy scikit-learn statsmodels duckdb pyarrow \
-                      matplotlib pyyaml pytest lightgbm
+          # requirements-dev.txt pulls in requirements.txt (ruff, pytest-cov).
+          # The unit tests run on synthetic data and never need the raw dataset.
+          pip install -r requirements-dev.txt
 
       - name: Lint
-        run: |
-          pip install ruff
-          ruff check src tests
+        run: ruff check src tests
 
       - name: Run tests
         run: python -m pytest -q

@@ -175,8 +175,11 @@ AUC/Gini/KS are unchanged):
 
 **Finding P-4 (Medium).** The model **under-predicts the 2014–2015 default rate**
 (12.13 % predicted vs 14.47 % observed); the train-window rate was 12.36 %, so a level
-shift explains part of it. The in-sample calibrator does **not** repair the gap out of
-time: its Brier is worse (0.12370 vs 0.12176) and its slope collapses to **0.3864** (vs
+shift explains part of it: the ~2.5 pp gap between 11.96 % predicted and 14.47 % observed on
+the primary window (calibrated scale) is consistent with the distribution shift between the
+2010–2013 training window and the 2014–2015 test window. The in-sample calibrator does
+**not** repair the gap out of
+time: its Brier is worse (0.12370 vs 0.12176) and its slope falls to **0.3864** (vs
 0.9429 raw). EL is therefore reported under both bases (§5).
 
 ### 3.7 Cutoff / confusion matrix (OOT)

@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "credit-risk-lending-club"
+name = "credit-risk-modeling"
 version = "1.0.0"
 description = "Probability of Default, LGD/EAD, expected loss and Monte Carlo portfolio risk on Lending Club data"
 readme = "README.md"

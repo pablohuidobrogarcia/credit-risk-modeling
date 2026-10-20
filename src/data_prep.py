@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import duckdb
+import pandas as pd
 
 from .config import Config
 from .utils import set_seeds
@@ -136,6 +137,66 @@ def build_accepted_parquet(force: bool = False) -> Path:
     )
     con.close()
     return out_parquet
+
+
+def population_totals() -> Dict[str, int]:
+    """Population counts of the accepted file (documents the sampling fraction)."""
+    c = Config.load()
+    acc_parquet = c.path("accepted_parquet")
+    if not acc_parquet.exists():
+        acc_parquet = build_accepted_parquet(force=False)
+    con = duckdb.connect()
+    con.execute("SET threads TO 4")
+    try:
+        row = con.execute(
+            f"""
+            SELECT COUNT(*)                                    AS n_accepted,
+                   SUM(resolved_flag)                          AS n_resolved,
+                   SUM(CASE WHEN loan_status = 'Fully Paid'   THEN 1 ELSE 0 END) AS n_fully_paid,
+                   SUM(CASE WHEN loan_status = 'Charged Off'  THEN 1 ELSE 0 END) AS n_charged_off,
+                   SUM(CASE WHEN loan_status = 'Default'      THEN 1 ELSE 0 END) AS n_default_status
+            FROM '{acc_parquet.as_posix()}'
+            """
+        ).df()
+    finally:
+        con.close()
+    return {k: int(v) for k, v in row.iloc[0].items()}
+
+
+def resolution_by_year() -> pd.DataFrame:
+    """Right-censoring diagnostic: how many loans of each vintage are resolved.
+
+    The modeling sample only contains loans with a final outcome, so a loan
+    issued in 2017-2018 only enters the sample if it defaulted or was prepaid
+    early enough to mature before the data cut-off (2018-12). This table makes
+    that selection explicit: ``resolved_share`` is the fraction of the
+    *population* vintage that had a known outcome by the cut-off.
+    """
+    c = Config.load()
+    acc_parquet = c.path("accepted_parquet")
+    if not acc_parquet.exists():
+        acc_parquet = build_accepted_parquet(force=False)
+    con = duckdb.connect()
+    con.execute("SET threads TO 4")
+    try:
+        tab = con.execute(
+            f"""
+            SELECT issue_year,
+                   COUNT(*)                                    AS n_loans,
+                   SUM(resolved_flag)                          AS n_resolved,
+                   SUM(COALESCE(default_flag, 0))              AS n_defaulted,
+                   ROUND(SUM(resolved_flag) * 1.0 / COUNT(*), 4) AS resolved_share,
+                   ROUND(SUM(COALESCE(default_flag, 0)) * 1.0
+                         / NULLIF(SUM(resolved_flag), 0), 4)     AS default_rate_resolved
+            FROM '{acc_parquet.as_posix()}'
+            WHERE issue_year IS NOT NULL
+            GROUP BY issue_year
+            ORDER BY issue_year
+            """
+        ).df()
+    finally:
+        con.close()
+    return tab
 
 
 def build_modeling_sample(

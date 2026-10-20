@@ -29,7 +29,7 @@ grid. Antithetic variates are used as a variance-reduction technique.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -288,6 +288,72 @@ def stress_test(
         row.update(out["stats"])
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# Asset-correlation calibration and sensitivity
+# ---------------------------------------------------------------------------
+def basel_retail_correlation(pd_value: float, kind: str = "other") -> float:
+    """PD-dependent asset correlation of the Basel IRB retail framework.
+
+    ``other retail``: ``rho = 0.03 + 0.13 * exp(-35 * PD)`` capped to
+    ``[0.03, 0.16]``; ``revolving``: ``rho = 0.04 + 0.16 * exp(-35 * PD)``
+    capped to ``[0.04, 0.20]`` (Basel II/III, CRE22.5/24). The framework
+    therefore *implies* a very low correlation for high-PD portfolios: at the
+    observed portfolio PD the implied rho sits near the bottom of the range.
+    """
+    pd_clipped = float(np.clip(pd_value, 1e-6, 1.0))
+    if kind == "revolving":
+        rho = 0.04 + 0.16 * np.exp(-35.0 * pd_clipped)
+        return float(np.clip(rho, 0.04, 0.20))
+    rho = 0.03 + 0.13 * np.exp(-35.0 * pd_clipped)
+    return float(np.clip(rho, 0.03, 0.16))
+
+
+def rho_sensitivity(
+    portfolio: BucketedPortfolio,
+    rhos: Sequence[float],
+    names: Optional[Sequence[str]] = None,
+    n_simulations: int = 100_000,
+    seed: int = 42,
+    antithetic: bool = True,
+) -> pd.DataFrame:
+    """Re-run the simulation over a grid of asset correlations.
+
+    The loss distribution is extremely sensitive to ``rho`` (systematic risk),
+    so every capital figure in the report is quoted together with this grid.
+    """
+    rows = []
+    for i, r in enumerate(rhos):
+        label = names[i] if names is not None else f"rho={float(r):.2f}"
+        out = simulate_losses(
+            portfolio, rho=float(r), n_simulations=n_simulations, seed=seed, antithetic=antithetic
+        )
+        row = {"label": label, "rho": float(r)}
+        row.update(out["stats"])
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def rho_sensitivity_plot(
+    sens: pd.DataFrame, base_rho: Optional[float] = None, scale: float = 1_000_000.0,
+    unit: str = "$m", name: str = "mc_rho_sensitivity.png",
+):
+    """EL, VaR 99% and VaR 99.9% as a function of the asset correlation."""
+    fig, ax = plt.subplots(figsize=(9, 5))
+    x = np.arange(len(sens))
+    w = 0.27
+    ax.bar(x - w, sens["expected_loss"] / scale, width=w, label="Expected loss", color="steelblue")
+    ax.bar(x, sens["var_0.99"] / scale, width=w, label="VaR 99%", color="orange")
+    ax.bar(x + w, sens["var_0.999"] / scale, width=w, label="VaR 99.9%", color="crimson")
+    ax.set_xticks(x)
+    ax.set_xticklabels(sens["label"], rotation=15, ha="right")
+    ax.set_ylabel(f"Loss ({unit})")
+    ax.set_title("Sensitivity of the loss distribution to the asset correlation")
+    ax.legend(fontsize=8)
+    if base_rho is not None:
+        ax.annotate(f"base case rho={base_rho:.3f}", xy=(0.98, 0.95), xycoords="axes fraction", ha="right", fontsize=8)
+    return save_fig(fig, name)
 
 
 # ---------------------------------------------------------------------------

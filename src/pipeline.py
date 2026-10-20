@@ -140,14 +140,23 @@ def stage_sql() -> Dict[str, pd.DataFrame]:
 # ---------------------------------------------------------------------------
 # Stage 2: EDA and time-series modelling
 # ---------------------------------------------------------------------------
-def stage_eda(df: pd.DataFrame) -> Dict[str, Any]:
-    """Vintage analysis, decomposition and SARIMAX forecast."""
-    print("[eda] vintage analysis and SARIMAX forecast ...")
+def stage_eda(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
+    """Vintage analysis, censoring diagnostics and SARIMAX forecast."""
+    print("[eda] vintage analysis, censoring diagnostic and SARIMAX forecast ...")
     save_table(timeseries.vintage_table(df), "vintage_table.csv")
-    out = timeseries.run_timeseries(df)
+
+    # Right-censoring diagnostic: the sample only holds resolved loans, so late
+    # vintages are systematically biased towards fast defaults.
+    maturity = data_prep.resolution_by_year()
+    save_table(maturity, "censoring_resolved_share_by_year.csv")
+    _resolved_share_plot(maturity)
+
+    mature_max_year = int(cfg.modeling.get("mature_max_year", 2015))
+    out = timeseries.run_timeseries(df, mature_max_year=mature_max_year)
     metrics = _jsonable(out["metrics"])
     lb = out["ljung_box"].reset_index()
-    return {
+
+    result: Dict[str, Any] = {
         "n_months": int(len(out["series"])),
         "series_first": str(out["series"].index.min().date()),
         "series_last": str(out["series"].index.max().date()),
@@ -157,7 +166,39 @@ def stage_eda(df: pd.DataFrame) -> Dict[str, Any]:
         "stationarity": _records(out["stationarity"]),
         "sarimax": metrics,
         "ljung_box": _records(lb),
+        "resolution_by_year": _records(maturity),
     }
+    cens = out.get("censoring", {})
+    if "sarimax_mature" in cens:
+        result["censoring_sensitivity"] = {
+            "mature_max_year": cens["mature_max_year"],
+            "n_months_mature": int(cens["n_months_mature"]),
+            "sarimax_full_sample": metrics,
+            "sarimax_mature_vintages": _jsonable(cens["sarimax_mature"]),
+            "stationarity_full_sample": _records(out["stationarity"]),
+            "stationarity_mature_vintages": _records(cens["stationarity_mature"]),
+        }
+    return result
+
+
+def _resolved_share_plot(maturity: pd.DataFrame, name: str = "censoring_resolved_share.png") -> None:
+    """Resolved share and vintage default rate, showing why late years are biased."""
+    fig, ax = plt.subplots(figsize=(9, 5))
+    years = maturity["issue_year"].astype(int)
+    ax.bar(years, maturity["resolved_share"] * 100.0, color="steelblue", label="Share of vintage resolved")
+    ax.set_xlabel("Origination year")
+    ax.set_ylabel("Resolved share (% of the vintage)", color="steelblue")
+    ax.tick_params(axis="y", labelcolor="steelblue")
+    ax2 = ax.twinx()
+    ax2.plot(years, maturity["default_rate_resolved"] * 100.0, "o--", color="crimson",
+             label="Default rate among resolved")
+    ax2.set_ylabel("Default rate among resolved (%)", color="crimson")
+    ax2.grid(False)
+    lines1, labels1 = ax.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="lower left")
+    ax.set_title("Right-censoring: only resolved loans enter the sample")
+    save_fig(fig, name)
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +323,32 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
     save_table(calib, "pd_calibration_champion.csv")
     validation.calibration_plot(champion, X_oot, y_oot)
 
+    # Probability calibration. An isotonic (monotone) map is fitted on the
+    # TRAINING window and applied out of time: it cannot change the ranking, so
+    # AUC/Gini/KS stay identical, but the probability scale - and therefore the
+    # expected loss - becomes usable. Both raw and calibrated figures are kept.
+    pd_tr_raw = champion.predict_proba(X_tr)
+    calibrator = M.fit_calibrator(y_all, pd_tr_raw)
+    pd_tr_cal = M.apply_calibrator(calibrator, pd_tr_raw)
+    pd_oot_cal = M.apply_calibrator(calibrator, pd_oot)
+    calib_metrics = {
+        "method": "isotonic_regression",
+        "fit_on": "training window (in-sample scores)",
+        "raw_oot": M.calibration_intercept_slope(y_oot, pd_oot),
+        "calibrated_oot": M.calibration_intercept_slope(y_oot, pd_oot_cal),
+        "calibrated_train": M.calibration_intercept_slope(y_all, pd_tr_cal),
+    }
+    save_json(_jsonable(calib_metrics), "pd_calibration_metrics.json")
+    save_table(M.calibration_table(y_oot, pd_oot_cal, n_bins=10), "pd_calibration_champion_calibrated.csv")
+    raw_brier = calib_metrics["raw_oot"]["brier"]
+    cal_brier = calib_metrics["calibrated_oot"]["brier"]
+    print(
+        f"    calibration (OOT) Brier raw={raw_brier:.5f} calibrated={cal_brier:.5f} "
+        f"| mean p raw={calib_metrics['raw_oot']['mean_predicted']:.4f} "
+        f"calibrated={calib_metrics['calibrated_oot']['mean_predicted']:.4f} "
+        f"observed={calib_metrics['raw_oot']['observed_rate']:.4f}"
+    )
+
     psi = validation.stability_report(champion, X_tr, X_oot, sel_num, sel_cat)
     save_table(psi, "pd_psi_champion.csv")
 
@@ -306,14 +373,17 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
 
     # Benchmark sensitivity: what does the lender's own grade/rate add on top?
     benchmark = None
+    benchmark_gini = None
     try:
         Xb, yb, numb, catb = features.build_model_matrix(train, include_lender_grade=True)
         Xb = features.apply_clip_bounds(Xb, features.fit_clip_bounds(Xb, numb))
         enc_b = fit_encoders(Xb, yb, numb, catb, n_bins=20, min_bin_pct=0.05, max_bins=8)
         bmodel, _ = pd_model.fit_statsmodels_woe("logit_lender_grade", "logit", Xb, yb, enc_b)
         Xb_oot, yb_oot, _, _ = features.build_model_matrix(oot, include_lender_grade=True)
-        benchmark = round(float(M.auc(yb_oot, bmodel.predict_proba(Xb_oot))), 4)
-        print(f"    benchmark (with lender grade/int_rate): AUC={benchmark:.4f}")
+        pb = np.asarray(bmodel.predict_proba(Xb_oot), dtype=float)
+        benchmark = round(float(M.auc(yb_oot, pb)), 4)
+        benchmark_gini = round(float(M.gini(yb_oot, pb)), 4)
+        print(f"    benchmark (with lender grade/int_rate): AUC={benchmark:.4f} Gini={benchmark_gini:.4f}")
     except Exception as exc:  # pragma: no cover - defensive
         print(f"    benchmark sensitivity skipped: {exc}")
 
@@ -352,6 +422,8 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
         "scaler": scaler.to_dict(),
         "score_psi": round(float(M.psi(score_tr, score_oot)), 4),
         "benchmark_auc_lender_grade": benchmark,
+        "benchmark_gini_lender_grade": benchmark_gini,
+        "calibration_metrics": calib_metrics,
         "shap": shap_importance,
         "coef_table": coef_table,
         "pd_oot": np.asarray(pd_oot, dtype=float),
@@ -359,6 +431,8 @@ def stage_pd(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
         "y_oot": y_oot,
         "oot_frame": oot,
         "models": models,
+        "pd_oot_calibrated": np.asarray(pd_oot_cal, dtype=float),
+        "pd_train_calibrated": np.asarray(pd_tr_cal, dtype=float),
     }
 
 
@@ -380,6 +454,8 @@ def _summarise_pd(res: Dict[str, Any]) -> Dict[str, Any]:
         "champion_gini": res["champion_gini"],
         "champion_ks": res["champion_ks"],
         "benchmark_auc_lender_grade": res["benchmark_auc_lender_grade"],
+        "benchmark_gini_lender_grade": res["benchmark_gini_lender_grade"],
+        "calibration_metrics": _jsonable(res["calibration_metrics"]),
         "cutoff": res["cutoff"],
         "confusion_oot": _jsonable(res["confusion"]),
         "calibration_oot": _records(res["calibration"]),
@@ -466,6 +542,8 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
     best = "gamma_glm" if m_gamma["mae"] <= m_tree["mae"] else "lightgbm"
 
     # Score LGD for the whole out-of-time portfolio (EL = PD x LGD x EAD).
+    # The PD basis is the calibrated champion score; the same portfolio is also
+    # scored with the raw score so the effect of calibration on EL is visible.
     oot_frame = pd_result["oot_frame"]
     X_all = _lgd_feature_frame(oot_frame, num, cat)
     if best == "gamma_glm":
@@ -473,14 +551,20 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
     else:
         lgd_hat = np.clip(np.asarray(tree.predict(X_all), dtype=float), 0.0, 1.0)
 
-    el_loan = lgd_ead.expected_loss_table(oot_frame, pd_result["pd_oot"], lgd_hat)
+    pd_raw = np.asarray(pd_result["pd_oot"], dtype=float)
+    pd_cal = np.asarray(pd_result.get("pd_oot_calibrated", pd_raw), dtype=float)
+    el_loan = lgd_ead.expected_loss_table(oot_frame, pd_cal, lgd_hat)
     el = lgd_ead.aggregate_el(el_loan)
     save_table(el["by_grade"], "el_by_grade.csv")
     save_table(el["portfolio"], "el_portfolio.csv")
     _el_by_grade_plot(el["by_grade"])
 
     portfolio = el["portfolio"].iloc[0]
+    portfolio_raw_pd = lgd_ead.aggregate_el(
+        lgd_ead.expected_loss_table(oot_frame, pd_raw, lgd_hat)
+    )["portfolio"].iloc[0]
     return {
+        "pd_basis": "champion score, isotonic-calibrated on the training window",
         "n_defaults_train": int(len(y_tr)),
         "n_defaults_oot": int(len(y_te)),
         "realised_lgd_train": round(float(y_tr.mean()), 4),
@@ -490,9 +574,12 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
         "best_lgd_model": best,
         "ead_total_oot": round(float(portfolio["ead"]), 2),
         "mean_pd_oot": round(float(portfolio["mean_pd"]), 4),
+        "mean_pd_oot_raw": round(float(portfolio_raw_pd["mean_pd"]), 4),
         "mean_lgd_oot": round(float(portfolio["mean_lgd"]), 4),
         "expected_loss_oot": round(float(portfolio["expected_loss"]), 2),
+        "expected_loss_oot_raw_pd": round(float(portfolio_raw_pd["expected_loss"]), 2),
         "el_rate_oot": round(float(portfolio["el_rate"]), 4),
+        "el_rate_oot_raw_pd": round(float(portfolio_raw_pd["el_rate"]), 4),
         "el_by_grade": el["by_grade"],
         "lgd_hat_oot": np.asarray(lgd_hat, dtype=float),
     }
@@ -500,9 +587,10 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
 
 def _summarise_lgd(res: Dict[str, Any]) -> Dict[str, Any]:
     return {k: _jsonable(v) for k, v in res.items() if k in {
-        "n_defaults_train", "n_defaults_oot", "realised_lgd_train", "realised_lgd_oot",
-        "median_lgd_oot", "best_lgd_model", "ead_total_oot", "mean_pd_oot",
-        "mean_lgd_oot", "expected_loss_oot", "el_rate_oot",
+        "pd_basis", "n_defaults_train", "n_defaults_oot", "realised_lgd_train", "realised_lgd_oot",
+        "median_lgd_oot", "best_lgd_model", "ead_total_oot", "mean_pd_oot", "mean_pd_oot_raw",
+        "mean_lgd_oot", "expected_loss_oot", "expected_loss_oot_raw_pd",
+        "el_rate_oot", "el_rate_oot_raw_pd",
     }} | {
         "model_comparison": _records(res["model_comparison"]),
         "el_by_grade": _records(res["el_by_grade"]),
@@ -526,6 +614,8 @@ def _summarise_clustering(res: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "k": res["k"],
         "features": CLUSTER_FEATURES,
+        "n_degenerate_segments": res["n_degenerate_segments"],
+        "degenerate_share_threshold": res["degenerate_share_threshold"],
         "k_selection": _records(res["k_selection"]),
         "kmeans_profile": _records(res["kmeans_profile"]),
         "hierarchical_profile": _records(res["hierarchical_profile"]),
@@ -540,12 +630,16 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
     print("[simulation] Monte Carlo portfolio loss distribution ...")
     pd_res, lgd_res = ctx["pd"], ctx["lgd"]
     oot = pd_res["oot_frame"]
+    pd_base = np.asarray(pd_res.get("pd_oot_calibrated", pd_res["pd_oot"]), dtype=float)
 
     portfolio = sim.build_portfolio(
-        oot, pd_res["pd_oot"], lgd_res["lgd_hat_oot"], ead_col="funded_amnt", n_detile=10
+        oot, pd_base, lgd_res["lgd_hat_oot"], ead_col="funded_amnt", n_detile=10
     )
     save_table(portfolio.summary().round(6), "sim_portfolio_buckets.csv")
-    print(f"    buckets={len(portfolio.labels)}  total EAD={portfolio.total_ead:,.0f}")
+    ead_w_pd = float(np.average(portfolio.pd, weights=portfolio.ead))
+    ead_w_lgd = float(np.average(portfolio.lgd, weights=portfolio.ead))
+    print(f"    buckets={len(portfolio.labels)}  total EAD={portfolio.total_ead:,.0f}"
+          f"  EAD-weighted PD={ead_w_pd:.4f}  LGD={ead_w_lgd:.4f}")
 
     rho = float(cfg.simulation.get("asset_correlation", 0.12))
     n_sim = int(cfg.simulation.get("n_simulations", 100_000))
@@ -560,7 +654,8 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
     plain = sim.convergence_study(portfolio, rho=rho, n_max=n_sim, seed=cfg.seed, antithetic=False)
     anti = sim.convergence_study(portfolio, rho=rho, n_max=n_sim, seed=cfg.seed, antithetic=True)
     sim.convergence_plot({"plain": plain, "antithetic": anti})
-    save_table(vrr.round(4), "sim_convergence.csv")
+    save_table(plain.round(4), "sim_convergence.csv")
+    save_table(anti.round(4), "sim_convergence_antithetic.csv")
 
     stress = sim.stress_test(
         portfolio,
@@ -575,13 +670,46 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
         stress[["scenario", "expected_loss", "var_0.999", "es_0.99"]].round(0).to_string(index=False)
     )
 
+    # Asset-correlation sensitivity. The loss distribution is driven by rho, so
+    # it is swept over the Basel retail range and anchored on the PD-dependent
+    # correlation implied by the Basel formula for the observed portfolio PD.
+    rho_grid = [float(r) for r in cfg.simulation.get("rho_sensitivity", (0.02, 0.05, 0.10, 0.15))]
+    rho_basel = sim.basel_retail_correlation(ead_w_pd)
+    labels_map: Dict[float, str] = {round(r, 6): f"rho={r:.2f}" for r in rho_grid}
+    labels_map[round(rho, 6)] = f"rho={rho:.3f} (base)"
+    labels_map[round(rho_basel, 6)] = f"rho={rho_basel:.3f} (Basel implied)"
+    ordered = sorted(labels_map.items())
+    sens = sim.rho_sensitivity(
+        portfolio,
+        [r for r, _ in ordered],
+        names=[n for _, n in ordered],
+        n_simulations=n_sim,
+        seed=cfg.seed,
+    )
+    save_table(sens.round(6), "sim_rho_sensitivity.csv")
+    sim.rho_sensitivity_plot(sens, base_rho=rho)
+    print(
+        sens[["label", "expected_loss", "var_0.99", "var_0.999", "es_0.99"]]
+        .round(0)
+        .to_string(index=False)
+    )
+
     return {
         "n_buckets": int(len(portfolio.labels)),
         "total_ead": float(portfolio.total_ead),
+        "ead_weighted_pd": round(ead_w_pd, 4),
+        "ead_weighted_lgd": round(ead_w_lgd, 4),
         "n_simulations": int(run["n_simulations"]),
         "asset_correlation": rho,
+        "rho_basel_implied": round(float(rho_basel), 4),
+        "rho_note": (
+            "Base case rho=0.12 (mid-range of the Basel IRB retail band); the grid spans "
+            "0.02-0.15 and includes the PD-dependent Basel formula value."
+        ),
         "antithetic": bool(run["antithetic"]),
         "statistics": {k: _jsonable(v) for k, v in stats.items()},
+        "convergence": _records(plain),
+        "rho_sensitivity": _records(sens),
         "variance_reduction": _records(vrr),
         "stress": _records(stress),
     }
@@ -620,6 +748,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             "n_rows": int(len(df)),
             "default_rate": round(float(df["default_flag"].mean()), 4),
             "years": [int(df["issue_year"].min()), int(df["issue_year"].max())],
+            "population": data_prep.population_totals(),
         }
 
     if "quality" in requested and df is not None:
@@ -627,7 +756,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     if "sql" in requested:
         summary["sql"] = {k: list(v.shape) for k, v in stage_sql().items()}
     if "eda" in requested and df is not None:
-        summary["eda"] = stage_eda(df)
+        summary["eda"] = stage_eda(df, cfg)
 
     if "pd" in requested and df is not None:
         ctx["pd"] = stage_pd(df, cfg)

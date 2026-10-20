@@ -181,7 +181,53 @@ def forecast_plot(out: Dict[str, object], name: str = "ts_forecast.png"):
     return save_fig(fig, name)
 
 
-def run_timeseries(df: pd.DataFrame, train_frac: float = 0.8) -> Dict[str, object]:
+def censoring_sensitivity(
+    series: pd.Series, mature_max_year: int = 2015, train_frac: float = 0.8
+) -> Dict[str, object]:
+    """Re-estimate the model on vintages old enough to be mostly resolved.
+
+    Right-censoring: with the data cut-off at 2018-12, a 36-month loan issued in
+    2017-2018 can only be in the sample if it defaulted or prepaid early. The
+    late vintages of the default-rate series are therefore biased towards fast
+    defaults. Truncating the series at ``mature_max_year`` removes that bias and
+    shows how much the conclusions depend on it.
+    """
+    mature = series[series.index.year <= int(mature_max_year)].dropna()
+    if len(mature) < 36:
+        return {"mature_max_year": int(mature_max_year), "n_months_mature": int(len(mature)), "note": "series too short to re-estimate"}
+    tests = stationarity_tests(mature)
+    out = fit_sarimax(mature, train_frac=train_frac)
+    return {
+        "mature_max_year": int(mature_max_year),
+        "n_months_mature": int(len(mature)),
+        "series_mature": mature,
+        "stationarity_mature": tests,
+        "sarimax_mature": out["metrics"],
+        "ljung_box_mature": out["ljung_box"],
+    }
+
+
+def censoring_plot(
+    series: pd.Series, mature_max_year: int = 2015, name: str = "ts_censoring_sensitivity.png"
+) -> None:
+    """Full vintage series with the right-censored window shaded."""
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(series.index, series.values, color="steelblue", label="Monthly default rate (resolved loans)")
+    if series.index.max().year > mature_max_year:
+        cens_start = pd.Timestamp(f"{int(mature_max_year) + 1}-01-01")
+        ax.axvspan(cens_start, series.index.max(), color="crimson", alpha=0.15,
+                   label=f"Right-censored window (vintages > {mature_max_year})")
+    ax.axvline(pd.Timestamp(f"{int(mature_max_year) + 1}-01-01"), color="crimson", ls="--", lw=1)
+    ax.set_ylabel("Monthly default rate")
+    ax.set_title("Right-censoring of the vintage series (data cut-off 2018-12)")
+    ax.legend(fontsize=8, loc="upper right")
+    ax.grid(alpha=0.3)
+    return save_fig(fig, name)
+
+
+def run_timeseries(
+    df: pd.DataFrame, train_frac: float = 0.8, mature_max_year: int = 2015
+) -> Dict[str, object]:
     """End-to-end vintage/trend pipeline used by the notebook and the report."""
     series_all = monthly_default_series(df)
     # Truncate the immature tail: keep months with at least 200 resolved loans.
@@ -201,8 +247,40 @@ def run_timeseries(df: pd.DataFrame, train_frac: float = 0.8) -> Dict[str, objec
     save_table(out["ljung_box"].reset_index(), "ts_ljung_box.csv")
     forecast_plot(out)
 
+    censoring_plot(series, mature_max_year=mature_max_year)
+    cens = censoring_sensitivity(series, mature_max_year=mature_max_year, train_frac=train_frac)
+    if "sarimax_mature" in cens:
+        save_json(
+            {
+                "mature_max_year": cens["mature_max_year"],
+                "n_months_mature": cens["n_months_mature"],
+                "full_sample": out["metrics"],
+                "mature_vintages_only": cens["sarimax_mature"],
+                "stationarity_full": _stationarity_records(tests),
+                "stationarity_mature": _stationarity_records(cens["stationarity_mature"]),
+            },
+            "ts_censoring_sensitivity.json",
+        )
+        save_table(
+            cens["stationarity_mature"], "ts_stationarity_tests_mature.csv"
+        )
+
     # Values used in the README/report tables.
     out["series"] = series
     out["stationarity"] = tests
     out["decomposition"] = dec
+    out["censoring"] = cens
     return out
+
+
+def _stationarity_records(tests: pd.DataFrame) -> list:
+    """Stationarity table reduced to JSON-safe scalars."""
+    return [
+        {
+            "test": str(r.test),
+            "statistic": round(float(r.statistic), 4),
+            "p_value": round(float(r.p_value), 4),
+            "conclusion": str(r.conclusion),
+        }
+        for r in tests.itertuples()
+    ]

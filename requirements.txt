@@ -14,7 +14,6 @@ shap>=0.44
 
 # Visualisation
 matplotlib>=3.8
-seaborn>=0.13
 
 # Notebooks / quality
 jupyterlab>=4.0

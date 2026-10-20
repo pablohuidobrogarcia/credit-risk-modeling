@@ -61,3 +61,30 @@ def test_confusion_at_cutoff_counts():
     out = M.confusion_at_cutoff(y, p, cutoff=0.5)
     assert (out["tp"], out["fp"], out["fn"], out["tn"]) == (1, 1, 1, 1)
     assert 0.0 <= out["approval_rate"] <= 1.0
+
+
+def test_calibration_intercept_slope_is_near_one_when_well_calibrated():
+    rng = np.random.default_rng(6)
+    p = rng.uniform(0.05, 0.6, 4000)
+    y = (rng.random(4000) < p).astype(int)
+    out = M.calibration_intercept_slope(y, p)
+    assert abs(out["slope"] - 1.0) < 0.25
+    assert abs(out["calibration_in_the_large"]) < 0.25
+    assert 0.0 <= out["brier"] <= 1.0
+
+
+def test_brier_score_is_zero_for_perfect_forecast():
+    y = np.array([0, 0, 1, 1])
+    assert M.brier_score(y, y) == 0.0
+    assert M.brier_score(y, np.full(4, 0.5)) == 0.25
+
+
+def test_isotonic_calibrator_is_monotone_and_keeps_ranking():
+    rng = np.random.default_rng(7)
+    p = rng.random(3000)
+    y = (rng.random(3000) < p).astype(int)
+    cal = M.fit_calibrator(y, p)
+    pc = M.apply_calibrator(cal, p)
+    assert ((pc >= 0.0) & (pc <= 1.0)).all()
+    assert np.all(np.diff(pc[np.argsort(p)]) >= -1e-9)  # monotone in the score
+    assert M.auc(y, pc) >= M.auc(y, p) - 0.01            # ranking essentially unchanged

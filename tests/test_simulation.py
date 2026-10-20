@@ -78,3 +78,25 @@ def test_build_portfolio_ead_weights():
     assert abs(port.total_ead - df["funded_amnt"].sum()) < 1e-6
     assert len(port.labels) == len(port.pd) == len(port.n)
     assert ((port.pd > 0) & (port.pd < 1)).all()
+
+
+def test_basel_retail_correlation_stays_in_the_regulatory_band():
+    low_pd = sim.basel_retail_correlation(0.001)
+    high_pd = sim.basel_retail_correlation(0.50)
+    assert 0.03 <= high_pd <= 0.16
+    assert 0.03 <= low_pd <= 0.16
+    assert low_pd > high_pd  # correlation decreases as PD rises
+    revolving = sim.basel_retail_correlation(0.001, kind="revolving")
+    assert 0.04 <= revolving <= 0.20
+    assert revolving > low_pd
+
+
+def test_rho_sensitivity_returns_one_row_per_rho_and_tighter_tails():
+    sens = sim.rho_sensitivity(
+        _portfolio(0.08), [0.02, 0.15], names=["low", "high"], n_simulations=20_000, seed=9
+    )
+    assert list(sens["label"]) == ["low", "high"]
+    assert list(sens["rho"]) == [0.02, 0.15]
+    assert sens["expected_loss"].iloc[0] > 0
+    # Higher asset correlation fattens the tail without moving the mean much.
+    assert sens["var_0.999"].iloc[1] > sens["var_0.999"].iloc[0]

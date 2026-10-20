@@ -5,6 +5,8 @@ from typing import Dict, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, roc_curve
 
 
@@ -121,6 +123,59 @@ def calibration_table(
     )
     tab["diff"] = tab["predicted"] - tab["observed"]
     return tab
+
+
+_EPS = 1e-6
+
+
+def brier_score(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+    """Mean squared error of the probability forecast (lower is better)."""
+    y = np.asarray(y_true, dtype=float)
+    p = np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0)
+    return float(np.mean((p - y) ** 2))
+
+
+def calibration_intercept_slope(
+    y_true: np.ndarray, y_prob: np.ndarray
+) -> Dict[str, float]:
+    """Calibration-in-the-large and calibration slope on the logit scale.
+
+    Perfect calibration means ``calibration_in_the_large == 0`` and
+    ``slope == 1``. ``slope < 1`` indicates over-confident (too extreme)
+    predicted probabilities.
+    """
+    y = np.asarray(y_true, dtype=float)
+    p = np.clip(np.asarray(y_prob, dtype=float), _EPS, 1.0 - _EPS)
+    logit_p = np.log(p / (1.0 - p)).reshape(-1, 1)
+    fit = LogisticRegression(C=1e6, solver="lbfgs", max_iter=2000)
+    fit.fit(logit_p, (y >= 0.5).astype(int))
+    obs_rate = float(np.clip(y.mean(), _EPS, 1.0 - _EPS))
+    pred_rate = float(np.clip(p.mean(), _EPS, 1.0 - _EPS))
+    citl = float(np.log(obs_rate / (1.0 - obs_rate)) - np.log(pred_rate / (1.0 - pred_rate)))
+    return {
+        "mean_predicted": pred_rate,
+        "observed_rate": obs_rate,
+        "calibration_in_the_large": citl,
+        "slope": float(fit.coef_[0][0]),
+        "brier": brier_score(y, p),
+    }
+
+
+def fit_calibrator(y_true: np.ndarray, y_prob: np.ndarray) -> IsotonicRegression:
+    """Fit an isotonic (monotone) probability calibrator.
+
+    Isotonic regression preserves the ranking of the scores, so AUC/Gini/KS are
+    unaffected; only the probability scale (and therefore EL) changes.
+    """
+    iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
+    iso.fit(np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0), np.asarray(y_true, dtype=float))
+    return iso
+
+
+def apply_calibrator(calibrator: IsotonicRegression, y_prob: np.ndarray) -> np.ndarray:
+    """Apply a fitted calibrator, clipped back to ``[0, 1]``."""
+    out = calibrator.predict(np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0))
+    return np.clip(np.asarray(out, dtype=float), 0.0, 1.0)
 
 
 def confusion_at_cutoff(y_true: np.ndarray, y_prob: np.ndarray, cutoff: float) -> Dict[str, float]:

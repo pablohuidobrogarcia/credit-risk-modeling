@@ -1,0 +1,76 @@
+{
+  "mature_max_year": 2015,
+  "n_months_mature": 74,
+  "full_sample": {
+    "order": [
+      1,
+      1,
+      1
+    ],
+    "seasonal_order": [
+      1,
+      0,
+      1,
+      12
+    ],
+    "aic": -403.5734905365871,
+    "bic": -392.12119333084513,
+    "n_train": 88,
+    "n_test": 22,
+    "train_rmse": 0.027972487853602,
+    "test_rmse": 0.098120014113309,
+    "test_mae": 0.06545475512980187,
+    "ljung_box_lag10_pvalue": 9.518426755066411e-05,
+    "ljung_box_lag20_pvalue": 0.002465731419981862
+  },
+  "mature_vintages_only": {
+    "order": [
+      1,
+      1,
+      1
+    ],
+    "seasonal_order": [
+      1,
+      0,
+      1,
+      12
+    ],
+    "aic": -242.04157996745565,
+    "bic": -233.12063179786435,
+    "n_train": 59,
+    "n_test": 15,
+    "train_rmse": 0.031060625283941292,
+    "test_rmse": 0.014797386847839546,
+    "test_mae": 0.012978557888006314,
+    "ljung_box_lag10_pvalue": 0.0026270150865158183,
+    "ljung_box_lag20_pvalue": 0.036490181114594594
+  },
+  "stationarity_full": [
+    {
+      "test": "ADF",
+      "statistic": -0.5568,
+      "p_value": 0.8804,
+      "conclusion": "fail to reject unit root"
+    },
+    {
+      "test": "KPSS",
+      "statistic": 0.5652,
+      "p_value": 0.027,
+      "conclusion": "reject stationarity"
+    }
+  ],
+  "stationarity_mature": [
+    {
+      "test": "ADF",
+      "statistic": -1.5506,
+      "p_value": 0.5083,
+      "conclusion": "fail to reject unit root"
+    },
+    {
+      "test": "KPSS",
+      "statistic": 1.0787,
+      "p_value": 0.01,
+      "conclusion": "reject stationarity"
+    }
+  ]
+}

@@ -31,12 +31,12 @@ jobs:
           # Heavy tree libraries are optional for the test suite, so they are
           # installed only if available (LightGBM wheels exist on all runners).
           pip install numpy pandas scipy scikit-learn statsmodels duckdb pyarrow \
-                      matplotlib seaborn pyyaml pytest lightgbm
+                      matplotlib pyyaml pytest lightgbm
 
-      - name: Lint (non-blocking)
+      - name: Lint
         run: |
           pip install ruff
-          ruff check src tests || true
+          ruff check src tests
 
       - name: Run tests
         run: python -m pytest -q

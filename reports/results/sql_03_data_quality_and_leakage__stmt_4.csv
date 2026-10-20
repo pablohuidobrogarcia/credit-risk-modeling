@@ -1,2 +1,2 @@
 min_loan,max_loan,min_income,max_income,min_dti,max_dti,min_revol_util,max_revol_util
-500.0,40000.0,0.0,9300000.0,-1.0,999.0,0.0,366.6
+500.0,40000.0,0.0,10999200.0,-1.0,999.0,0.0,892.3

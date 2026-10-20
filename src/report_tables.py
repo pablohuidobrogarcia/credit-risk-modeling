@@ -122,6 +122,19 @@ def render_results_block(summary: Dict[str, Any]) -> str:
     chosen_k = clu.get("k")
     chosen_row = next((r for r in k_sel if r.get("k") == chosen_k), {})
 
+    cal_method = pd_.get("calibration_method")
+    cal_rows = pd_.get("calibration_comparison", []) or []
+    cal_row = next((r for r in cal_rows if r.get("method") == cal_method), {})
+    forecast_bench = eda.get("forecast_benchmark", []) or []
+    best_forecast = forecast_bench[0] if forecast_bench else {}
+    sarimax_row = next((r for r in forecast_bench if r.get("method") == "sarimax"), {})
+    boundary_train = lgd.get("boundary_rate_train")
+    boundary_oot = lgd.get("boundary_rate_oot")
+    grade_gap = lgd.get("grade_gap_mae", {}) or {}
+    best_lgd_grade_gap = grade_gap.get(best_lgd) if best_lgd else None
+    se_strat = sim.get("se_reduction_stratified_pct")
+    se_anti = sim.get("se_reduction_antithetic_pct")
+
     def _pct_stat(key: str) -> str:
         v = stats.get(key)
         return _pct(v) if v is not None else "n/a"
@@ -131,7 +144,9 @@ def render_results_block(summary: Dict[str, Any]) -> str:
     lines.append("|---|---|")
     if n_sample is not None and default_rate is not None:
         n_resolved = pop.get("n_resolved")
-        hint = f" of {n_resolved:,} resolved ({n_resolved and n_sample / n_resolved * 100:.1f} %)" if n_resolved else ""
+        hint = ""
+        if n_resolved and n_resolved != n_sample:
+            hint = f" of {n_resolved:,} resolved ({n_sample / n_resolved * 100:.1f} %)"
         lines.append(
             f"| **Sample** | {n_sample:,} resolved loans{hint}, vintages {years[0]}–{years[1]}, "
             f"default rate **{_pct(default_rate)}** |"
@@ -150,9 +165,27 @@ def render_results_block(summary: Dict[str, Any]) -> str:
         f"| **PD — benchmark** (with lender `grade`/`int_rate`) | "
         f"**AUC {_num(bench_auc)} / Gini {_num(bench_gini)}** |"
     )
+    if cal_method:
+        lines.append(
+            f"| **PD — calibration** (fit on a held-out temporal slice) | `{cal_method}`, "
+            f"OOT Brier raw {_num(pd_.get('calibration_metrics', {}).get('raw_oot', {}).get('brier'), 5)} → "
+            f"calibrated {_num(pd_.get('calibration_metrics', {}).get('calibrated_oot', {}).get('brier'), 5)}, "
+            f"CITL {_num(cal_row.get('test_citl'))}, slope {_num(cal_row.get('test_slope'))} |"
+        )
     if lgd_mae is not None:
         lines.append(
-            f"| **LGD — champion** | `{best_lgd}`, MAE **{_num(lgd_mae)}**, R² **{_num(lgd_r2)}** |"
+            f"| **LGD — champion** | `{best_lgd}`, MAE **{_num(lgd_mae)}**, R² **{_num(lgd_r2)}**"
+            + (
+                f", mean grade gap **{_num(best_lgd_grade_gap)}**"
+                if best_lgd_grade_gap is not None
+                else ""
+            )
+            + " |"
+        )
+    if boundary_train is not None and boundary_oot is not None:
+        lines.append(
+            f"| **LGD — boundary mass** (`recoveries = 0`) | "
+            f"**{_pct(boundary_train)}** train / **{_pct(boundary_oot)}** OOT |"
         )
     if el_amount is not None:
         lines.append(
@@ -176,6 +209,14 @@ def render_results_block(summary: Dict[str, Any]) -> str:
             f"VaR 99 % **{_pct_stat('var_0.99_pct_ead')}**, "
             f"VaR 99.9 % **{_pct_stat('var_0.999_pct_ead')}** of EAD |"
         )
+    if se_strat is not None:
+        note = (
+            f"stratified **{_num(se_strat, 1)} %**, antithetic **{_num(se_anti, 1)} %** "
+            f"(negative result, kept as reported)"
+            if se_anti is not None
+            else f"stratified **{_num(se_strat, 1)} %**"
+        )
+        lines.append(f"| **Monte Carlo — variance reduction** | SE reduction at {sim.get('n_simulations', 0):,} paths: {note} |")
 
     # Primary vs secondary PD comparison.
     wc = pd_.get("window_comparison", []) or []
@@ -190,6 +231,58 @@ def render_results_block(summary: Dict[str, Any]) -> str:
                 f"| {row.get('window')} | {row.get('test_years')} | {row.get('champion')} | "
                 f"**{_num(row.get('auc'))}** | {_num(row.get('gini'))} | {_num(row.get('ks'))} | "
                 f"{_pct(row.get('default_rate_test'))} |"
+            )
+
+    # Forecast benchmark: does SARIMAX beat the naive / ETS benchmarks?
+    if forecast_bench:
+        lines.append("")
+        lines.append("**Forecast benchmark on the temporal holdout (mature vintages):**")
+        lines.append("")
+        lines.append("| Method | Holdout RMSE | MAE | MASE |")
+        lines.append("|---|---|---|---|")
+        for row in forecast_bench:
+            name = row.get("method")
+            marker = " **(SARIMAX)**" if name == "sarimax" else ""
+            lines.append(
+                f"| {name}{marker} | {_num(row.get('rmse'), 6)} | {_num(row.get('mae'), 6)} | "
+                f"{_num(row.get('mase'), 4)} |"
+            )
+        if best_forecast and sarimax_row:
+            verdict = (
+                "SARIMAX is the best of the four"
+                if best_forecast.get("method") == "sarimax"
+                else f"`{best_forecast.get('method')}` beats SARIMAX on the holdout"
+            )
+            lines.append("")
+            lines.append(f"> {verdict}.")
+
+    # Calibration method comparison.
+    if cal_rows:
+        lines.append("")
+        lines.append("**Calibration methods (selection on a validation slice, reported out of time):**")
+        lines.append("")
+        lines.append("| Method | val Brier | val CITL | test Brier | test CITL | test slope |")
+        lines.append("|---|---|---|---|---|---|")
+        for row in cal_rows:
+            marker = " **← chosen**" if row.get("method") == cal_method else ""
+            lines.append(
+                f"| {row.get('method')}{marker} | {_num(row.get('val_brier'), 5)} | "
+                f"{_num(row.get('val_citl'))} | {_num(row.get('test_brier'), 5)} | "
+                f"{_num(row.get('test_citl'))} | {_num(row.get('test_slope'))} |"
+            )
+
+    # LGD model comparison.
+    if lgd_models:
+        lines.append("")
+        lines.append("**LGD models (loan-level fit on defaulted loans):**")
+        lines.append("")
+        lines.append("| Model | MAE | RMSE | R² |")
+        lines.append("|---|---|---|---|")
+        for row in lgd_models:
+            marker = " **← champion**" if row.get("model") == best_lgd else ""
+            lines.append(
+                f"| {row.get('model')}{marker} | {_num(row.get('mae'))} | "
+                f"{_num(row.get('rmse'))} | {_num(row.get('r2'))} |"
             )
     return "\n".join(lines)
 

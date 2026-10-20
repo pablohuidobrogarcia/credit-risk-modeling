@@ -49,19 +49,52 @@ is reported separately as the censoring-exposed secondary analysis.
 <!-- RESULTS:START -->
 | Stage | Headline result (primary / mature window) |
 |---|---|
-| **Sample** | 500,000 resolved loans of 1,345,350 resolved (37.2 %), vintages 2007–2018, default rate **19.99 %** |
-| **PD — champion** | `random_forest`, OOT 2014–2015: **AUC 0.6157 / Gini 0.2315 / KS 0.1702** |
-| **PD — benchmark** (with lender `grade`/`int_rate`) | **AUC 0.6700 / Gini 0.3399** |
-| **LGD — champion** | `gamma_glm`, MAE **0.0996**, R² **-0.0846** |
-| **Expected loss** | **$207.2M** on $2,104.7M EAD → **9.85 %** of EAD (primary OOT portfolio) |
-| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **9.85 %**, UL **5.46 %**, VaR 99 % **26.80 %**, VaR 99.9 % **34.95 %** of EAD |
+| **Sample** | 1,345,350 resolved loans, vintages 2007–2018, default rate **19.96 %** |
+| **Trend analysis** | 85 monthly vintages (2008-12-01 → 2015-12-01), mean default rate **15.79 %** |
+| **PD — champion** | `lightgbm`, OOT 2014–2015: **AUC 0.6572 / Gini 0.3144 / KS 0.2274** |
+| **PD — benchmark** (with lender `grade`/`int_rate`) | **AUC 0.6799 / Gini 0.3599** |
+| **PD — calibration** (fit on a held-out temporal slice) | `isotonic`, OOT Brier raw 0.11949 → calibrated 0.11970, CITL 0.1986, slope 1.0765 |
+| **LGD — champion** | `lightgbm`, MAE **0.1015**, R² **-0.0294**, mean grade gap **0.0024** |
+| **LGD — boundary mass** (`recoveries = 0`) | **5.20 %** train / **26.86 %** OOT |
+| **Expected loss** | **$574.8M** on $5,670.3M EAD → **10.14 %** of EAD (primary OOT portfolio) |
+| **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
+| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.14 %**, UL **5.88 %**, VaR 99 % **28.52 %**, VaR 99.9 % **37.39 %** of EAD |
+| **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
 
 **Primary vs secondary (censored) validation window:**
 
 | Window | OOT years | Champion | AUC | Gini | KS | Default rate |
 |---|---|---|---|---|---|---|
-| mature (primary) | 2014-2015 | random_forest | **0.6157** | 0.2315 | 0.1702 | 14.47 % |
-| immature (secondary) | 2017-2018 | lightgbm | **0.6736** | 0.3473 | 0.2524 | 21.29 % |
+| mature (primary) | 2014-2015 | lightgbm | **0.6572** | 0.3144 | 0.2274 | 14.46 % |
+| immature (secondary) | 2017-2018 | lightgbm | **0.7152** | 0.4303 | 0.3129 | 21.29 % |
+
+**Forecast benchmark on the temporal holdout (mature vintages):**
+
+| Method | Holdout RMSE | MAE | MASE |
+|---|---|---|---|
+| last_value_naive | 0.013200 | 0.011200 | 0.5543 |
+| ets | 0.014000 | 0.011900 | 0.5903 |
+| sarimax **(SARIMAX)** | 0.024600 | 0.022900 | 1.1319 |
+| seasonal_naive | 0.036300 | 0.034400 | 1.7036 |
+
+> `last_value_naive` beats SARIMAX on the holdout.
+
+**Calibration methods (selection on a validation slice, reported out of time):**
+
+| Method | val Brier | val CITL | test Brier | test CITL | test slope |
+|---|---|---|---|---|---|
+| none | 0.11590 | 0.2111 | 0.11950 | 0.1844 | 0.9087 |
+| intercept | 0.11600 | 0.2284 | 0.11960 | 0.2021 | 0.9088 |
+| platt | 0.11530 | 0.2175 | 0.11970 | 0.1982 | 1.1095 |
+| isotonic **← chosen** | 0.11520 | 0.2333 | 0.11970 | 0.1986 | 1.0765 |
+
+**LGD models (loan-level fit on defaulted loans):**
+
+| Model | MAE | RMSE | R² |
+|---|---|---|---|
+| gamma_glm | 0.1004 | 0.1572 | -0.0758 |
+| lightgbm **← champion** | 0.1015 | 0.1538 | -0.0294 |
+| two_part | 0.1000 | 0.1559 | -0.0578 |
 <!-- RESULTS:END -->
 
 **The censored secondary window flatters the PD model** (see the comparison table above):
@@ -94,8 +127,9 @@ of its population is resolved (`modeling.min_resolved_share`).
 | **Train** | 2010–2013, term = 36 m | issue year < 2017 |
 | **Test** | 2014–2015, term = 36 m | 2017–2018 |
 | **Train resolution** | **99.59 %** resolved | — |
-| **Test resolution** | **99.97 %** resolved | 38.17 % (2017) → 11.37 % (2018) |
-| **OOT loans** | 165,597 (DR 14.47 %) | 83,859 (DR 21.29 %) |
+| **Test resolution** | **99.97 %** resolved | 40.12 % (2017, 36 m) → 11.97 % (2018, 36 m) |
+| **Train loans** | **166,459** (DR 12.39 %) | — |
+| **OOT loans** | **445,596** (DR 14.46 %) | 225,639 (DR 21.29 %) |
 
 The 60-month cells of 2014–2015 are only **82.85 %** / **67 %** resolved, so they are
 excluded from the primary split; 2009 (36 m, 89.30 % resolved) misses the 90 % bar by a
@@ -139,15 +173,17 @@ capitalisation does not matter.
 The full accepted file does not fit comfortably in memory on a laptop, so the modeling
 sample is a **year-stratified random sample** built with DuckDB:
 
-* `data/processed/modeling_sample.parquet` — 500,000 rows, stratified by origination
-  year so that every vintage keeps its relative weight.
+* `data/processed/modeling_sample.parquet` — the **entire resolved population**
+  (1,345,350 rows at the shipped `sample_size: 1400000`), ordered by origination year so
+  that every vintage keeps its relative weight. The cap only bites on machines that lower
+  `modeling.sample_size`.
 * The sampling is deterministic: rows are ordered by a hash of `id` inside each
   `issue_year`, no RNG is involved, and the same sample is rebuilt on every machine.
 
 The accepted file holds **2,260,668 loans**, of which **1,345,350 are resolved**
-(1,076,751 Fully Paid, 268,559 Charged Off, 40 Default). The modeling sample is therefore
-**500,000 / 1,345,350 ≈ 37.2 %** of the resolved population, with a default rate of
-**19.99 %** (population resolved default rate: **19.96 %**). These population counts are
+(1,076,751 Fully Paid, 268,559 Charged Off, 40 Default). Because the shipped cap exceeds the
+resolved population, the modeling sample is **the full 1,345,350** resolved loans, with a
+default rate of **19.96 %**. These population counts are
 written to `summary.json → data.population` by `data_prep.population_totals()`.
 
 ### Target definition
@@ -178,11 +214,12 @@ END
 | Data | `data` | Raw CSV → typed Parquet, resolved-loan modeling sample | `data/processed/*.parquet` |
 | Quality | `quality` | Missingness, outliers, leakage audit | `data_quality_*.csv/json` |
 | SQL | `sql` | Vintage and default-rate queries over Parquet (Hive/Spark stand-in) | `sql_0*_*.csv` |
-| EDA | `eda` | Monthly default-rate series, censoring diagnostic, decomposition, stationarity tests, SARIMAX forecast | `ts_*.csv`, `ts_*.json`, `ts_*.png` |
-| PD | `pd` | WoE binning + IV, variable selection, logit/probit scorecard, regularised and tree challengers, OOT validation on the mature window, secondary censored-window comparison, PSI, SHAP | `pd_*.csv/json`, `roc_curves.png`, `ks_curve.png`, `calibration.png`, `shap_summary.png` |
-| LGD/EAD | `lgd` | LGD on defaults (Gamma GLM vs tree), EAD from outstanding principal, EL = PD × LGD × EAD | `lgd_*.csv`, `el_*.csv` |
-| Clustering | `clustering` | k-means + hierarchical segmentation, elbow/silhouette, PCA, segment profiles | `clustering_*.csv`, `clustering_*.png` |
-| Simulation | `simulation` | Vasicek single-factor Monte Carlo: EL, UL, VaR, ES, ρ sensitivity, antithetic variance reduction, stress | `sim_*.csv`, `mc_*.png` |
+| EDA | `eda` | Monthly default-rate series, censoring diagnostic, decomposition, stationarity tests, SARIMAX forecast **benchmarked against naive/ETS** | `ts_*.csv`, `ts_*.json`, `ts_*.png` |
+| PD | `pd` | WoE binning + IV, variable selection, logit/probit scorecard, regularised and tree challengers on the wide feature set, temporal LightGBM tuning, four-way probability calibration, OOT validation on the mature window, secondary censored-window comparison, PSI, SHAP | `pd_*.csv/json`, `roc_curves.png`, `ks_curve.png`, `calibration.png`, `shap_summary.png` |
+| LGD/EAD | `lgd` | LGD on defaults (Gamma GLM vs tree vs **two-part boundary/severity** model), grade/portfolio calibration, EAD from outstanding principal, EL = PD × LGD × EAD | `lgd_*.csv`, `el_*.csv` |
+| Clustering | `clustering` | k-means **and Gaussian-mixture** segmentation on log features, elbow/silhouette/stability, PCA, segment profiles | `clustering_*.csv`, `clustering_*.png` |
+| Simulation | `simulation` | Vasicek single-factor Monte Carlo: EL, UL, VaR, ES, ρ sensitivity, **stratified + antithetic + importance-sampling** variance reduction, stress | `sim_*.csv`, `mc_*.png` |
+| Reject (exploratory) | `reject` | Rejected-vs-accepted common-variable shift and an illustrative extrapolation gap — **not used by any headline number** | `reject_*.csv/json` |
 
 Run everything with:
 
@@ -232,41 +269,70 @@ and an out-of-sample forecast with confidence bands.
 Because the data end at 2018-12, a dedicated
 [censoring diagnostic](#71-right-censoring-is-now-handled-by-design) reports, for every
 vintage and term, how much of it was actually resolved by the cut-off. The **primary**
-series is restricted to the mature vintages (issue year ≤ 2015, 74 months); the full series
-(110 months, immature tail included) is estimated in parallel as the secondary analysis, so
-the effect of censoring on the forecast is measurable rather than asserted.
+series is restricted to the mature vintages (issue year ≤ 2015) and made **gap-free**
+(the longest contiguous monthly block, 85 months, 2008-12 → 2015-12); the full series
+(immature tail included) is estimated in parallel as the secondary analysis, so the effect
+of censoring on the forecast is measurable rather than asserted.
+
+**The forecast is benchmarked, not just fitted** (`timeseries.benchmark_forecasts`): the
+SARIMAX model is scored head-to-head against a seasonal-naive, a last-value-naive and an
+ETS/Holt-Winters forecast on the *same* chronological holdout. See
+[§7.3](#73-the-default-rate-forecast-is-weak) for the result — SARIMAX does **not** win.
 
 ### 3.4 PD — scorecard and challengers
 
 1. **WoE binning + IV** on 30 numeric/categorical candidates; variables kept after
-   IV ranking, correlation screening and VIF.
+   IV ranking, correlation screening and VIF (7 survive in the mature window).
 2. **Interpretable models:** statsmodels logit (coefficients + odds ratios) and probit
    GLM, both on the WoE matrix.
 3. **Points scorecard** from the logit: base score 600, base odds 1:50, PDO 20.
 4. **Challengers:** Lasso/Ridge logit (CV over `C`), decision tree, random forest and
-   LightGBM on the raw features inside a `ColumnTransformer` pipeline.
-5. **Out-of-time validation:** train = 2010–2013, test = 2014–2015, 36-month loans only
-   (the fully-mature primary split described at the top). Winsorisation bounds, encoders,
-   WoE maps, the isotonic calibrator and the KS-optimal cutoff are all fit on train only.
-   Reported: AUC, Gini, KS, ROC and KS curves, decile calibration, confusion matrix at
-   the train-selected cutoff, and PSI per variable and per score. The same stack is re-run
-   on the censored 2017–2018 window and the two are tabulated in
-   `summary.json → pd.window_comparison`.
-6. **Interpretation:** SHAP (TreeExplainer) for the champion, and a direct
+   LightGBM. The challengers deliberately use the **full leakage-free origination set**
+   (30 variables: 22 numeric, 8 categorical) rather than the scorecard's 7 IV-selected
+   inputs, so the comparison measures *modelling capacity*, not variable selection.
+5. **LightGBM is tuned by temporal cross-validation inside the train window only**
+   (fit 2010–2012, validate 2013) — the 2014–2015 test window is never used for tuning.
+   Business-sensible monotone constraints are applied through a `MonotoneLGBMClassifier`
+   that resolves the constraint vector after the `ColumnTransformer` widens the
+   categoricals.
+6. **Out-of-time validation:** train = 2010–2013, test = 2014–2015, 36-month loans only
+   (the fully-mature primary split described at the top). Winsorisation bounds, encoders
+   and WoE maps are fit on train only. Reported: AUC, Gini, KS, ROC and KS curves, decile
+   calibration, confusion matrix at the train-selected cutoff, and PSI per variable and per
+   score. The same stack is re-run on the censored 2017–2018 window and the two are
+   tabulated in `summary.json → pd.window_comparison`.
+7. **Probability calibration:** four methods — `none`, `intercept`, `platt`, `isotonic` —
+   are compared in `src/calibration.py`. Every calibrator is fit on **out-of-sample** scores
+   from a later temporal slice (model trained 2010–2012, scoring 2013), and the method is
+   chosen on a separate inner slice (2010–2011 model scoring 2012), never on the test
+   window. The `intercept` calibrator genuinely fixes the slope at 1 (bisection on
+   `mean(sigmoid(logit(p) + a)) == mean(y)`), rather than being a free-slope logistic.
+8. **Interpretation:** SHAP (TreeExplainer) for the champion, and a direct
    SHAP-vs-logit-coefficient comparison table.
-7. **Benchmark sensitivity:** the same logit re-run *with* the lender's own
+9. **Benchmark sensitivity:** the same *wide* feature set **plus** the lender's own
    `grade` / `int_rate` (variables the lender computed, hence not available to us before
    origination in a real application-decision setting), so the reader can see exactly
    how much discrimination is being borrowed from the lender's own model.
+
+**Result: `lightgbm` is the champion** at OOT **AUC 0.6572 / Gini 0.3144 / KS 0.2274**. The
+logit scorecard reaches AUC 0.6217, and the lender-grade benchmark reaches AUC 0.6799 — so
+**the champion is still short of the lender's own variables by ≈ 0.023 AUC** (see
+[§7.2](#72-discrimination-is-moderate-and-the-lenders-own-variables-do-better)).
 
 ### 3.5 LGD / EAD / EL
 
 * **LGD** = `1 − recoveries / exposure` computed on loans that reached a default
   outcome (Charged Off / Default), which is the standard recovery-based definition.
 * **EAD** = outstanding funded principal at the moment of default.
-* Models: a **Gamma GLM** (log link, the natural family for a `(0,1)` severity) with
-  numeric + one-hot categorical terms, versus a LightGBM regressor; both compared on the
-  same out-of-time defaults by MAE/RMSE/R².
+* Realised LGD piles up at the two boundaries (0 = full recovery, 1 = no recovery), and the
+  mass at `LGD = 1` **shifts sharply across vintages** (5.20 % train vs 26.86 % OOT), so
+  `src/lgd_ead.py` fits a **two-part model** in addition to the classic Gamma GLM:
+  1. a logistic model for the boundary event `LGD == 1`;
+  2. a fractional (quasi-Beta) severity model for loans that recover something;
+  3. combined as `E[LGD] = P(LGD=1) · 1 + (1 − P(LGD=1)) · E[LGD | LGD < 1]`.
+* All three candidates (Gamma GLM, LightGBM regressor, two-part) are compared on the same
+  out-of-time defaults by MAE/RMSE/R² **and** by grade- and portfolio-level calibration; the
+  champion is chosen on grade-level calibration first.
 * **EL = PD × LGD × EAD** per loan, aggregated by `grade` and for the whole
   out-of-time portfolio.
 
@@ -279,6 +345,8 @@ histories, balances, affordability ratios) with a rigorous preprocessing chain:
   handful of extreme borrowers (`annual_inc` up to millions, `dti = 999`) dominate the
   Euclidean distance and k-means degenerates into “one cluster with ~99.9 % of the
   loans”.
+* **A `log1p` transform before winsorisation** for the heavy-tailed variables (income,
+  balances), so a handful of large borrowers no longer dominate the distance metric.
 * Median imputation, then `StandardScaler`.
 * The **same algorithm is used for the k-selection study and the shipped fit**: exact
   KMeans with 10 restarts. MiniBatchKMeans exists only as an opt-in fallback above 250k
@@ -292,6 +360,10 @@ histories, balances, affordability ratios) with a rigorous preprocessing chain:
   `0.6 · silhouette + 0.4 · bootstrap-ARI` (both normalised over the grid), and a boundary
   winner is only kept when no interior k comes within 5 % of it. Stability is the mean
   Adjusted Rand Index of the labels across bootstrap resamples (`cluster_stability`).
+* **A Gaussian-mixture alternative** (`GMMSegmenter`, soft/ellipsoidal clusters on the
+  log features) is fit side by side with its own bootstrap stability, because on this data
+  it separates the default rate far better than k-means (see
+  [§7.6](#76-everything-else)).
 * Segments holding **less than 1 % of the sample are flagged `degenerate`** instead of
   being presented as business segments, and the cluster **default-rate spread** is reported
   so a segmentation that separates nothing cannot be sold as useful.
@@ -309,20 +381,26 @@ the Gaussian-correlation transform of the PD, then losses are `Σ LGD × EAD × 
   per loan, bucketed by `grade` × PD decile, so the correlation structure is applied at
   portfolio level rather than to a single average PD.
 * **Asset correlation** is documented and *swept*: a base case inside the Basel IRB
-  retail band plus a sensitivity grid over `ρ ∈ {0.02, 0.05, 0.10, 0.15}`, and the
-  PD-dependent correlation implied by the Basel retail formula at the observed portfolio
-  PD. The loss distribution is extremely sensitive to `ρ`, so no capital figure is
-  quoted without its `ρ`.
+  retail band (`ρ = 0.12`) plus a sensitivity grid over `ρ ∈ {0.02, 0.032, 0.05, 0.10,
+  0.12, 0.15}`, and the PD-dependent correlation implied by the Basel retail formula at the
+  observed portfolio PD. The loss distribution is extremely sensitive to `ρ`, so no capital
+  figure is quoted without its `ρ`.
 * Reported: expected loss, unexpected loss, VaR 99 % and 99.9 %, expected shortfall,
-  convergence versus the number of paths, an **antithetic-variance reduction** report,
-  and an **importance-sampling** estimator on the systematic factor for the 99.9 % VaR.
-  The IS estimator is not asserted but *verified*: a unit test checks it is unbiased
+  convergence versus the number of paths, a **three-arm variance-reduction** report
+  (plain / antithetic / stratified), and an **importance-sampling** estimator on the
+  systematic factor for the 99.9 % VaR.
+* **Stratified sampling of the systematic factor** is the variance-reduction technique of
+  record: one draw per equal-probability stratum, mapped through the normal quantile
+  function and permuted. The antithetic experiment is kept as a *reported negative result*
+  because it is a no-op on this construction. See
+  [§7.6](#76-everything-else) for the measured (small) stratified gain and why it is small.
+* The IS estimator is not asserted but *verified*: a unit test checks it is unbiased
   against the closed-form Vasicek VaR of an infinitely granular homogeneous portfolio,
   and its spread is measured by a replication-based RMSE study
   (`variance_reduction_comparison`) rather than the (invalid for quantiles) `se / √ESS`
-  scaling. At the tuned shift the IS estimator cuts the tail-VaR RMSE by
-  **4.36×** versus plain Monte Carlo at equal paths; the full shift curve, ESS and
-  effective sample size are reported, and PD/LGD stress scenarios complete the stage.
+  scaling. At the tuned shift the IS estimator cuts the tail-VaR RMSE by **5.11×** versus
+  plain Monte Carlo at equal paths; the full shift curve, ESS and effective sample size are
+  reported, and PD/LGD stress scenarios complete the stage.
 
 ---
 
@@ -368,6 +446,7 @@ The unit tests run on **synthetic data**, so CI passes without the dataset.
 │   ├── figures/                # every chart referenced by the docs
 │   ├── results/                # CSV/JSON artifacts + summary.json
 │   └── model_validation_report.md
+├── r/                          # optional R replication of the scorecard (not run here)
 ├── sql/                        # HiveQL-style queries executed with DuckDB
 ├── src/                        # typed, documented modules (one per stage)
 ├── tests/                      # pytest suite on synthetic data
@@ -390,10 +469,17 @@ The unit tests run on **synthetic data**, so CI passes without the dataset.
 | Primary split restricted to ≥ 90 %-resolved `(year, term)` cells | Removes right-censoring bias from the headline metrics; the censored window is kept as a labelled secondary comparison. |
 | Winsorisation/encoders fitted on train only | Test-window statistics must not influence the fit. |
 | Linear/GLM models on the WoE matrix; tree models on raw features | WoE is what makes an interpretable logistic scorecard behave linearly; trees do not need it. |
+| Challengers get the **full** leakage-free feature set, not the scorecard's 7 WoE inputs | Otherwise the model comparison measures *variable selection*, not *modelling capacity*. |
+| LightGBM tuned by temporal CV **inside** the train window (2010–2012 → 2013) | Tuning on the 2014–2015 test window would violate the golden rule. |
+| Calibrators fit on out-of-sample scores, method chosen on a separate inner slice | A calibrator fit on in-sample scores inherits the overfit it is meant to fix. |
+| LGD modelled in two parts (boundary + severity) | Realised LGD piles up at 0 and 1 and the `LGD=1` mass shifts across vintages. |
 | DuckDB over Parquet for SQL | Same queries run on Hive/Spark; no cluster needed to reproduce. |
+| `log1p` before winsorising in clustering | Heavy-tailed income/balance variables otherwise dominate the distance metric. |
 | Winsorise before clustering | Prevents degenerate clusters driven by outliers. |
 | Silhouette on a stratified sample | Plain random subsamples raise `ValueError: Number of labels is 1` on unbalanced clusterings. |
 | Simulation at bucket level, not one average PD | Correlation risk is a *portfolio* effect; averaging PD first destroys the tail. |
+| Stratified sampling of the systematic factor; antithetic kept as a reported null | Stratification is a valid variance reducer; antithetic is a no-op on bucketed binomial draws and is reported as such. |
+| Non-blocking stages fail soft and are labelled (forecast, reject inference, R) | A weak result is *reported*, never hidden and never allowed to break the pipeline. |
 
 ---
 
@@ -415,10 +501,10 @@ measured censoring effect:
 
 | Window | OOT years | Test resolution | Champion | AUC | Gini | KS | Default rate |
 |---|---|---|---|---|---|---|---|
-| **Mature (primary)** | 2014–2015 | 99.97 % | random_forest | **0.6157** | 0.2315 | 0.1702 | 14.47 % |
-| Immature (secondary) | 2017–2018 | 38.17 % / 11.37 % | lightgbm | **0.6736** | 0.3473 | 0.2524 | 21.29 % |
+| **Mature (primary)** | 2014–2015 | 99.97 % | lightgbm | **0.6572** | 0.3144 | 0.2274 | 14.46 % |
+| Immature (secondary) | 2017–2018 | 40.12 % / 11.97 % | lightgbm | **0.7152** | 0.4303 | 0.3129 | 21.29 % |
 
-Testing on the censored window **inflates AUC by +0.0579** (0.6736 vs 0.6157). That gap is
+Testing on the censored window **inflates AUC by +0.0580** (0.7152 vs 0.6572). That gap is
 a measurement artefact, not model quality — it is exactly why the earlier headline figure
 of 0.6736 is no longer quoted as the headline.
 
@@ -432,18 +518,18 @@ Per-vintage resolved share (population, from `data/processed/accepted.parquet`):
 | 2014 | 235,629 | 223,103 | 94.68 % | 18.45 % |
 | 2015 | 421,095 | 375,546 | 89.18 % | 20.19 % |
 | 2016 | 434,407 | 293,105 | 67.47 % | 23.29 % |
-| **2017** | 443,579 | 169,321 | **38.17 %** | 23.13 % |
-| **2018** | 495,242 | 56,318 | **11.37 %** | 15.76 % |
+| **2017** | 443,579 | 169,321 | **40.12 %** (36 m) | 23.13 % |
+| **2018** | 495,242 | 56,318 | **11.97 %** (36 m) | 15.76 % |
 
 **Effect on the forecast** — the same SARIMAX order (1,1,1)(1,0,1,12) estimated on the
 mature vintages (primary) versus the full series (secondary):
 
 | Series | Months | Train RMSE | Test RMSE |
 |---|---|---|---|
-| Full 2009-11 → 2018-12 (secondary) | 110 | 0.027972 | **0.098120** |
-| Mature vintages only (≤ 2015, primary) | 74 | 0.031061 | **0.014797** |
+| Full series (secondary, censored tail) | 110 | 0.027972 | **0.098120** |
+| Mature vintages only (≤ 2015, primary) | 85 | 0.030262 | **0.024591** |
 
-The out-of-sample error **drops by a factor of ≈ 6.6** (0.0981 → 0.0148) once the censored
+The out-of-sample error **drops by a factor of ≈ 4.0** (0.0981 → 0.0246) once the censored
 vintages are removed, confirming that censoring — not the model — drives most of the
 reported forecast error on the full series.
 
@@ -455,146 +541,166 @@ time-to-default, which is out of scope here.
 
 ### 7.2 Discrimination is moderate, and the lender's own variables do better
 
-Out-of-time on the **primary (mature) window** (2014–2015), champion **Random Forest**:
+Out-of-time on the **primary (mature) window** (2014–2015), champion **LightGBM**:
 
 | Feature set | AUC | Gini | KS |
 |---|---|---|---|
-| Without `grade`/`int_rate` — champion **random_forest** | **0.6157** | **0.2315** | 0.1702 |
-| Without `grade`/`int_rate` — interpretable logit scorecard (`logit_l2`) | 0.6113 | 0.2226 | 0.1647 |
-| With `grade`/`int_rate` — plain logit benchmark | **0.6700** | **0.3399** | — |
+| Without `grade`/`int_rate` — champion **lightgbm** | **0.6572** | **0.3144** | 0.2274 |
+| Without `grade`/`int_rate` — interpretable logit scorecard (`logit_l2`) | 0.6218 | 0.2436 | 0.1770 |
+| With `grade`/`int_rate` — LightGBM benchmark (same recipe + lender vars) | **0.6799** | **0.3599** | — |
 
 Two honest readings:
 
-* The lender's own grade and rate add **+0.0543 AUC / +0.1173 Gini** over the best model
+* The lender's own grade and rate add **+0.0227 AUC / +0.0455 Gini** over the best model
   built only from loan-application data. A meaningful share of the discrimination a
   deployed scorecard would reach is inherited from information we do not have at
   application time; this model is *not* a replacement for the lender's score.
-* The boosted-tree/forest champion beats the interpretable logit scorecard by only
-  **+0.0044 AUC**. On this window the extra complexity buys almost nothing, which is worth
+* The boosted-tree champion beats the interpretable logit scorecard by only
+  **+0.0354 AUC**. On this window the extra complexity buys a modest amount, which is worth
   knowing before choosing a challenger in production.
 
 Full OOT table (see [`pd_model_comparison.csv`](reports/results/pd_model_comparison.csv)):
 
-| Model | AUC | Gini | KS | CV AUC | Train AUC |
-|---|---|---|---|---|---|
-| random_forest (champion) | 0.6157 | 0.2315 | 0.1702 | 0.6304 | 0.7140 |
-| logit_l2 | 0.6113 | 0.2226 | 0.1646 | 0.6302 | 0.6307 |
-| probit | 0.6113 | 0.2227 | 0.1643 | — | 0.6307 |
-| logit (scorecard) | 0.6112 | 0.2224 | 0.1641 | — | 0.6307 |
-| logit_l1 | 0.6112 | 0.2223 | 0.1641 | 0.6303 | 0.6307 |
-| lightgbm | 0.6068 | 0.2137 | 0.1589 | 0.6171 | 0.7897 |
-| decision_tree | 0.5611 | 0.1221 | 0.1215 | 0.5736 | 0.5769 |
+| Model | AUC | Gini | KS |
+|---|---|---|---|
+| lightgbm (champion) | 0.6572 | 0.3144 | 0.2274 |
+| random_forest | 0.6468 | 0.2936 | 0.2088 |
+| probit | 0.6219 | 0.2438 | 0.1770 |
+| logit_l2 (scorecard) | 0.6218 | 0.2436 | 0.1766 |
+| logit | 0.6217 | 0.2435 | 0.1764 |
+| logit_l1 | 0.6217 | 0.2435 | 0.1764 |
+| decision_tree | 0.5509 | 0.1018 | 0.1018 |
 
-The forest champion beats the interpretable logit scorecard by only **+0.0044 AUC**. On
-this window the extra complexity buys almost nothing, which is worth knowing before
-choosing a challenger in production. Note also that LightGBM *overfits* (train AUC 0.7897
-vs OOT 0.6068) and lands below the penalised logits out of time.
+The tree models now consume the **wide leakage-free feature set** (30 variables) rather than
+the scorecard's 7 IV-selected inputs, so the gap to the logit reflects genuine modelling
+capacity. Even so, the interpretable logit scorecard stays within ~0.035 AUC of the
+champion, and the lender's own variables still lead by ~0.023 AUC.
 
 ### 7.3 The default-rate forecast is weak
 
+* **SARIMAX does not beat a naive benchmark.** On the identical chronological holdout the
+  four arms score:
+
+  | Method | RMSE | MAE | MASE |
+  |---|---|---|---|
+  | last_value_naive | **0.0132** | 0.0112 | **0.554** |
+  | ets | 0.0140 | 0.0119 | 0.590 |
+  | sarimax | 0.0246 | 0.0229 | 1.132 |
+  | seasonal_naive | 0.0363 | 0.0344 | 1.704 |
+
+  SARIMAX's MASE is **> 1**, i.e. it is *worse* than the in-sample seasonal-naive baseline,
+  while both the last-value-naive and the ETS forecast beat it. The ARIMA machinery does not
+  earn its keep on this series.
 * Stationarity tests on the mature series (primary) point the same way: the **ADF fails to
-  reject a unit root** (statistic −1.5506, p = 0.5083, 5 % critical value −2.9044) and the
-  **KPSS rejects trend-stationarity** (statistic 1.0787, p = 0.01, 5 % critical value 0.4630).
-  The two tests agree, so the series is treated as non-stationary and the ARIMA forecast is
-  fragile. (For reference, on the full sample the ADF p-value is even higher at 0.8804 and
-  KPSS still rejects at p = 0.0270.)
-* **Ljung–Box rejects white-noise residuals** on the mature series too: lag 10 p = 0.0026,
-  lag 20 p = 0.0365 — the model leaves serial structure unexplained.
-* Train RMSE **0.031061** vs test RMSE **0.014797**: on the *mature* series the
-  out-of-sample error is actually lower than in-sample, i.e. the mature series is easy to
-  forecast but that is precisely because it excludes the regime shift that matters.
+  reject a unit root** and the **KPSS rejects trend-stationarity**. The two tests agree, so
+  the series is treated as non-stationary and the ARIMA forecast is fragile.
+* **Ljung–Box** on the clean series residual autocorrelation: lag 10 p ≈ 0.066, lag 20
+  p ≈ 0.099 — weaker evidence against the residuals than an earlier NaN-poisoned run
+  suggested, and still a stated caveat.
 
 **The forecast should not be used for planning.** It is included to demonstrate the
 diagnostic workflow (decomposition, ADF/KPSS, ACF/PACF, Ljung–Box, chronological
-backtest), not as a usable vintage forecast.
+backtest + naive benchmarks), not as a usable vintage forecast.
 
 ### 7.4 LGD is not usable for individual predictions
 
-Out-of-time on the primary window (2014–2015 defaults; train 7,641 defaults, test 23,953):
+Out-of-time on the primary window (2014–2015 defaults):
 
-| Model | MAE | RMSE | R² |
-|---|---|---|---|
-| gamma_glm (best MAE) | 0.0996 | 0.1550 | **−0.0846** |
-| lightgbm | 0.1027 | 0.1532 | **−0.0586** |
+| Model | MAE | RMSE | R² | Grade-gap MAE | Portfolio gap |
+|---|---|---|---|---|---|
+| gamma_glm | 0.1004 | 0.1572 | **−0.0758** | 0.00504 | −0.0011 |
+| lightgbm (champion) | 0.1015 | **0.1538** | **−0.0294** | **0.00245** | +0.0009 |
+| two_part | **0.1000** | 0.1559 | −0.0578 | 0.00637 | +0.0021 |
 
-Both out-of-time R² are still **negative**: neither model beats predicting the mean, and on
-this window the tree has the marginally better (still negative) R² while the Gamma GLM has
-the lower MAE. This is expected given the data — observed LGD on this portfolio is
-extremely concentrated (mean LGD OOT = **0.8691**, median = **0.8964**, because most
-charge-offs are never recovered) — but it means:
+All three out-of-time R² are still **negative**: none beats predicting the mean. The
+two-part model has the best loan-level MAE, but the plain LightGBM regressor wins on both
+RMSE and grade-level calibration, so it is the champion. This is expected given the data —
+observed LGD on this portfolio is extremely concentrated (mean LGD OOT = **0.8678**,
+median = **0.8964**, because most charge-offs are never recovered) — but it means:
 
 * The LGD output must **not** be used as a loan-level prediction. Its only defensible
   use is as a **portfolio/grade-level average**, close to the realised mean.
-* Consequently the **9.85 % EL rate is driven almost entirely by PD and by the ~86 % LGD
-  level, not by any LGD discriminating power.**
+* Consequently the **EL rate is driven almost entirely by PD and by the ~87 % LGD level,
+  not by any LGD discriminating power.**
+* The boundary mass itself shifts across vintages (**5.20 %** of defaulted loans at
+  `LGD = 1` in train versus **26.86 %** out of time), which is why the two-part structure is
+  reported even though it does not win outright.
 
-### 7.5 Calibration
+### 7.5 Calibration — the honest result is that it does not help here
 
-An isotonic calibrator was fitted on the training window and applied out of time (it is
-monotone, so AUC/Gini/KS are unchanged):
+Four calibrators were compared in `src/calibration.py`, all fit on out-of-sample scores from
+a later temporal slice:
 
-| Basis (OOT, primary window) | Mean predicted | Observed | Calibration-in-the-large | Slope | Brier |
+| Method | val Brier | val CITL | test Brier | test CITL | test slope |
 |---|---|---|---|---|---|
-| raw champion score | 0.1213 | 0.1447 | 0.2034 | 0.9429 | **0.12176** |
-| isotonic-calibrated | 0.1196 | 0.1447 | 0.2194 | 0.3864 | **0.12370** |
+| none | 0.1159 | 0.2111 | **0.11950** | 0.1844 | 0.9087 |
+| intercept | 0.1160 | 0.2284 | 0.11960 | 0.2021 | 0.9088 |
+| platt | 0.1153 | 0.2175 | 0.11970 | 0.1982 | 1.1095 |
+| isotonic **← chosen** | **0.1152** | 0.2333 | 0.11970 | 0.1986 | 1.0765 |
 
-Two observations:
+Two observations, stated plainly:
 
-* The model **under-predicts the OOT default rate** (11.96 % predicted vs 14.47 % observed on
-  the calibrated scale; the raw score averages 12.13 %). The 2014–2015 default rate is
-  higher than the 2010–2013 training rate (12.36 %), so part of this is a real level shift:
-  the ~2.5 pp gap between 11.96 % predicted and 14.47 % observed on the primary window is
-  consistent with the distribution shift between the 2010–2013 training window and the
-  2014–2015 test window, not with a defective fit.
-* The calibrator was fitted on training-window scores, so it inherits an in-sample fit;
-  applied OOT its slope falls to **0.3864** (vs 0.9429 raw) and its Brier is **worse**
-  (0.12370 vs 0.12176). The raw score is already conservatively *low*, and the isotonic map
-  makes the probabilities *flatter*, not better. The calibrated PDs are used for
-  EL/simulation because that is the operationally correct pipeline, but the improvement is
-  **not** taken for granted — and the EL is reported both ways:
-  **$207.23M (calibrated PD, 9.85 % of EAD)** vs **$214.07M (raw PD, 10.17 % of EAD)**.
+* Validation selects **isotonic** (best val Brier 0.1152), but on the test window the raw
+  score has the **lowest** Brier (0.11950 vs 0.11970). In other words the calibration choice
+  made on validation **does not improve the test-window Brier here** — the raw model is
+  already close to calibrated out of time (slope 0.9087, CITL 0.184). This is reported as a
+  null result rather than hidden.
+* The model **under-predicts the OOT default rate** by about **2.3 pp** (isotonic mean
+  predicted 0.1218 vs observed 0.1446). The 2014–2015 default rate is higher than the
+  2010–2013 training rate (12.39 %), so much of this is a real level shift between windows,
+  not a defective fit.
+
+The calibrated PDs are still used downstream for EL/simulation (operationally correct), but
+no improvement is claimed.
 
 ### 7.6 Everything else
 
 * **Selection bias — rejected applications.** Only *accepted* loans have an outcome. Any
-  score built here is conditioned on the lender's approval policy and **cannot** be used
-  to re-decide previously rejected applications. The rejected file contributes nothing
-  to the models.
+  score built here is conditioned on the lender's approval policy and **cannot** be used to
+  re-decide previously rejected applications. `src/reject_inference.py` now *quantifies* the
+  gap on the handful of shared variables (Amount Requested, DTI, Employment Length, State,
+  Risk_Score): rejected DTI is a median **+2.31** points higher and Amount Requested a median
+  **−$2,000** lower, and a small logit on the accepted book implies a rejected-minus-accepted
+  PD gap of roughly **+0.058**. This is labelled **exploratory** — it is *not* used to
+  reweight, retrain, or adjust any headline number, and the selection bias remains open.
 * **No macro-economic variables.** The simulation applies PD/LGD *shocks*; it does not
   model the credit cycle through a real macro factor, so the "stress" scenarios are
   shocks, not forecasts.
 * **Vasicek correlation is an assumption.** The Basel retail formula at the portfolio PD
-  (EAD-weighted PD 0.1138) implies ρ = **0.0324**, whereas the simulation base case is
-  ρ = 0.12. VaR 99.9 % ranges from **17.97 %** of EAD (ρ = 0.02) to **39.05 %**
-  (ρ = 0.15) — the choice of ρ matters more than anything else in the capital number.
-  That is why the full sensitivity grid is reported instead of a single figure.
+  (EAD-weighted PD 0.1172) implies a much lower ρ than the simulation base case of
+  **ρ = 0.12** (Basel-implied ≈ 0.0322); VaR 99.9 % ranges from **18.92 %** of EAD
+  (ρ = 0.02) to **41.67 %** (ρ = 0.15)
+  — the choice of ρ matters more than anything else in the capital number. That is why the
+  full sensitivity grid is reported instead of a single figure.
 * **Importance sampling works, but it is not a free lunch.** Shifting the systematic factor
   towards the loss tail and reweighting by the likelihood ratio gives an unbiased 99.9 %
-  VaR (733.5M IS vs 741.5M naive at shift 1.5; the estimator is checked against the
-  closed-form Vasicek VaR in the test suite) and it **genuinely reduces the estimator's
-  spread**: a replication-based RMSE study puts the IS tail-VaR RMSE at **4.36× smaller**
-  than plain Monte Carlo at equal paths (3.23M vs 14.10M), matched by the batched standard
-  error (SE ratio **0.21×** vs naive). The caveat is that the win comes at a real cost — the
-  effective sample size falls to 2,276 of 20,000 paths (11.4 %) — and pushing the shift out
-  to the factor quantile (≈ 3.09) collapses it further (ESS ≈ 23) and biases the estimate
-  upward. The shift is therefore tuned to 1.5 and the whole curve is reported in
+  VaR (the estimator is checked against the closed-form Vasicek VaR in the test suite) and it
+  **genuinely reduces the estimator's spread**: a replication-based RMSE study puts the IS
+  tail-VaR RMSE at **5.11× smaller** than plain Monte Carlo at equal paths. The caveat is
+  that the win comes at a real cost — the effective sample size falls to **2,276 of 20,000
+  paths (11.4 %)** — and pushing the shift out to the factor quantile (≈ 3.09) collapses it
+  further and biases the estimate upward. The shift is therefore tuned to 1.5 and the whole
+  curve is reported in
   [`sim_importance_sampling_sensitivity.csv`](reports/results/sim_importance_sampling_sensitivity.csv),
   with the RMSE study in
   [`sim_importance_sampling_variance_reduction.csv`](reports/results/sim_importance_sampling_variance_reduction.csv).
-* **Segmentation is descriptive, not predictive.** k = 2 is chosen (silhouette 0.2185,
-  bootstrap ARI 0.9629, 0 degenerate segments) but the two segments' default rates are
-  close (19.09 % vs 20.40 % — a **1.31 pp spread**), so the segments are **not** a useful
-  risk-rating substitute. Silhouette monotonically prefers the smallest k tested and the
-  combined score confirms k = 2 well outside the 5 % boundary tolerance; it remains a
-  metric-driven choice, not an obviously "business-correct" one.
+* **Segmentation is descriptive, not a rating.** k-means (k = 2, silhouette 0.1840,
+  bootstrap ARI 0.9566) produces two segments whose default rates are nearly identical
+  (19.67 % vs 20.21 % — a **0.54 pp spread**), so the k-means segments are **not** a useful
+  risk-rating substitute. The **Gaussian-mixture alternative** does separate the default rate
+  materially (14.98 % vs 21.26 % — a **6.28 pp spread**, ARI 0.978), and it is reported as
+  the better behavioural segmentation; even so, both remain descriptive groupings, not
+  calibrated ratings.
 * **Cutoff choice.** The confusion matrix uses the KS-optimal cutoff selected on the
-  **training** window (0.129212) and applied out of time, not a business-optimal cutoff:
-  on the OOT set it approves 85.53 % of loans with a **36.94 %** bad rate among approved
-  (precision 0.1965, recall 0.5344).
-* **Antithetic variates help only marginally** (mean SE falls by **0.19 %** at 100,000
-  paths; the convergence table shows the reduction is negligible at every path count).
-  With bucketed binomial draws the pairing adds almost nothing; reporting a null result is
-  more useful than hiding it.
+  **training** window (0.136088) and applied out of time, not a business-optimal cutoff.
+* **Antithetic variates help only marginally** (mean SE falls by **0.18 %** at 100,000
+  paths; the convergence table shows the reduction is negligible at every path count), and
+  **stratified sampling of the systematic factor** gives only **0.50 %**. The reason is
+  structural: with ~70 buckets the idiosyncratic per-bucket default noise dominates the
+  single systematic factor, so stratifying it barely moves the total-loss variance. A
+  replication test confirms stratified sampling *does* reduce the SE on a homogeneous
+  portfolio where the factor dominates. Reporting both null results is more useful than
+  hiding them; importance sampling remains the technique that actually works.
 * **Single dataset, single period, US consumer credit only.** Nothing here is evidence
   about another product, country or underwriting regime, and the 2018 data vintage means
   the scorecard is a historical exercise.
@@ -604,12 +710,15 @@ Two observations:
 ## 8. Reproducibility
 
 * Single global seed (`config/config.yaml`), applied to numpy/scipy/sklearn/LightGBM.
-* The stratified sample is hash-based, hence machine-independent.
+* The modeling sample is hash-based, hence machine-independent.
 * Every artifact under `reports/results/` and `reports/figures/` is regenerated by
   `python -m src.pipeline all`; nothing is hand-edited.
 * `python -m ruff check src tests` and `python -m pytest -q` must be clean before a
-  commit (68 tests).
+  commit (115 tests).
 * CI runs lint + tests on Python 3.10 and 3.11 **without** the dataset.
+* The README results block is generated from `summary.json` by
+  `python -m src.report_tables --write`; `tests/test_report_integrity.py` fails if the
+  numbers drift, and CI runs `python -m src.report_tables --check`.
 
 ---
 

@@ -7,20 +7,29 @@ the customer segmentation and the Monte Carlo portfolio loss simulation produced
 **Evidence base.** Every figure in this report is read from
 [`reports/results/summary.json`](results/summary.json) and the CSV artefacts in
 `reports/results/`. Nothing is quoted from memory or from a different run.
-Run seed: **42**; full pipeline wall time **550.2 s**.
+Run seed: **42**; full pipeline wall time **2850.4 s**.
 
 **Verdict in one paragraph.** The pipeline is reproducible and leakage-controlled, and the
-validation design now **removes right-censoring from the headline metrics by construction**:
+validation design **removes right-censoring from the headline metrics by construction**:
 the primary out-of-time window is built from `(year, term)` cells that are ≥ 90 % resolved
 (train 2010–2013 / test 2014–2015, 36-month loans only). On that honest window the PD
-champion reaches AUC 0.6157 (Gini 0.2315), and a plain logit given the lender's own
-`grade`/`int_rate` reaches AUC 0.6700 (Gini 0.3399). Testing on the old, censored
-2017–2018 window would have reported AUC 0.6736 (Gini 0.3473) — **the censored window
-inflates AUC by +0.0579**, which is why it is now only a labelled secondary analysis. The
-LGD model still has a **negative** out-of-time R². The portfolio forecast is weak. The
-Monte Carlo layer is sound, its dominant assumption (asset correlation) is disclosed and
+champion (`lightgbm`, tuned by temporal CV inside the train window only) reaches AUC 0.6572
+(Gini 0.3144), and a LightGBM given the lender's own `grade`/`int_rate` on the same wide
+feature set reaches AUC 0.6799 (Gini 0.3599). Testing on the old, censored 2017–2018 window
+would have reported AUC 0.7152 — **the censored window inflates AUC by +0.0580**, which is
+why it is now only a labelled secondary analysis. The LGD model still has a **negative**
+out-of-time R² (all three candidates). Probability calibration, honestly, **does not improve
+the test-window Brier here**. The portfolio forecast is weak and loses to naive benchmarks.
+The Monte Carlo layer is sound, its dominant assumption (asset correlation) is disclosed and
 swept, and its importance-sampling estimator is **verified against a closed-form benchmark**
-and shown to cut the tail-VaR RMSE by **4.36×** at equal paths.
+and shown to cut the tail-VaR RMSE by **5.11×** at equal paths.
+
+> **What changed in this revision.** This report was updated to reflect a rework that grew the
+> modelling sample to the full resolved population, moved the challengers onto the wide
+> leakage-free feature set, added temporal LightGBM tuning, a four-way calibration study, a
+> two-part LGD model, a Gaussian-mixture segmentation alternative, a benchmarked forecast and
+> stratified sampling. Numbers that this rework *did not* improve (calibration, the forecast,
+> antithetic/stratified variance reduction) are reported as null results rather than removed.
 
 ---
 
@@ -33,8 +42,8 @@ and shown to cut the tail-VaR RMSE by **4.36×** at equal paths.
 | — Fully Paid | 1,076,751 | `data.population.n_fully_paid` |
 | — Charged Off | 268,559 | `data.population.n_charged_off` |
 | — Default | 40 | `data.population.n_default_status` |
-| Modeling sample | 500,000 (37.2 % of resolved) | `data.n_rows` |
-| Sample default rate | 19.99 % (99,948 defaults) | `data.default_rate`, `quality.n_defaults` |
+| Modeling sample | 1,345,350 (the full resolved population) | `data.n_rows` |
+| Sample default rate | 19.96 % (268,599 defaults) | `data.default_rate`, `quality.n_defaults` |
 | Vintages covered | 2007 – 2018 | `data.years` |
 
 **Target definition.** `default_flag = 1` for `loan_status in ('Charged Off','Default')`,
@@ -42,9 +51,9 @@ and shown to cut the tail-VaR RMSE by **4.36×** at equal paths.
 loan is labelled with a future-unknown state.
 
 **Assessment.** The definition is consistent, reproducible and standard for this dataset.
-The sample is a deterministic, year-stratified draw (hash of `id` within `issue_year`),
-which preserves the vintage mix; the 0.03 pp gap between sample (19.99 %) and population
-(19.96 %) resolved default rates confirms the stratification did not distort the target.
+The shipped `modeling.sample_size` (1,400,000) exceeds the resolved population, so the
+modeling sample *is* the full 1,345,350 resolved loans and the sample default rate (19.96 %)
+equals the population figure exactly — there is no sampling distortion to report.
 
 **Finding S-1 (accepted risk).** The sample contains **only accepted** applications.
 The scorecard is therefore conditional on the lender's own approval policy and must not
@@ -81,10 +90,10 @@ contaminated by right-censoring. The rule and its evidence are written to
 
 | | Window | Loans | Default rate | Resolved share |
 |---|---|---|---|---|
-| Train | 2010 – 2013, term 36 m | 61,800 | 12.36 % | 99.59 % |
-| OOT test | 2014 – 2015, term 36 m | 165,597 | 14.47 % | 99.97 % |
+| Train | 2010 – 2013, term 36 m | 166,459 | 12.39 % | 99.59 % |
+| OOT test | 2014 – 2015, term 36 m | 445,596 | 14.46 % | 99.97 % |
 
-The 60-month cells of 2014–2015 are only 82.85 % / 67.0 % resolved and 2009 (36 m) is
+The 60-month cells of 2014–2015 are only 82.85 % / 67.08 % resolved and 2009 (36 m) is
 89.30 % resolved, so all are excluded from the primary split.
 
 **Secondary (immature) window.** The exact same code path is re-run on the old
@@ -92,12 +101,12 @@ issue-year ≥ 2017 window so the censoring effect is *measured*:
 
 | | Window | Loans | Default rate | Resolved share |
 |---|---|---|---|---|
-| Train | 2007 – 2016 | 416,141 | 19.73 % | — |
-| OOT test | 2017 – 2018 | 83,859 | 21.29 % | 38.17 % / 11.37 % |
+| Train | issue year < 2017 | — | — | — |
+| OOT test | 2017 – 2018 | 225,639 | 21.29 % | 40.12 % / 11.97 % (36 m) |
 
 **Finding C-0 (High — the reason for the redesign).** Training/testing on the mature
-window versus the censored window changes the champion AUC from **0.6736** to **0.6157**,
-i.e. **the censored window inflates discounting power by +0.0579 AUC**. All headline
+window versus the censored window changes the champion AUC from **0.7152** to **0.6572**,
+i.e. **the censored window inflates discounting power by +0.0580 AUC**. All headline
 metrics in this report are stated on the mature window; the censored figure is quoted only
 as the secondary comparison in §3.3.
 
@@ -105,103 +114,116 @@ as the secondary comparison in §3.3.
 
 30 variables binned with a WoE/IV procedure on the **training window only**; **7 kept**
 after IV ranking, correlation screening and VIF: `annual_inc`, `installment_to_income`,
-`dti`, `revol_util`, `home_ownership`, `credit_history_months`, `purpose`.
+`dti`, `revol_util`, `home_ownership`, `inq_last_6mths`, `purpose`.
 
-Strongest IV on the mature training window: `annual_inc` 0.0991, `installment_to_income`
-0.0732, then `loan_amnt_to_income` 0.0499, `dti` 0.0444. **Every variable is in the "weak"
-IV band** — an honest, early signal that the achievable discrimination is limited, and
-weaker than the censored window would have suggested.
+Strongest IV on the mature training window: `annual_inc` 0.0955, `installment_to_income`
+0.0657, then `loan_amnt_to_income` 0.0445, `dti` 0.0410, `revol_util` 0.0383. **Every
+variable is in the "weak" IV band** — an honest, early signal that the achievable
+discrimination is limited, and weaker than the censored window would have suggested.
+
+Note the deliberate asymmetry: the **challengers** (§3.3) do not use these 7 WoE inputs;
+they consume the **full leakage-free origination set** (30 variables: 22 numeric, 8
+categorical) via a `ColumnTransformer`, so the model comparison measures *modelling
+capacity* rather than the scorecard's variable selection.
 
 ### 3.3 Out-of-time discrimination (primary window, 2014–2015)
 
-| Model | AUC | Gini | KS | CV AUC | Train AUC |
-|---|---|---|---|---|---|
-| **random_forest (champion)** | **0.6157** | **0.2315** | **0.1702** | 0.6304 | 0.7140 |
-| logit_l2 (Ridge) | 0.6113 | 0.2226 | 0.1646 | 0.6302 | 0.6307 |
-| probit | 0.6113 | 0.2227 | 0.1643 | — | 0.6307 |
-| logit (scorecard) | 0.6112 | 0.2224 | 0.1641 | — | 0.6307 |
-| logit_l1 (Lasso) | 0.6112 | 0.2223 | 0.1641 | 0.6303 | 0.6307 |
-| lightgbm | 0.6068 | 0.2137 | 0.1589 | 0.6171 | 0.7897 |
-| decision_tree | 0.5611 | 0.1221 | 0.1215 | 0.5736 | 0.5769 |
+| Model | AUC | Gini | KS |
+|---|---|---|---|
+| **lightgbm (champion, temporally tuned + monotone)** | **0.6572** | **0.3144** | **0.2274** |
+| random_forest | 0.6468 | 0.2936 | 0.2088 |
+| probit | 0.6219 | 0.2438 | 0.1770 |
+| logit_l2 (Ridge, scorecard) | 0.6218 | 0.2436 | 0.1766 |
+| logit | 0.6217 | 0.2435 | 0.1764 |
+| logit_l1 (Lasso) | 0.6217 | 0.2435 | 0.1764 |
+| decision_tree | 0.5509 | 0.1018 | 0.1018 |
+
+The LightGBM hyper-parameters were chosen by **temporal cross-validation inside the train
+window only** (fit 2010–2012, validate 2013; best valid AUC 0.6447). The 2014–2015 test
+window was never touched during tuning.
 
 **Comparison against the censored secondary window** (`pd_window_comparison.csv`):
 
 | Window | OOT years | Champion | AUC | Gini | KS | Calibration gap | Score PSI |
 |---|---|---|---|---|---|---|---|
-| **Mature (primary)** | 2014–2015 | random_forest | **0.6157** | 0.2315 | 0.1702 | −0.0251 | 0.0089 |
-| Immature (secondary) | 2017–2018 | lightgbm | **0.6736** | 0.3473 | 0.2524 | −0.0229 | 0.0060 |
+| **Mature (primary)** | 2014–2015 | lightgbm | **0.6572** | 0.3144 | 0.2274 | −0.0229 | 0.0145 |
+| Immature (secondary) | 2017–2018 | lightgbm | **0.7152** | 0.4303 | 0.3129 | −0.0243 | 0.0028 |
 
 **Assessment.**
 
-* On the honest window the champion is a random forest, but it beats the interpretable
-  logit scorecard by only **+0.0044 AUC**. LightGBM *overfits* (train AUC 0.7897 → OOT
-  0.6068) and lands below the penalised logits. For production the logit scorecard is the
-  defensible choice; the tree is a monitoring challenger.
-* **Finding P-1 (Medium).** Absolute discrimination is moderate (Gini 0.2315). For
-  unsecured US consumer credit this is realistic, but it is not a strong model — and it is
-  *weaker* than the censored window implied.
+* On the honest window the champion is LightGBM; it beats the interpretable logit scorecard
+  by **+0.0354 AUC** — a real but modest margin, because the challengers now see the wide
+  feature set. For production the logit scorecard remains the more defensible choice on
+  explainability grounds; the tree is a monitoring challenger.
+* **Finding P-1 (Medium).** Absolute discrimination is moderate (Gini 0.3144) — better than
+  the earlier baseline (0.2315) but still modest for unsecured US consumer credit, and it is
+  *weaker* than the censored window implies.
 
 ### 3.4 Benchmark: how much of the ranking comes from the lender?
 
 | Feature set | AUC | Gini |
 |---|---|---|
-| Without `grade`/`int_rate` (champion random_forest) | 0.6157 | 0.2315 |
-| With `grade`/`int_rate` (plain logit) | **0.6700** | **0.3399** |
+| Without `grade`/`int_rate` (champion lightgbm) | 0.6572 | 0.3144 |
+| With `grade`/`int_rate` (**same wide set + same LightGBM recipe**) | **0.6799** | **0.3599** |
 
-**Finding P-2 (High).** A plain logistic regression allowed to see the lender's own
-`grade` and `int_rate` outperforms our best model built from application data by
-**+0.0543 AUC / +0.1173 Gini**. Part of the discrimination a deployed scorecard would
-achieve is therefore inherited from the lender's risk engine rather than learned here. The
-claim "the model keeps almost all the discriminatory power without the lender's variables"
-is **not** supported by the numbers and is not made anywhere in this repository.
+**Finding P-2 (High).** The benchmark was re-run *fairly* — the same wide feature set and
+the same LightGBM recipe, plus the lender's own `grade`/`int_rate` — so the comparison is
+apples-to-apples. It still outperforms our best model built from application data by
+**+0.0227 AUC / +0.0455 Gini**. Part of the discrimination a deployed scorecard would achieve
+is therefore inherited from the lender's risk engine rather than learned here. The claim
+"the model keeps almost all the discriminatory power without the lender's variables" is
+**not** supported by the numbers and is not made anywhere in this repository.
 
 ### 3.5 Stability
 
-* Score PSI (train vs OOT): **0.0089** — stable.
-* Every kept variable is "stable": largest `purpose` 0.0820, `dti` 0.0565,
-  `credit_history_months` 0.0476, `revol_util` 0.0332. **Finding P-3 (Low):** no variable
-  breaches the "monitor" threshold on the mature window; population shift is not an issue
-  in this window, though `purpose` is the one to watch.
+* Score PSI (train vs OOT): **0.0145** — stable (well below the 0.10 "monitor" level).
+* **Finding P-3 (Low):** no variable breaches the "monitor" threshold on the mature window;
+  population shift is not an issue in this window.
 
-### 3.6 Calibration
+### 3.6 Calibration — the honest result is that it does not help here
 
-Isotonic calibrator fitted on the training window, applied out of time (monotone, so
-AUC/Gini/KS are unchanged):
+Four calibrators were compared in `src/calibration.py`. Every calibrator is fit on
+**out-of-sample** scores from a later temporal slice (model trained 2010–2012, scoring 2013),
+and the method is selected on a separate inner slice (2010–2011 model scoring 2012) — never
+on the test window. The `intercept` calibrator genuinely fixes the slope at 1.
 
-| Basis (OOT) | Mean predicted | Observed | Calibration-in-the-large | Slope | Brier |
+| Method | val Brier | val CITL | test Brier | test CITL | test slope |
 |---|---|---|---|---|---|
-| raw champion | 0.1213 | 0.1447 | 0.2034 | **0.9429** | **0.12176** |
-| calibrated | 0.1196 | 0.1447 | 0.2194 | 0.3864 | 0.12370 |
+| none | 0.1159 | 0.2111 | **0.11950** | 0.1844 | 0.9087 |
+| intercept | 0.1160 | 0.2284 | 0.11960 | 0.2021 | 0.9088 |
+| platt | 0.1153 | 0.2175 | 0.11970 | 0.1982 | 1.1095 |
+| **isotonic (selected on validation)** | **0.1152** | 0.2333 | 0.11970 | 0.1986 | 1.0765 |
 
-**Finding P-4 (Medium).** The model **under-predicts the 2014–2015 default rate**
-(12.13 % predicted vs 14.47 % observed); the train-window rate was 12.36 %, so a level
-shift explains part of it: the ~2.5 pp gap between 11.96 % predicted and 14.47 % observed on
-the primary window (calibrated scale) is consistent with the distribution shift between the
-2010–2013 training window and the 2014–2015 test window. The in-sample calibrator does
-**not** repair the gap out of
-time: its Brier is worse (0.12370 vs 0.12176) and its slope falls to **0.3864** (vs
-0.9429 raw). EL is therefore reported under both bases (§5).
+**Finding P-4 (Medium).** Validation selects **isotonic** (best val Brier 0.1152), but on the
+test window the **raw** score has the lowest Brier (0.11950 vs 0.11970) and the raw model is
+already close to calibrated out of time (slope 0.9087, CITL 0.184). The calibration choice
+made on validation therefore **does not improve the test-window Brier here**. The model
+still **under-predicts the 2014–2015 default rate** by about **2.3 pp** (isotonic mean
+predicted 0.1218 vs observed 0.1446); the train-window rate was 12.39 %, so a level shift
+explains part of it. This is reported as a null result rather than hidden; the calibrated
+PDs are still used downstream for EL/simulation because that is the operationally correct
+pipeline, but no improvement is claimed.
 
 ### 3.7 Cutoff / confusion matrix (OOT)
 
-Cutoff = **0.129212**, KS-optimal on the **training** window, applied out of time:
+Cutoff = **0.136088**, KS-optimal on the **training** window, applied out of time:
 
 | TP | FP | FN | TN | Precision | Recall | Approval rate | Bad rate approved |
 |---|---|---|---|---|---|---|---|
-| 12,800 | 52,326 | 11,154 | 89,317 | 0.1965 | 0.5344 | 85.53 % | **36.94 %** |
+| 34,960 | 123,446 | 29,487 | 257,703 | 0.2207 | 0.5425 | 85.54 % | **32.39 %** |
 
 **Finding P-5 (Low).** This cutoff is a *statistical* default, not an economic optimum: the
-36.94 % bad rate among approved loans is high, and a business cutoff (rate/return
+32.39 % bad rate among approved loans is high, and a business cutoff (rate/return
 optimisation) would be set elsewhere. Any decision use requires a proper cost matrix.
 
 ### 3.8 Interpretability
 
-SHAP (champion, `pd_shap_importance.csv`) versus logit coefficients
-(`pd_shap_vs_logit.csv`). Top SHAP drivers: `purpose` (0.2162), `annual_inc` (0.2040),
-`revol_util` (0.1728), `installment_to_income` (0.1693), `dti` (0.1379).
+SHAP (champion) versus logit coefficients. Top SHAP drivers: `revol_util` (0.2064),
+`annual_inc` (0.1779), `inq_last_6mths` (0.1625), `installment_to_income` (0.1577),
+`purpose` (0.1403).
 
-**Finding P-6 (Low).** The two views are broadly consistent; `purpose` ranks first by SHAP
-though it is mid-pack by IV, which reflects interactions the marginal IV cannot see.
+**Finding P-6 (Low).** The two views are broadly consistent; `revol_util` ranks first by
+SHAP though it is mid-pack by IV, which reflects interactions the marginal IV cannot see.
 Reviewers should treat SHAP importance as interaction-aware and IV/coefficients as
 marginal — they are not interchangeable.
 
@@ -209,47 +231,54 @@ marginal — they are not interchangeable.
 
 ## 4. LGD / EAD
 
-Sample: defaults in train **7,641**; defaults in OOT **23,953** (the mature OOT window has
+Sample: defaults in train **20,622**; defaults in OOT **64,445** (the mature OOT window has
 *more* defaults than the train window because 2014–2015 were worse vintages).
 
 | | Train | OOT |
 |---|---|---|
-| Realised LGD (mean) | 0.8809 | **0.8691** |
+| Realised LGD (mean) | 0.8801 | **0.8678** |
 | Median LGD (OOT) | | **0.8964** |
+| Boundary mass (`LGD = 1`) | 5.20 % | **26.86 %** |
 
-| Model | MAE | RMSE | R² |
-|---|---|---|---|
-| **gamma_glm (chosen, lower MAE)** | **0.0996** | 0.1550 | **−0.0846** |
-| lightgbm | 0.1027 | **0.1532** | **−0.0586** |
+Realised LGD piles up at 0 and 1, and the `LGD = 1` mass **shifts sharply across vintages**
+(5.20 % train vs 26.86 % OOT), so a two-part model (logistic boundary + fractional severity)
+is fitted alongside the Gamma GLM and a LightGBM regressor. The champion is chosen on
+grade-level calibration first, then loan-level MAE.
 
-**Finding L-1 (High).** Both out-of-time R² are **negative** — neither model beats
-predicting the mean. The tree has the marginally better (still negative) R² and the Gamma
-GLM the lower MAE; neither ordering changes the conclusion. The LGD model is **not usable
-for individual loan predictions**; its only defensible use is as a portfolio/grade-level
-average.
+| Model | MAE | RMSE | R² | Grade-gap MAE | Portfolio gap |
+|---|---|---|---|---|---|
+| gamma_glm | 0.1004 | 0.1572 | **−0.0758** | 0.00504 | −0.0011 |
+| **lightgbm (champion)** | 0.1015 | **0.1538** | **−0.0294** | **0.00245** | +0.0009 |
+| two_part | **0.1000** | 0.1559 | −0.0578 | 0.00637 | +0.0021 |
 
-**Finding L-2 (High).** Observed LGD is nearly degenerate (mean 0.8691, median 0.8964),
-so there is very little cross-sectional signal to learn. Mean predicted LGD by grade is
-almost flat (0.8634 for A → 0.8366 for G), which is consistent with the realised figure
-but confirms the model carries little grade-level differentiation.
+**Finding L-1 (High).** All three out-of-time R² are **negative** — none beats predicting
+the mean. The two-part model has the best loan-level MAE, but the plain LightGBM regressor
+wins on both RMSE and grade-level calibration, so it is the champion. The LGD model is
+**not usable for individual loan predictions**; its only defensible use is as a
+portfolio/grade-level average.
+
+**Finding L-2 (High).** Observed LGD is nearly degenerate (mean 0.8678, median 0.8964), so
+there is very little cross-sectional signal to learn. Mean predicted LGD by grade is almost
+flat (0.8707 for A → 0.8571 for F), which is consistent with the realised figure but
+confirms the model carries little grade-level differentiation.
 
 ---
 
 ## 5. Expected loss
 
-OOT portfolio (primary window): EAD **$2,104,710,850**; mean PD 0.1196 (calibrated) /
-0.1213 (raw); mean LGD 0.8649.
+OOT portfolio (primary window): EAD **$5,670,341,550**; mean PD 0.1218 (calibrated) /
+0.1233 (raw); mean LGD 0.8663.
 
 | PD basis | Expected loss | EL / EAD |
 |---|---|---|
-| isotonic-calibrated champion PD (primary) | **$207,232,901** | **0.0985** |
-| raw champion PD (secondary) | $214,069,395 | 0.1017 |
+| isotonic-calibrated champion PD (primary) | **$574,794,646** | **0.1014** |
+| raw champion PD (secondary) | $579,736,269 | 0.1022 |
 
-By grade (`el_by_grade`): EL rate rises monotonically **0.0600 (A) → 0.2167 (G)** while
-mean LGD stays almost flat (0.8634 → 0.8366), i.e. **the EL ranking is essentially a PD
+By grade (`el_by_grade`): EL rate rises monotonically **0.0657 (A) → 0.1874 (G)** while
+mean LGD stays almost flat (0.8672 → 0.8690), i.e. **the EL ranking is essentially a PD
 ranking** — consistent with L-1/L-2.
 
-**Finding E-1 (Medium).** A 9.85 % EL rate is high in absolute terms and is a direct
+**Finding E-1 (Medium).** A 10.14 % EL rate is high in absolute terms and is a direct
 consequence of the ~14 % default rate in this (resolved-only) sample; it should not be
 read as the EL of a fresh, still-performing book.
 
@@ -262,36 +291,50 @@ bare grid boundary. See `clustering_k_selection.csv`:
 
 | k | Inertia | Silhouette | Stability (ARI) | Largest cluster share | Degenerate clusters |
 |---|---|---|---|---|---|
-| **2** | **196,134.22** | **0.2185** | **0.9629** | 0.6860 | 0 |
-| 3 | 168,523.21 | 0.1618 | 0.9778 | 0.4642 | 0 |
-| 4 | 155,299.14 | 0.1497 | 0.9208 | 0.3629 | 0 |
-| 5 | 146,148.44 | 0.1558 | 0.9443 | 0.3403 | 0 |
-| 6 | 138,386.10 | 0.1377 | 0.8974 | 0.2903 | 0 |
-| 7 | 132,406.86 | 0.1154 | 0.8847 | 0.2008 | 0 |
-| 8 | 127,879.34 | 0.1165 | 0.8942 | 0.1895 | 0 |
+| **2** | **192,959.17** | **0.1840** | **0.9566** | 0.5523 | 0 |
+| 3 | 168,761.02 | 0.1538 | 0.9105 | 0.3694 | 0 |
+| 4 | 155,626.46 | 0.1378 | 0.9198 | 0.2834 | 0 |
+| 5 | 144,820.00 | 0.1414 | 0.9454 | 0.2670 | 0 |
+| 6 | 137,693.87 | 0.1235 | 0.7325 | 0.2457 | 0 |
+| 7 | 131,071.14 | 0.1239 | 0.9134 | 0.1948 | 0 |
+| 8 | 126,885.01 | 0.1135 | 0.7638 | 0.1613 | 0 |
 
-Segment profiles:
+k-means segment profiles:
 
 | Segment | Share | Default rate | Loan amount | Annual income | DTI | History (months) |
 |---|---|---|---|---|---|---|
-| 0 | 31.21 % | 0.1909 | $21,196 | $112,013 | 20.17 | 238.4 |
-| 1 | 68.79 % | 0.2040 | $11,355 | $60,109 | 17.42 | 175.6 |
+| 0 | 55.08 % | 0.2021 | $18,511 | $92,169 | 20.27 | 220.2 |
+| 1 | 44.92 % | 0.1967 | $9,403 | $56,723 | 15.84 | 164.3 |
 
-**Finding C-1 (Medium).** After winsorisation no segment is degenerate (0 flagged). The two
-segments differ mainly in **size, income and loan amount**, with a default-rate spread of
-only **1.31 pp** (0.1909 vs 0.2040). They are descriptive customer groups, **not** a
+Gaussian-mixture segment profiles (`GMMSegmenter`, soft/ellipsoidal clusters on the same
+`log1p`-transformed features):
+
+| Segment | Share | Default rate | Loan amount | Annual income | DTI | History (months) |
+|---|---|---|---|---|---|---|
+| 0 | 20.60 % | **0.1498** | $10,703 | $91,835 | 15.86 | 198.3 |
+| 1 | 79.40 % | **0.2126** | $15,385 | $72,202 | 18.91 | 194.3 |
+
+**Finding C-1 (Medium).** After winsorisation no segment is degenerate (0 flagged). The
+**k-means** segments differ mainly in **size, income and loan amount**, with a default-rate
+spread of only **0.54 pp** (0.1967 vs 0.2021) — descriptive customer groups, **not** a
 risk-rating substitute.
 
-**Finding C-2 (Medium).** Silhouette monotonically favours the smallest k tested. The
-selection rule (`0.6·silhouette + 0.4·stability`, boundary kept only if no interior k comes
-within 5 %) returns **k = 2** honestly: the combined score for k = 2 (≈ 0.94) is far above
-the best interior candidate k = 3 (≈ 0.67), so the boundary is not merely an artefact.
-Stability (ARI 0.9629) confirms the split is reproducible. It remains a *metric-driven*
-choice, not an obviously "business-correct" one.
+**Finding C-2 (High).** The **Gaussian-mixture** alternative separates the default rate
+materially better: **6.28 pp** (14.98 % vs 21.26 %) with bootstrap ARI **0.978**. It is the
+first segmentation in this project with a usable default-rate gap, and it is reported as the
+better behavioural segmentation. Even so, both remain descriptive groupings, not calibrated
+ratings.
 
-**Finding C-3 (Low).** Ward hierarchical clustering on a 5,000-loan subsample recovers a
-comparable two-group structure (39.36 % / 60.64 % with default rates 0.156 / 0.219), which
-corroborates the k-means split at sample scale.
+**Finding C-3 (Medium).** Silhouette monotonically favours the smallest k tested. The
+selection rule (`0.6·silhouette + 0.4·stability`, boundary kept only if no interior k comes
+within 5 %) returns **k = 2** honestly: the combined score for k = 2 is well above the best
+interior candidate k = 3, so the boundary is not merely an artefact. Stability (ARI 0.9566)
+confirms the split is reproducible. It remains a *metric-driven* choice, not an obviously
+"business-correct" one.
+
+**Finding C-4 (Low).** Ward hierarchical clustering on a subsample recovers a comparable
+two-group structure (29.92 % / 70.08 % with default rates 0.1564 / 0.2041), which
+corroborates a two-group split at sample scale.
 
 ---
 
@@ -305,101 +348,106 @@ corroborates the k-means split at sample scale.
 | `TypeError: Must provide 'func' or tuples` in `profile_segments` | Mixing named-tuple aggregation with plain `col="mean"` kwargs in `DataFrame.agg`. | Rebuilt the aggregation with `groupby()[cols].mean()` + `insert`. |
 | Hierarchical profile length mismatch | Linkage computed on a 5,000-loan subsample while labels were applied to 120,000 rows. | Subsample once and profile the *same* rows. |
 | Scorecard points all zero; SHAP/coefficient merge broken | `reset_index(names=…)` on an ndarray gave positional integers as variable names. | Use `res.model.exog_names` / `res.params.index`. |
-| Importance sampling appeared to increase variance | The reported SE used `se_plain/√ESS`, which is valid for weighted *means* but not for a weighted empirical **quantile**; it inflated the IS error (2.96× when the true ratio was 0.21×) and invited a wrong "granular ⇒ idiosyncratic" explanation. | Replaced with a batched-quantile SE plus a replication-based RMSE study; added a closed-form Vasicek unbiasedness unit test. IS now measures a **4.36×** RMSE reduction; the negative finding is withdrawn (`Finding M-3`). |
-| Degenerate risk from `MiniBatchKMeans` as default | Exact `KMeans` measured better *and* faster on the 120k sample (inertia 1,174,937 / silhouette 0.2200 vs 1,184,469 / 0.1889). | MiniBatch kept as an opt-in fallback above 250k rows; exact KMeans is the default for both the study and the shipped fit. |
+| Importance sampling appeared to increase variance | The reported SE used `se_plain/√ESS`, which is valid for weighted *means* but not for a weighted empirical **quantile**; it inflated the IS error and invited a wrong "granular ⇒ idiosyncratic" explanation. | Replaced with a batched-quantile SE plus a replication-based RMSE study; added a closed-form Vasicek unbiasedness unit test. IS now measures a **5.11×** RMSE reduction. |
+| Degenerate risk from `MiniBatchKMeans` as default | Exact `KMeans` measured better *and* faster on the 120k sample. | MiniBatch kept as an opt-in fallback above 250k rows; exact KMeans is the default for both the study and the shipped fit. |
+| SHAP crashed on the champion | The monotone-constrained LightGBM is wrapped in `MonotoneLGBMClassifier`; `TreeExplainer` received the wrapper, not the booster. | `interpret.py` unwraps via `getattr(clf, "model_", clf)` before explainer construction. |
+| Monotone constraints broke inside the sklearn pipeline | The constraint vector must match the post-`ColumnTransformer` width, which is only known at fit time. | New `MonotoneLGBMClassifier` resolves the vector at fit time and declares `estimator_type="classifier"` via `__sklearn_tags__`. |
+| Silent all-NaN bureau columns in early vintages | Five variables (`tot_coll_amt`, `tot_cur_bal`, `total_rev_hi_lim`, `mths_since_last_major_derog`, `limit_utilisation`) do not exist before 2012, so they are *entirely* missing in the 2010–2011 tuning/calibration slices; `SimpleImputer` dropped them (with a warning) and changed the feature width. | Set `keep_empty_features=True` so an all-missing column is carried as a constant instead of dropped; added a regression test that fits on a slice where a column is all-NaN under `warnings.simplefilter("error")`. |
+| Forecast benchmark was silently broken | The vintage series had interior holes (months below the resolved-loan volume threshold), which made MASE `NaN`, Holt-Winters non-convergent and Ljung-Box `NaN`. | New `_contiguous_monthly` keeps the longest gap-free monthly block (85 months) so all four forecast arms are scored on the same grid; ETS/MASE/Ljung-Box now populate. |
+| All-NaN warning path / SHAP list-type output | Newer SHAP returns a list of ndarray for binary LightGBM; the code assumed an array. | Output type handled; `shap_top` now populates. |
 
-Test suite: **68 unit tests**, all passing on synthetic data; `ruff check src tests` clean;
+Test suite: **115 unit tests**, all passing on synthetic data; `ruff check src tests` clean;
 CI runs lint + tests on Python 3.10 and 3.11 without the dataset. A dedicated
 `tests/test_leakage.py` enforces that the split never mixes train/test rows and that
-winsorisation bounds, WoE encoders and the calibrator are fitted on train only.
+winsorisation bounds, WoE encoders and the calibrator are fitted on train only, and
+`tests/test_report_integrity.py` fails if the README/`summary.json` numbers drift.
 
 ---
 
 ## 8. Monte Carlo portfolio loss simulation
 
-Portfolio: **69 buckets** (grade × PD decile), total EAD **$2,104,710,850**,
-EAD-weighted PD **0.1138**, EAD-weighted LGD **0.8593**. PDs are the out-of-time
-calibrated champion scores; LGDs are the Gamma GLM output per loan.
+Portfolio: **70 buckets** (grade × PD decile), total EAD **$5,670,341,550**,
+EAD-weighted PD **0.1172**, EAD-weighted LGD **0.8625**. PDs are the out-of-time
+calibrated champion scores; LGDs are the champion LGD model output per loan.
 
-Base case, 100,000 paths, antithetic variates, ρ = 0.12:
+Base case, 100,000 paths, **stratified** sampling of the systematic factor, ρ = 0.12:
 
 | Metric | Amount | % of EAD |
 |---|---|---|
-| Expected loss | $207,271,841 | 9.85 % |
-| Unexpected loss (std) | $114,905,715 | 5.46 % |
-| VaR 99 % | $564,131,680 | 26.80 % |
-| ES 99 % | $638,449,813 | 30.33 % |
-| VaR 99.9 % | $735,620,950 | 34.95 % |
-| ES 99.9 % | $807,437,113 | 38.36 % |
-| Economic capital (99 %) | $356,859,839 | 16.96 % |
-| Economic capital (99.9 %) | $528,349,109 | 25.10 % |
+| Expected loss | $574,731,161 | 10.14 % |
+| Unexpected loss (std) | $333,542,731 | 5.88 % |
+| VaR 99 % | $1,617,286,614 | 28.52 % |
+| ES 99 % | $1,837,432,176 | 32.40 % |
+| VaR 99.9 % | $2,120,320,304 | 37.39 % |
+| ES 99.9 % | $2,306,245,549 | 40.67 % |
+| Economic capital (99 %) | $1,042,555,453 | 18.39 % |
+| Economic capital (99.9 %) | $1,545,589,143 | 27.25 % |
 
 ### 8.1 Asset correlation (the dominant assumption)
 
-The Basel IRB PD-dependent retail formula, evaluated at the portfolio PD (0.1138),
-implies ρ = **0.0324**. The base case is ρ = 0.12. Both are inside the retail band; the
+The Basel IRB PD-dependent retail formula, evaluated at the portfolio PD (0.1172),
+implies ρ = **0.0322**. The base case is ρ = 0.12. Both are inside the retail band; the
 grid makes the choice transparent:
 
 | ρ | EL (% EAD) | UL (% EAD) | VaR 99 % | VaR 99.9 % |
 |---|---|---|---|---|
-| 0.02 | 9.84 % | 2.17 % | 15.60 % | **17.97 %** |
-| 0.0324 (Basel implied) | 9.84 % | 2.77 % | 17.46 % | 20.69 % |
-| 0.05 | 9.84 % | 3.45 % | 19.68 % | 24.02 % |
-| 0.10 | 9.85 % | 4.96 % | 24.93 % | 32.12 % |
-| **0.12 (base)** | **9.85 %** | **5.46 %** | **26.80 %** | **34.95 %** |
-| 0.15 | 9.85 % | 6.16 % | 29.48 % | **39.05 %** |
+| 0.02 | 10.14 % | 2.33 % | 16.37 % | **18.92 %** |
+| 0.0322 (Basel implied) | 10.14 % | 2.96 % | 18.32 % | 21.80 % |
+| 0.05 | 10.14 % | 3.72 % | 20.76 % | 25.53 % |
+| 0.10 | 10.14 % | 5.34 % | 26.50 % | 34.20 % |
+| **0.12 (base)** | **10.14 %** | **5.88 %** | **28.52 %** | **37.39 %** |
+| 0.15 | 10.14 % | 6.64 % | 31.43 % | **41.67 %** |
 
 **Finding M-1 (High).** EL is essentially invariant to ρ, while VaR 99.9 % moves from
-**17.97 % to 39.05 % of EAD** — more than a doubling — purely from the correlation
+**18.92 % to 41.67 % of EAD** — more than a doubling — purely from the correlation
 assumption. Any capital number from this model is only meaningful together with its ρ;
 the repository therefore never quotes one in isolation.
 
 ### 8.2 Convergence and variance reduction
 
-Convergence study saved to `sim_convergence.csv` (plain) and
-`sim_convergence_antithetic.csv`; the loss distribution stabilises as paths grow.
+Convergence study saved to `sim_convergence.csv` (plain), `sim_convergence_antithetic.csv`
+and `sim_convergence_stratified.csv`; the loss distribution stabilises as paths grow.
 
-| Paths | SE (plain) | SE (antithetic) | SE reduction |
-|---|---|---|---|
-| 100,000 | 364,043 | 363,362 | **+0.19 %** |
+| Scheme | SE at 100,000 paths | SE reduction vs plain |
+|---|---|---|
+| plain | — | — |
+| antithetic | — | **0.18 %** |
+| stratified | — | **0.50 %** |
 
-**Finding M-2 (Medium).** **Antithetic variates give no meaningful variance reduction here**
-(mean SE falls by only 0.19 % at 100,000 paths). With bucketed binomial draws the systematic
-factor is already averaged across 69 buckets, so pairing paths adds almost nothing. The
-result is reported rather than hidden.
+**Finding M-2 (Medium).** **Neither antithetic nor stratified sampling gives a meaningful
+variance reduction here** (0.18 % and 0.50 % respectively). The reason is structural: with
+~70 buckets the idiosyncratic per-bucket default noise dominates the single systematic
+factor, so stratifying `Z` barely moves the total-loss variance, and the antithetic pairing
+is a no-op on bucketed binomial draws. A replication test confirms stratified sampling
+*does* reduce the SE on a homogeneous portfolio where the factor dominates, so the technique
+is kept as the variance-reduction method of record — but the practical gain on this portfolio
+is small, and this is reported rather than hidden.
 
-**Finding M-3 (Medium).** **Importance sampling on the systematic factor works, and it was
+**Finding M-3 (Low).** **Importance sampling on the systematic factor works, and it was
 verified rather than asserted.** Shifting `Z` towards the loss tail and reweighting by the
 likelihood ratio `w(z) = φ(z)/φ(z + shift)` yields an unbiased 99.9 % VaR: a unit test
 (`test_importance_sampling_is_unbiased_for_the_closed_form_var`) confirms the reweighted
 estimator converges to the closed-form Vasicek VaR of an infinitely granular homogeneous
 portfolio, and the factor quantile matching the 99.9 % level (`|Φ⁻¹(0.001)| ≈ 3.09`) is
-reported alongside each run. On the real 69-bucket portfolio the single-run estimates are
-IS $733.5M vs naive $741.5M (shift 1.5), and — using a **replication-based RMSE study** rather
-than the earlier, invalid `se/√ESS` scaling — IS reduces the tail-VaR RMSE by **4.36×** at
-equal paths (RMSE 3.23M vs 14.10M over 40 replications); the batched standard error agrees
-(SE ratio **0.21×**). The real cost is the effective sample size: it falls to **2,276 of
-20,000 paths (11.4 %)**, and pushing the shift to the factor quantile (≈ 3.09) collapses it to
-≈ 23 and biases the weighted quantile **upward**, which is why the shift is tuned to 1.5. The
-shift curve is in `sim_importance_sampling_sensitivity.csv` and the RMSE study in
+reported alongside each run. On the real 70-bucket portfolio the single-run estimates are
+IS $2,120.4M vs naive $2,144.7M (shift 1.5), and — using a **replication-based RMSE study**
+over 40 replications — IS reduces the tail-VaR RMSE by **5.11×** at equal paths (RMSE 9.25M
+vs 47.28M); the batched standard error agrees (SE ratio **0.19×**). The real cost is the
+effective sample size: it falls to **2,276 of 20,000 paths (11.4 %)**, and pushing the shift
+to the factor quantile (≈ 3.09) collapses it further and biases the weighted quantile
+**upward**, which is why the shift is tuned to 1.5. The shift curve is in
+`sim_importance_sampling_sensitivity.csv` and the RMSE study in
 `sim_importance_sampling_variance_reduction.csv`.
-
-> **Correction to an earlier draft.** A previous version of this report claimed IS *increased*
-> variance by 2.96× and attributed that to the tail being idiosyncratic (a granularity story).
-> Both were wrong: the 2.96× figure came from an inapplicable `se/√ESS` formula, and the
-> granularity explanation does not hold — for a granular portfolio the tail *is* driven by the
-> systematic factor, which is exactly what the shift exploits. The estimator and its error
-> metric were fixed, a closed-form unit test was added, and the negative finding was withdrawn.
 
 ### 8.3 Stress scenarios (ρ = 0.12)
 
 | Scenario | EAD-weighted PD | Mean LGD | EL | EL % EAD | VaR 99.9 % |
 |---|---|---|---|---|---|
-| baseline | 0.1138 | 0.8593 | $207,271,841 | 9.85 % | $735,620,950 |
-| PD +30 % | 0.1479 | 0.8593 | $269,425,581 | 12.80 % | $843,491,761 |
-| PD +50 % | 0.1707 | 0.8593 | $310,850,307 | 14.77 % | $906,680,785 |
-| LGD +10 % | 0.1138 | 0.9452 | $227,999,026 | 10.83 % | $809,183,045 |
-| PD +50 % & LGD +10 % | 0.1707 | 0.9452 | $341,935,338 | 16.25 % | $997,348,863 |
+| baseline | 0.1172 | 0.8625 | $575,061,033 | 10.14 % | $2,124,846,785 |
+| PD +30 % | 0.1523 | 0.8625 | $747,468,417 | 13.18 % | $2,445,639,962 |
+| PD +50 % | 0.1758 | 0.8625 | $862,414,536 | 15.21 % | $2,630,254,724 |
+| LGD +10 % | 0.1172 | 0.9488 | $632,567,136 | 11.16 % | $2,337,331,464 |
+| PD +50 % & LGD +10 % | 0.1758 | 0.9488 | $948,655,990 | 16.73 % | $2,893,280,197 |
 
 **Finding M-4 (Low).** Stress is close to linear in PD and LGD (EL = PD × LGD × EAD), as
 expected. That is a property of the Vasicek formulation, worth stating explicitly to avoid
@@ -411,31 +459,34 @@ over-reading the stress grid.
 
 | ID | Severity | Finding |
 |---|---|---|
-| **C-0** | **High** | Testing on the censored 2017–2018 window inflates AUC by +0.0579 (0.6736 vs 0.6157). The primary split now removes this by construction. |
-| **P-2** | **High** | Lender `grade`/`int_rate` add +0.0543 AUC / +0.1173 Gini over our best application-data model. |
-| **L-1 / L-2** | **High** | LGD R² is negative for both models; LGD is usable only as a grade/portfolio average. |
-| **M-1** | **High** | VaR 99.9 % spans 17.97 %–39.05 % of EAD across the ρ grid; ρ dominates the capital figure. |
-| **E-1** | Medium | EL of 9.85 % of EAD reflects a high (~14 %) default rate in a resolved-only sample. |
-| **P-4** | Medium | Out-of-time under-prediction (12.13 % vs 14.47 %); in-sample calibrator does not repair it (Brier worsens, slope 0.39). |
-| **P-1** | Medium | Absolute discrimination is moderate (Gini 0.2315); trees show real in/out decay. |
-| **M-2** | Medium | Antithetic variates give no meaningful reduction (+0.19 % SE) in this bucketed design. |
-| **M-3** | Low | Importance sampling **does** reduce tail-VaR variance (RMSE 4.36× smaller) but cuts the effective sample size to 11.4 %; shift is tuned, not arbitrary. |
-| **C-1 / C-2** | Medium | Segments differ by only 1.31 pp in default rate; k = 2 is metric-driven though now stability-backed. |
-| **P-3** | Low | All variable PSIs stable on the mature window (largest `purpose` 0.0820). |
-| **P-5** | Low | Cutoff is statistical, not economic (36.94 % bad rate among approved). |
-| **S-1** | Low | Accepted-only sample: reject inference is out of scope. |
+| **C-0** | **High** | Testing on the censored 2017–2018 window inflates AUC by +0.0580 (0.7152 vs 0.6572). The primary split now removes this by construction. |
+| **P-2** | **High** | Lender `grade`/`int_rate` add +0.0227 AUC / +0.0455 Gini over our best application-data model, even when the benchmark gets the same wide feature set and recipe. |
+| **L-1 / L-2** | **High** | LGD R² is negative for all three models; the `LGD=1` boundary mass shifts 5.20 % → 26.86 % across windows; LGD is usable only as a grade/portfolio average. |
+| **M-1** | **High** | VaR 99.9 % spans 18.92 %–41.67 % of EAD across the ρ grid; ρ dominates the capital figure. |
+| **C-2** | **High** | k-means segmentation separates almost nothing (0.54 pp DR spread); the Gaussian-mixture alternative is materially better (6.28 pp) but still descriptive. |
+| **E-1** | Medium | EL of 10.14 % of EAD reflects a high (~14 %) default rate in a resolved-only sample. |
+| **P-4** | Medium | Calibration does **not** improve the test-window Brier (raw 0.11950 vs isotonic 0.11970); the model still under-predicts by ~2.3 pp. |
+| **P-1** | Medium | Absolute discrimination is moderate (Gini 0.3144); the tree champion beats the logit scorecard by only +0.0354 AUC. |
+| **M-2** | Medium | Antithetic (+0.18 %) and stratified (+0.50 %) variance reduction are negligible on this bucketed portfolio; importance sampling is the technique that works. |
+| **P-3** | Low | Score PSI 0.0145 on the mature window: stable population. |
+| **P-5** | Low | Cutoff is statistical, not economic (32.39 % bad rate among approved). |
+| **S-1** | Low | Accepted-only sample; reject inference now quantifies the gap (+0.058 illustrative PD) but does not fix it. |
 | **Q-1** | Low | Outliers handled by winsorisation rather than removal (conservative). |
 
 ## 10. Recommendation
 
 1. **Use** the logistic scorecard (`logit_l2`) as the production model for discrimination,
-   with the random-forest score as a monitored challenger; the AUC difference
-   (0.6113 vs 0.6157) does not justify the loss of explainability.
+   with the LightGBM challenger as a monitored alternative; the AUC difference
+   (0.6218 vs 0.6572) is real but the tree lacks the scorecard's explainability, so the
+   choice is a governance trade-off, not a pure-performance one.
 2. **Do not use** the LGD model at loan level; use the realised/grade-level LGD
-   (≈ 0.84–0.87) and revisit with a two-stage (recovery) model on a mature vintage only.
-3. **Do not use** the SARIMAX forecast for planning; if vintage trend monitoring is
-   required, restrict it to vintages with a resolved share above ~90 % (≤ 2015 here).
-4. **Report every capital figure with its ρ**, using the Basel implied ρ (0.0324 at this
+   (≈ 0.85–0.87) and revisit with a two-stage (recovery) model on a mature vintage only.
+3. **Do not use** the SARIMAX forecast for planning — it loses to naive and ETS benchmarks;
+   if vintage trend monitoring is required, restrict it to vintages with a resolved share
+   above ~90 % (≤ 2015 here) and always report the naive benchmark alongside.
+4. **Report every capital figure with its ρ**, using the Basel implied ρ (0.0322 at this
    PD) as the reference and 0.12–0.15 as a stress band.
-5. **Before any decision use**, re-estimate the cutoff against an explicit cost/return
+5. **Prefer the Gaussian-mixture segmentation** over k-means for any behavioural use, but
+   treat it as descriptive — not a calibrated rating.
+6. **Before any decision use**, re-estimate the cutoff against an explicit cost/return
    matrix and validate on a vintage that is fully matured.

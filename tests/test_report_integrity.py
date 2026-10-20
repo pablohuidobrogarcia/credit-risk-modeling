@@ -137,3 +137,67 @@ def test_no_stale_repo_slugs_in_docs():
         if path.exists():
             hit = pattern.search(path.read_text(encoding="utf-8"))
             assert hit is None, f"Stale repo slug {hit.group(0)!r} in {path.name}"
+
+
+# ---------------------------------------------------------------------------
+# 3. The new (block 2-8) headline figures must also be present and consistent.
+# ---------------------------------------------------------------------------
+def test_calibration_method_and_comparison_are_reported():
+    summary = _summary()
+    pd_ = summary["pd"]
+    method = pd_.get("calibration_method")
+    if not method:
+        pytest.skip("calibration comparison not present (partial run)")
+    rows = pd_.get("calibration_comparison") or []
+    assert rows, "calibration_comparison is empty"
+    assert method in {r["method"] for r in rows}
+    readme = README.read_text(encoding="utf-8")
+    # The chosen method name is stated in the generated block.
+    assert f"`{method}`" in readme
+
+
+def test_challenger_uses_a_wider_feature_set_than_the_scorecard():
+    """Block 2's whole point: the challengers must not inherit the scorecard's
+    parsimonious IV selection."""
+    summary = _summary()
+    pd_ = summary["pd"]
+    n_scorecard = pd_.get("n_features_used")
+    n_chal = pd_.get("n_features_challenger")
+    if n_chal is None:
+        pytest.skip("challenger feature count not present")
+    assert pd_.get("challenger_uses_full_features") is True
+    assert n_chal >= n_scorecard
+
+
+def test_forecast_benchmark_contains_sarimax_and_naive():
+    summary = _summary()
+    bench = (summary.get("eda") or {}).get("forecast_benchmark") or []
+    if not bench:
+        pytest.skip("forecast benchmark not present (partial run)")
+    methods = {row["method"] for row in bench}
+    assert {"sarimax", "seasonal_naive", "ets"} <= methods
+    for row in bench:
+        assert row["rmse"] >= 0
+
+
+def test_monte_carlo_variance_reduction_is_reported():
+    summary = _summary()
+    sim = summary.get("simulation") or {}
+    if not sim:
+        pytest.skip("simulation not present")
+    assert sim.get("se_reduction_stratified_pct") is not None
+    # The antithetic arm is kept as a reported negative result, so its number
+    # must exist too (even though it does not help).
+    assert "se_reduction_antithetic_pct" in sim
+
+
+def test_lgd_two_part_boundary_rate_is_reported():
+    summary = _summary()
+    lgd = summary.get("lgd") or {}
+    if not lgd:
+        pytest.skip("lgd stage not present")
+    if "boundary_rate_oot" not in lgd:
+        pytest.skip("two-part LGD not present (partial run)")
+    assert 0.0 <= lgd["boundary_rate_train"] <= 1.0
+    assert 0.0 <= lgd["boundary_rate_oot"] <= 1.0
+    assert "two_part" in {m["model"] for m in lgd["model_comparison"]}

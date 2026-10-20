@@ -835,18 +835,32 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
     save_json(_jsonable(is_out), "sim_importance_sampling.json")
     is_sens = sim.importance_sampling_sensitivity(
         portfolio,
-        rhos_shift=tuple(is_cfg.get("shift_grid", (0.5, 1.0, 1.5, 2.0, 2.5))),
+        rhos_shift=tuple(is_cfg.get("shift_grid", (0.5, 1.0, 1.5, 2.0, 2.5, 3.09))),
         level=0.999,
         n_paths=int(is_cfg.get("n_tail_paths", 20_000)),
         rho=rho,
         seed=cfg.seed,
     )
     save_table(is_sens.round(4), "sim_importance_sampling_sensitivity.csv")
+    is_vr = sim.variance_reduction_comparison(
+        portfolio,
+        rho=rho,
+        level=0.999,
+        n_paths=int(is_cfg.get("n_tail_paths", 20_000)),
+        shift=float(is_cfg.get("shift", 1.5)),
+        seed=cfg.seed,
+        n_replications=int(is_cfg.get("n_replications", 40)),
+    )
+    save_json(_jsonable(is_vr), "sim_importance_sampling_variance_reduction.json")
+    save_table(pd.DataFrame([is_vr]).round(6), "sim_importance_sampling_variance_reduction.csv")
     print(
-        "    importance sampling (99.9%): VarIS={:,} vs naive={:,}  ESS={:,.0f}".format(
+        "    importance sampling (99.9%): VarIS={:,} vs naive={:,}  ESS={:,.0f}  "
+        "RMSE IS/naive={:.2f}x ({} reps)".format(
             int(is_out["var_importance_sampling"]),
             int(is_out["var_naive_same_paths"]),
             is_out["effective_sample_size"],
+            is_vr["rmse_reduction_factor"],
+            is_vr["n_replications"],
         )
     )
 
@@ -906,6 +920,7 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
         "variance_reduction": _records(vrr),
         "importance_sampling": _jsonable(is_out),
         "importance_sampling_sensitivity": _records(is_sens),
+        "importance_sampling_variance_reduction": _jsonable(is_vr),
         "stress": _records(stress),
     }
 

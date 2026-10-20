@@ -5,14 +5,14 @@
     "mean_predicted": 0.12125792326297351,
     "observed_rate": 0.14465237896821803,
     "calibration_in_the_large": 0.20339706943581404,
-    "slope": 0.9429361054551955,
+    "slope": 0.9429361054551954,
     "brier": 0.12176169708631432
   },
   "calibrated_oot": {
     "mean_predicted": 0.11956237411170158,
     "observed_rate": 0.14465237896821803,
     "calibration_in_the_large": 0.21940640876069395,
-    "slope": 0.386420544772786,
+    "slope": 0.3864205447727861,
     "brier": 0.12369728788143758
   },
   "calibrated_train": {

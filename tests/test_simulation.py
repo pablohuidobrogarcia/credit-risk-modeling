@@ -106,7 +106,7 @@ def test_importance_sampling_matches_the_naive_tail_estimate():
     # Importance sampling is an unbiased reweighting of the systematic factor:
     # its 99.9% VaR should be the same order of magnitude as the naive estimate
     # (the loss distribution here is discrete, so exact equality is not expected).
-    out = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.999, n_paths=40_000, shift=2.5, seed=11)
+    out = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.999, n_paths=40_000, shift=1.5, seed=11)
     naive = out["var_naive_same_paths"]
     assert out["var_importance_sampling"] > 0
     assert 0.5 * naive <= out["var_importance_sampling"] <= 1.5 * naive
@@ -115,7 +115,86 @@ def test_importance_sampling_matches_the_naive_tail_estimate():
 
 def test_importance_sampling_hits_the_tail_more_often_than_naive():
     # The whole point: with the shift most paths are in the tail region.
-    out = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.999, n_paths=20_000, shift=2.5, seed=12)
+    out = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.999, n_paths=20_000, shift=1.5, seed=12)
     assert 0 < out["effective_sample_size"] <= out["n_paths"]
     assert out["var_pct_ead_is"] > 0
+
+
+def test_weighted_quantile_matches_plain_quantile_with_uniform_weights():
+    rng = np.random.default_rng(0)
+    values = rng.standard_normal(10_000)
+    uniform = np.ones_like(values)
+    # The weighted (step-CDF) quantile agrees with numpy's linearly interpolated
+    # quantile up to the gap between adjacent order statistics.
+    gaps = np.diff(np.sort(values))
+    for level in (0.5, 0.99, 0.999):
+        weighted = sim._weighted_quantile(values, uniform, level)
+        plain = float(np.quantile(values, level))
+        assert abs(weighted - plain) <= gaps.max()
+
+
+def test_vasicek_closed_form_matches_a_granular_monte_carlo():
+    # An infinitely granular homogeneous pool has loss rate exactly equal to the
+    # conditional PD p(Z); its level-quantile has the closed form used as our
+    # benchmark. The simulated naive VaR must agree with it in expectation.
+    pd_, rho, level = 0.10, 0.15, 0.999
+    truth = sim.vasicek_var_closed_form(pd_, rho, level)
+    assert 0.0 < truth < 1.0
+    # Monotone in rho/PD and anchored at rho -> 0 (VaR -> PD).
+    assert abs(sim.vasicek_var_closed_form(pd_, 0.0, level) - pd_) < 1e-9
+    assert sim.vasicek_var_closed_form(pd_, 0.15, level) > sim.vasicek_var_closed_form(pd_, 0.02, level)
+
+    granular = sim.BucketedPortfolio(
+        ead=np.array([1.0]), lgd=np.array([1.0]), pd=np.array([pd_]),
+        n=np.array([10_000_000.0]), labels=["granular"],
+    )
+    out = sim.simulate_losses(granular, rho=rho, n_simulations=200_000, seed=3)
+    naive_var = float(np.quantile(out["losses"], level))
+    assert abs(naive_var - truth) < 0.01
+
+
+def test_importance_sampling_is_unbiased_for_the_closed_form_var():
+    # Verifies the likelihood ratio w(z) = phi(z)/phi(z + shift) is implemented
+    # correctly: averaging the reweighted quantile across seeds must converge to
+    # the analytic Vasicek VaR (a shift of ~3.09 is the factor quantile that maps
+    # to the 99.9% level).
+    pd_, rho, level = 0.10, 0.15, 0.999
+    truth = sim.vasicek_var_closed_form(pd_, rho, level)
+    granular = sim.BucketedPortfolio(
+        ead=np.array([1.0]), lgd=np.array([1.0]), pd=np.array([pd_]),
+        n=np.array([10_000_000.0]), labels=["granular"],
+    )
+    ests = np.array([
+        sim.importance_sampling_var(granular, rho=rho, level=level, n_paths=30_000, shift=3.09, seed=s)[
+            "var_importance_sampling"
+        ]
+        for s in range(12)
+    ])
+    assert abs(float(ests.mean()) - truth) < 0.01
+
+
+def test_shift_target_is_the_factor_quantile_for_the_level():
+    out = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.999, n_paths=5_000, shift=1.5, seed=1)
+    assert abs(out["shift_target"] - (-3.0902323)) < 1e-4
+    out99 = sim.importance_sampling_var(_portfolio(0.10), rho=0.15, level=0.99, n_paths=5_000, shift=1.5, seed=1)
+    assert abs(out99["shift_target"] - (-2.3263479)) < 1e-4
+
+
+def test_importance_sampling_reduces_variance_on_a_realistic_portfolio():
+    # The honest, replication-based test: IS at a shift near the factor quantile
+    # must have a materially smaller RMSE than plain Monte Carlo at equal paths.
+    port = sim.BucketedPortfolio(
+        ead=np.linspace(1_000, 30_000, 40),
+        lgd=np.full(40, 0.85),
+        pd=np.clip(np.linspace(0.03, 0.25, 40), 1e-3, 0.9),
+        n=np.full(40, 2_000.0),
+        labels=[f"b{i}" for i in range(40)],
+    )
+    cmp = sim.variance_reduction_comparison(
+        port, rho=0.15, level=0.999, n_paths=10_000, shift=1.5, seed=5, n_replications=25
+    )
+    assert cmp["rmse_importance_sampling"] > 0
+    assert cmp["rmse_naive"] > 0
+    assert cmp["rmse_reduction_factor"] > 1.0
+
 

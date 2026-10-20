@@ -1,13 +1,8 @@
 {
   "seed": 42,
   "stages": [
-    "data",
-    "quality",
-    "sql",
-    "eda",
     "pd",
     "lgd",
-    "clustering",
     "simulation"
   ],
   "data": {
@@ -23,469 +18,6 @@
       "n_fully_paid": 1076751,
       "n_charged_off": 268559,
       "n_default_status": 40
-    }
-  },
-  "quality": {
-    "n_rows": 500000,
-    "n_columns": 62,
-    "n_defaults": 99948,
-    "default_rate": 0.1999,
-    "origination_years": [
-      2007,
-      2018
-    ],
-    "features_used": 30,
-    "numeric_features": 22,
-    "categorical_features": 8
-  },
-  "sql": {
-    "01_vintage_analysis__stmt_1_vintage": [
-      138,
-      8
-    ],
-    "02_default_rate_by_grade_year__stmt_1_by_grade": [
-      7,
-      5
-    ],
-    "02_default_rate_by_grade_year__stmt_2_grade_by_year": [
-      83,
-      4
-    ],
-    "03_data_quality_and_leakage__stmt_1": [
-      1,
-      4
-    ],
-    "03_data_quality_and_leakage__stmt_2": [
-      6,
-      2
-    ],
-    "03_data_quality_and_leakage__stmt_3": [
-      1,
-      5
-    ],
-    "03_data_quality_and_leakage__stmt_4": [
-      1,
-      8
-    ]
-  },
-  "eda": {
-    "n_months": 74,
-    "series_first": "2009-11-01",
-    "series_last": "2015-12-01",
-    "mean_default_rate": 0.1631,
-    "min_default_rate": 0.0913,
-    "max_default_rate": 0.2114,
-    "stationarity": [
-      {
-        "test": "ADF",
-        "statistic": -1.5506,
-        "p_value": 0.5083,
-        "crit_5pct": -2.9044,
-        "n_lags": 4.0,
-        "H0": "unit root (non-stationary)",
-        "conclusion": "fail to reject unit root"
-      },
-      {
-        "test": "KPSS",
-        "statistic": 1.0787,
-        "p_value": 0.01,
-        "crit_5pct": 0.463,
-        "n_lags": null,
-        "H0": "trend-stationary",
-        "conclusion": "reject stationarity"
-      }
-    ],
-    "sarimax": {
-      "order": [
-        1,
-        1,
-        1
-      ],
-      "seasonal_order": [
-        1,
-        0,
-        1,
-        12
-      ],
-      "aic": -242.04157996745565,
-      "bic": -233.12063179786435,
-      "n_train": 59,
-      "n_test": 15,
-      "train_rmse": 0.031060625283941292,
-      "test_rmse": 0.014797386847839546,
-      "test_mae": 0.012978557888006314,
-      "ljung_box_lag10_pvalue": 0.0026270150865158183,
-      "ljung_box_lag20_pvalue": 0.036490181114594594
-    },
-    "sarimax_basis": "mature vintages only (issue_year <= 2015)",
-    "ljung_box": [
-      {
-        "index": 10,
-        "lb_stat": 26.9762,
-        "lb_pvalue": 0.0026
-      },
-      {
-        "index": 20,
-        "lb_stat": 32.6887,
-        "lb_pvalue": 0.0365
-      }
-    ],
-    "resolution_by_year": [
-      {
-        "issue_year": 2007,
-        "n_loans": 603,
-        "n_resolved": 251.0,
-        "n_defaulted": 45.0,
-        "resolved_share": 0.4163,
-        "default_rate_resolved": 0.1793
-      },
-      {
-        "issue_year": 2008,
-        "n_loans": 2393,
-        "n_resolved": 1562.0,
-        "n_defaulted": 247.0,
-        "resolved_share": 0.6527,
-        "default_rate_resolved": 0.1581
-      },
-      {
-        "issue_year": 2009,
-        "n_loans": 5281,
-        "n_resolved": 4716.0,
-        "n_defaulted": 594.0,
-        "resolved_share": 0.893,
-        "default_rate_resolved": 0.126
-      },
-      {
-        "issue_year": 2010,
-        "n_loans": 12537,
-        "n_resolved": 11536.0,
-        "n_defaulted": 1487.0,
-        "resolved_share": 0.9202,
-        "default_rate_resolved": 0.1289
-      },
-      {
-        "issue_year": 2011,
-        "n_loans": 21721,
-        "n_resolved": 21721.0,
-        "n_defaulted": 3297.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.1518
-      },
-      {
-        "issue_year": 2012,
-        "n_loans": 53367,
-        "n_resolved": 53367.0,
-        "n_defaulted": 8644.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.162
-      },
-      {
-        "issue_year": 2013,
-        "n_loans": 134814,
-        "n_resolved": 134804.0,
-        "n_defaulted": 21024.0,
-        "resolved_share": 0.9999,
-        "default_rate_resolved": 0.156
-      },
-      {
-        "issue_year": 2014,
-        "n_loans": 235629,
-        "n_resolved": 223103.0,
-        "n_defaulted": 41162.0,
-        "resolved_share": 0.9468,
-        "default_rate_resolved": 0.1845
-      },
-      {
-        "issue_year": 2015,
-        "n_loans": 421095,
-        "n_resolved": 375546.0,
-        "n_defaulted": 75804.0,
-        "resolved_share": 0.8918,
-        "default_rate_resolved": 0.2019
-      },
-      {
-        "issue_year": 2016,
-        "n_loans": 434407,
-        "n_resolved": 293105.0,
-        "n_defaulted": 68252.0,
-        "resolved_share": 0.6747,
-        "default_rate_resolved": 0.2329
-      },
-      {
-        "issue_year": 2017,
-        "n_loans": 443579,
-        "n_resolved": 169321.0,
-        "n_defaulted": 39169.0,
-        "resolved_share": 0.3817,
-        "default_rate_resolved": 0.2313
-      },
-      {
-        "issue_year": 2018,
-        "n_loans": 495242,
-        "n_resolved": 56318.0,
-        "n_defaulted": 8874.0,
-        "resolved_share": 0.1137,
-        "default_rate_resolved": 0.1576
-      }
-    ],
-    "resolution_by_year_term": [
-      {
-        "issue_year": 2007,
-        "term_months": "36",
-        "n_loans": 603,
-        "n_resolved": 251.0,
-        "resolved_share": 0.4163,
-        "default_rate_resolved": 0.1793
-      },
-      {
-        "issue_year": 2008,
-        "term_months": "36",
-        "n_loans": 2393,
-        "n_resolved": 1562.0,
-        "resolved_share": 0.6527,
-        "default_rate_resolved": 0.1581
-      },
-      {
-        "issue_year": 2009,
-        "term_months": "36",
-        "n_loans": 5281,
-        "n_resolved": 4716.0,
-        "resolved_share": 0.893,
-        "default_rate_resolved": 0.126
-      },
-      {
-        "issue_year": 2010,
-        "term_months": "36",
-        "n_loans": 9156,
-        "n_resolved": 8466.0,
-        "resolved_share": 0.9246,
-        "default_rate_resolved": 0.0995
-      },
-      {
-        "issue_year": 2010,
-        "term_months": "60",
-        "n_loans": 3381,
-        "n_resolved": 3070.0,
-        "resolved_share": 0.908,
-        "default_rate_resolved": 0.2101
-      },
-      {
-        "issue_year": 2011,
-        "term_months": "36",
-        "n_loans": 14101,
-        "n_resolved": 14101.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.1063
-      },
-      {
-        "issue_year": 2011,
-        "term_months": "60",
-        "n_loans": 7620,
-        "n_resolved": 7620.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.236
-      },
-      {
-        "issue_year": 2012,
-        "term_months": "36",
-        "n_loans": 43470,
-        "n_resolved": 43470.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.1358
-      },
-      {
-        "issue_year": 2012,
-        "term_months": "60",
-        "n_loans": 9897,
-        "n_resolved": 9897.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.277
-      },
-      {
-        "issue_year": 2013,
-        "term_months": "36",
-        "n_loans": 100422,
-        "n_resolved": 100422.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.1233
-      },
-      {
-        "issue_year": 2013,
-        "term_months": "60",
-        "n_loans": 34392,
-        "n_resolved": 34382.0,
-        "resolved_share": 0.9997,
-        "default_rate_resolved": 0.2515
-      },
-      {
-        "issue_year": 2014,
-        "term_months": "36",
-        "n_loans": 162570,
-        "n_resolved": 162570.0,
-        "resolved_share": 1.0,
-        "default_rate_resolved": 0.1373
-      },
-      {
-        "issue_year": 2014,
-        "term_months": "60",
-        "n_loans": 73059,
-        "n_resolved": 60533.0,
-        "resolved_share": 0.8285,
-        "default_rate_resolved": 0.3114
-      },
-      {
-        "issue_year": 2015,
-        "term_months": "36",
-        "n_loans": 283173,
-        "n_resolved": 283026.0,
-        "resolved_share": 0.9995,
-        "default_rate_resolved": 0.1489
-      },
-      {
-        "issue_year": 2015,
-        "term_months": "60",
-        "n_loans": 137922,
-        "n_resolved": 92520.0,
-        "resolved_share": 0.6708,
-        "default_rate_resolved": 0.3639
-      },
-      {
-        "issue_year": 2016,
-        "term_months": "36",
-        "n_loans": 323495,
-        "n_resolved": 232361.0,
-        "resolved_share": 0.7183,
-        "default_rate_resolved": 0.1985
-      },
-      {
-        "issue_year": 2016,
-        "term_months": "60",
-        "n_loans": 110912,
-        "n_resolved": 60744.0,
-        "resolved_share": 0.5477,
-        "default_rate_resolved": 0.3643
-      },
-      {
-        "issue_year": 2017,
-        "term_months": "36",
-        "n_loans": 320419,
-        "n_resolved": 128551.0,
-        "resolved_share": 0.4012,
-        "default_rate_resolved": 0.2002
-      },
-      {
-        "issue_year": 2017,
-        "term_months": "60",
-        "n_loans": 123160,
-        "n_resolved": 40770.0,
-        "resolved_share": 0.331,
-        "default_rate_resolved": 0.3295
-      },
-      {
-        "issue_year": 2018,
-        "term_months": "36",
-        "n_loans": 344671,
-        "n_resolved": 41272.0,
-        "resolved_share": 0.1197,
-        "default_rate_resolved": 0.1325
-      },
-      {
-        "issue_year": 2018,
-        "term_months": "60",
-        "n_loans": 150571,
-        "n_resolved": 15046.0,
-        "resolved_share": 0.0999,
-        "default_rate_resolved": 0.2264
-      }
-    ],
-    "censoring_sensitivity": {
-      "mature_max_year": 2015,
-      "n_months_mature": 74,
-      "n_months_full": 110,
-      "sarimax_mature_vintages": {
-        "order": [
-          1,
-          1,
-          1
-        ],
-        "seasonal_order": [
-          1,
-          0,
-          1,
-          12
-        ],
-        "aic": -242.04157996745565,
-        "bic": -233.12063179786435,
-        "n_train": 59,
-        "n_test": 15,
-        "train_rmse": 0.031060625283941292,
-        "test_rmse": 0.014797386847839546,
-        "test_mae": 0.012978557888006314,
-        "ljung_box_lag10_pvalue": 0.0026270150865158183,
-        "ljung_box_lag20_pvalue": 0.036490181114594594
-      },
-      "sarimax_full_sample": {
-        "order": [
-          1,
-          1,
-          1
-        ],
-        "seasonal_order": [
-          1,
-          0,
-          1,
-          12
-        ],
-        "aic": -403.5734905365871,
-        "bic": -392.12119333084513,
-        "n_train": 88,
-        "n_test": 22,
-        "train_rmse": 0.027972487853602,
-        "test_rmse": 0.098120014113309,
-        "test_mae": 0.06545475512980187,
-        "ljung_box_lag10_pvalue": 9.518426755066411e-05,
-        "ljung_box_lag20_pvalue": 0.002465731419981862
-      },
-      "stationarity_mature_vintages": [
-        {
-          "test": "ADF",
-          "statistic": -1.5506,
-          "p_value": 0.5083,
-          "crit_5pct": -2.9044,
-          "n_lags": 4.0,
-          "H0": "unit root (non-stationary)",
-          "conclusion": "fail to reject unit root"
-        },
-        {
-          "test": "KPSS",
-          "statistic": 1.0787,
-          "p_value": 0.01,
-          "crit_5pct": 0.463,
-          "n_lags": null,
-          "H0": "trend-stationary",
-          "conclusion": "reject stationarity"
-        }
-      ],
-      "stationarity_full_sample": [
-        {
-          "test": "ADF",
-          "statistic": -0.5568,
-          "p_value": 0.8804,
-          "crit_5pct": -2.8884,
-          "n_lags": 0.0,
-          "H0": "unit root (non-stationary)",
-          "conclusion": "fail to reject unit root"
-        },
-        {
-          "test": "KPSS",
-          "statistic": 0.5652,
-          "p_value": 0.027,
-          "crit_5pct": 0.463,
-          "n_lags": null,
-          "H0": "trend-stationary",
-          "conclusion": "reject stationarity"
-        }
-      ]
     }
   },
   "pd": {
@@ -611,14 +143,14 @@
         "mean_predicted": 0.12125792326297351,
         "observed_rate": 0.14465237896821803,
         "calibration_in_the_large": 0.20339706943581404,
-        "slope": 0.9429361054551955,
+        "slope": 0.9429361054551954,
         "brier": 0.12176169708631432
       },
       "calibrated_oot": {
         "mean_predicted": 0.11956237411170158,
         "observed_rate": 0.14465237896821803,
         "calibration_in_the_large": 0.21940640876069395,
-        "slope": 0.386420544772786,
+        "slope": 0.3864205447727861,
         "brier": 0.12369728788143758
       },
       "calibrated_train": {
@@ -1351,168 +883,6 @@
       }
     ]
   },
-  "clustering": {
-    "k": 2,
-    "features": [
-      "loan_amnt",
-      "annual_inc",
-      "dti",
-      "revol_util",
-      "open_acc",
-      "total_acc",
-      "credit_history_months",
-      "installment_to_income",
-      "loan_amnt_to_income",
-      "tot_cur_bal",
-      "revol_bal",
-      "total_rev_hi_lim"
-    ],
-    "n_degenerate_segments": 0,
-    "degenerate_share_threshold": 0.01,
-    "k_selection": [
-      {
-        "k": 2,
-        "inertia": 196134.2196,
-        "silhouette": 0.2185,
-        "stability_ari": 0.9629,
-        "largest_cluster_share": 0.686,
-        "n_degenerate_clusters": 0
-      },
-      {
-        "k": 3,
-        "inertia": 168523.208,
-        "silhouette": 0.1618,
-        "stability_ari": 0.9778,
-        "largest_cluster_share": 0.4642,
-        "n_degenerate_clusters": 0
-      },
-      {
-        "k": 4,
-        "inertia": 155299.1377,
-        "silhouette": 0.1497,
-        "stability_ari": 0.9208,
-        "largest_cluster_share": 0.3629,
-        "n_degenerate_clusters": 0
-      },
-      {
-        "k": 5,
-        "inertia": 146148.4395,
-        "silhouette": 0.1558,
-        "stability_ari": 0.9443,
-        "largest_cluster_share": 0.3403,
-        "n_degenerate_clusters": 0
-      },
-      {
-        "k": 6,
-        "inertia": 138386.1012,
-        "silhouette": 0.1377,
-        "stability_ari": 0.8974,
-        "largest_cluster_share": 0.2903,
-        "n_degenerate_clusters": 0
-      },
-      {
-        "k": 7,
-        "inertia": 132406.8596,
-        "silhouette": 0.1154,
-        "stability_ari": 0.8847,
-        "largest_cluster_share": 0.2008,
-        "n_degenerate_clusters": 0
-      },
-      {
-        "k": 8,
-        "inertia": 127879.3406,
-        "silhouette": 0.1165,
-        "stability_ari": 0.8942,
-        "largest_cluster_share": 0.1895,
-        "n_degenerate_clusters": 0
-      }
-    ],
-    "kmeans_profile": [
-      {
-        "segment": 0,
-        "n": 156027,
-        "share": 0.3121,
-        "degenerate": false,
-        "default_rate": 0.1909,
-        "loan_amnt": 21196.3822,
-        "annual_inc": 112012.8604,
-        "dti": 20.1684,
-        "revol_util": 53.5192,
-        "open_acc": 15.799,
-        "total_acc": 34.255,
-        "credit_history_months": 238.3759,
-        "installment_to_income": 0.0807,
-        "loan_amnt_to_income": 0.2274,
-        "tot_cur_bal": 256786.1844,
-        "revol_bal": 30823.6623,
-        "total_rev_hi_lim": 58583.7783
-      },
-      {
-        "segment": 1,
-        "n": 343973,
-        "share": 0.6879,
-        "degenerate": false,
-        "default_rate": 0.204,
-        "loan_amnt": 11354.9819,
-        "annual_inc": 60109.3704,
-        "dti": 17.421,
-        "revol_util": 51.0144,
-        "open_acc": 9.6943,
-        "total_acc": 20.784,
-        "credit_history_months": 175.6356,
-        "installment_to_income": 0.1769,
-        "loan_amnt_to_income": 0.4506,
-        "tot_cur_bal": 86378.5886,
-        "revol_bal": 9602.1044,
-        "total_rev_hi_lim": 20515.6212
-      }
-    ],
-    "hierarchical_profile": [
-      {
-        "segment": 1,
-        "n": 1968,
-        "share": 0.3936,
-        "degenerate": false,
-        "default_rate": 0.156,
-        "loan_amnt": 18197.8913,
-        "annual_inc": 109131.652,
-        "dti": 17.4414,
-        "revol_util": 52.2707,
-        "open_acc": 14.2337,
-        "total_acc": 31.595,
-        "credit_history_months": 225.407,
-        "installment_to_income": 0.0661,
-        "loan_amnt_to_income": 0.1858,
-        "tot_cur_bal": 240586.3163,
-        "revol_bal": 25761.4477,
-        "total_rev_hi_lim": 50562.5672
-      },
-      {
-        "segment": 2,
-        "n": 3032,
-        "share": 0.6064,
-        "degenerate": false,
-        "default_rate": 0.219,
-        "loan_amnt": 12228.9495,
-        "annual_inc": 55036.831,
-        "dti": 18.6057,
-        "revol_util": 51.1196,
-        "open_acc": 9.8331,
-        "total_acc": 20.8427,
-        "credit_history_months": 177.2236,
-        "installment_to_income": 0.0884,
-        "loan_amnt_to_income": 0.235,
-        "tot_cur_bal": 76775.8566,
-        "revol_bal": 10346.3407,
-        "total_rev_hi_lim": 21731.2234
-      }
-    ],
-    "default_rate_spread": {
-      "min_default_rate": 0.1909,
-      "max_default_rate": 0.204,
-      "spread_pp": 1.31
-    }
-  },
   "simulation": {
     "n_buckets": 69,
     "total_ead": 2104710850.0,
@@ -1795,69 +1165,105 @@
     "importance_sampling": {
       "level": 0.999,
       "shift": 1.5,
+      "shift_target": -3.090232306167813,
       "n_paths": 20000,
       "var_importance_sampling": 733506011.5979015,
       "es_importance_sampling": 797600747.5301304,
       "var_naive_same_paths": 741538580.8026968,
       "effective_sample_size": 2276.069392148001,
+      "effective_sample_size_share": 0.11380346960740005,
       "es_naive_same_paths": 786164064.0264181,
-      "se_importance_sampling": 74003735.67608565,
-      "se_naive": 24964989.9024106,
+      "se_importance_sampling": 2524898.4964686898,
+      "se_naive": 12089531.787096176,
+      "se_ratio_is_over_naive": 0.20884998202855573,
       "var_pct_ead_is": 0.3485067849571363,
       "var_pct_ead_naive": 0.352323256566429
     },
     "importance_sampling_sensitivity": [
       {
         "shift": 0.5,
+        "shift_target": -3.0902,
         "var_is": 737342807.1343,
         "var_naive": 695270394.4187,
+        "var_diff_is_minus_naive": 42072412.7156,
         "effective_sample_size": 15546.681,
         "ess_share": 0.7773,
-        "se_is": 16578564.2051,
-        "se_naive": 14616748.0735,
-        "se_ratio_is_over_naive": 1.1342
+        "se_is": 6026271.3817,
+        "se_naive": 9892306.6731,
+        "se_ratio_is_over_naive": 0.6092
       },
       {
         "shift": 1.0,
+        "shift_target": -3.0902,
         "var_is": 733475515.12,
         "var_naive": 718467376.5,
+        "var_diff_is_minus_naive": 15008138.62,
         "effective_sample_size": 7426.3774,
         "ess_share": 0.3713,
-        "se_is": 14303299.6435,
-        "se_naive": 8715849.9801,
-        "se_ratio_is_over_naive": 1.6411
+        "se_is": 3458772.5207,
+        "se_naive": 9724495.0904,
+        "se_ratio_is_over_naive": 0.3557
       },
       {
         "shift": 1.5,
+        "shift_target": -3.0902,
         "var_is": 733506011.5979,
         "var_naive": 741538580.8027,
+        "var_diff_is_minus_naive": -8032569.2048,
         "effective_sample_size": 2276.0694,
         "ess_share": 0.1138,
-        "se_is": 74003735.6761,
-        "se_naive": 24964989.9024,
-        "se_ratio_is_over_naive": 2.9643
+        "se_is": 2524898.4965,
+        "se_naive": 12089531.7871,
+        "se_ratio_is_over_naive": 0.2088
       },
       {
         "shift": 2.0,
+        "shift_target": -3.0902,
         "var_is": 732465117.743,
         "var_naive": 763525225.8863,
+        "var_diff_is_minus_naive": -31060108.1434,
         "effective_sample_size": 499.1636,
         "ess_share": 0.025,
-        "se_is": 80302381.2337,
-        "se_naive": 12686296.6797,
-        "se_ratio_is_over_naive": 6.3299
+        "se_is": 3164152.7436,
+        "se_naive": 13322657.8195,
+        "se_ratio_is_over_naive": 0.2375
       },
       {
         "shift": 2.5,
+        "shift_target": -3.0902,
         "var_is": 732464656.1151,
         "var_naive": 774593755.1429,
+        "var_diff_is_minus_naive": -42129099.0278,
         "effective_sample_size": 105.3596,
         "ess_share": 0.0053,
-        "se_is": 230175288.3385,
-        "se_naive": 16706320.0155,
-        "se_ratio_is_over_naive": 13.7777
+        "se_is": 5245561.8391,
+        "se_naive": 15351677.7033,
+        "se_ratio_is_over_naive": 0.3417
+      },
+      {
+        "shift": 3.09,
+        "shift_target": -3.0902,
+        "var_is": 738787876.3644,
+        "var_naive": 757349496.0569,
+        "var_diff_is_minus_naive": -18561619.6925,
+        "effective_sample_size": 23.0266,
+        "ess_share": 0.0012,
+        "se_is": 8780042.7366,
+        "se_naive": 11349480.7397,
+        "se_ratio_is_over_naive": 0.7736
       }
     ],
+    "importance_sampling_variance_reduction": {
+      "level": 0.999,
+      "shift": 1.5,
+      "n_paths": 20000,
+      "n_replications": 40,
+      "mean_var_importance_sampling": 734180264.1396961,
+      "mean_var_naive": 732998040.2963575,
+      "rmse_importance_sampling": 3234208.8979118476,
+      "rmse_naive": 14103970.525526477,
+      "rmse_reduction_factor": 4.36087184554858
+    },
     "stress": [
       {
         "scenario": "baseline",
@@ -1991,5 +1397,5 @@
       }
     ]
   },
-  "elapsed_seconds": 550.2
+  "elapsed_seconds": 502.2
 }

@@ -43,12 +43,15 @@ simulation:
   # Sensitivity grid spanning the Basel retail range (0.02-0.16).
   rho_sensitivity: [0.02, 0.05, 0.10, 0.15]
   # Importance sampling on the systematic factor for the 99.9% VaR estimate.
-  # shift=1.5 keeps the effective sample size usable on this (granular)
-  # portfolio; larger shifts make the IS estimator noisier, which is reported.
+  # The shift should sit near |Phi^{-1}(1 - level)| ~= 3.09 at 99.9%, but a shift
+  # that large collapses the ESS on a finite sample and biases the weighted
+  # quantile upward. 1.5 is the measured optimum here (see the shift grid and
+  # variance_reduction_comparison in the validation report); the grid is swept
+  # in full so the trade-off is reported rather than assumed.
   importance_sampling:
     n_tail_paths: 20000
     shift: 1.5
-    shift_grid: [0.5, 1.0, 1.5, 2.0, 2.5]
+    shift_grid: [0.5, 1.0, 1.5, 2.0, 2.5, 3.09]
 
 
   pd_shocks:

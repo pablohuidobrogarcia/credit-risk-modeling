@@ -19,7 +19,8 @@ champion reaches AUC 0.6157 (Gini 0.2315), and a plain logit given the lender's 
 inflates AUC by +0.0579**, which is why it is now only a labelled secondary analysis. The
 LGD model still has a **negative** out-of-time R². The portfolio forecast is weak. The
 Monte Carlo layer is sound, its dominant assumption (asset correlation) is disclosed and
-swept, and its importance-sampling experiment is reported as a **negative** result.
+swept, and its importance-sampling estimator is **verified against a closed-form benchmark**
+and shown to cut the tail-VaR RMSE by **4.36×** at equal paths.
 
 ---
 
@@ -301,10 +302,10 @@ corroborates the k-means split at sample scale.
 | `TypeError: Must provide 'func' or tuples` in `profile_segments` | Mixing named-tuple aggregation with plain `col="mean"` kwargs in `DataFrame.agg`. | Rebuilt the aggregation with `groupby()[cols].mean()` + `insert`. |
 | Hierarchical profile length mismatch | Linkage computed on a 5,000-loan subsample while labels were applied to 120,000 rows. | Subsample once and profile the *same* rows. |
 | Scorecard points all zero; SHAP/coefficient merge broken | `reset_index(names=…)` on an ndarray gave positional integers as variable names. | Use `res.model.exog_names` / `res.params.index`. |
-| Importance sampling increased variance | For a granular 69-bucket portfolio the tail is idiosyncratic; the likelihood-ratio weights concentrate on few paths (ESS 11.4 % at shift 1.5). | Kept as a reported **negative** experiment with the full shift curve; plain MC remains the headline VaR. |
+| Importance sampling appeared to increase variance | The reported SE used `se_plain/√ESS`, which is valid for weighted *means* but not for a weighted empirical **quantile**; it inflated the IS error (2.96× when the true ratio was 0.21×) and invited a wrong "granular ⇒ idiosyncratic" explanation. | Replaced with a batched-quantile SE plus a replication-based RMSE study; added a closed-form Vasicek unbiasedness unit test. IS now measures a **4.36×** RMSE reduction; the negative finding is withdrawn (`Finding M-3`). |
 | Degenerate risk from `MiniBatchKMeans` as default | Exact `KMeans` measured better *and* faster on the 120k sample (inertia 1,174,937 / silhouette 0.2200 vs 1,184,469 / 0.1889). | MiniBatch kept as an opt-in fallback above 250k rows; exact KMeans is the default for both the study and the shipped fit. |
 
-Test suite: **63 unit tests**, all passing on synthetic data; `ruff check src tests` clean;
+Test suite: **68 unit tests**, all passing on synthetic data; `ruff check src tests` clean;
 CI runs lint + tests on Python 3.10 and 3.11 without the dataset. A dedicated
 `tests/test_leakage.py` enforces that the split never mixes train/test rows and that
 winsorisation bounds, WoE encoders and the calibrator are fitted on train only.
@@ -364,14 +365,28 @@ Convergence study saved to `sim_convergence.csv` (plain) and
 factor is already averaged across 69 buckets, so pairing paths adds almost nothing. The
 result is reported rather than hidden.
 
-**Finding M-3 (Medium).** **Importance sampling on the systematic factor also failed to
-reduce variance.** Shifting `Z` towards the loss tail and reweighting by the likelihood
-ratio yields an unbiased 99.9 % VaR (IS $733.5M vs naive $741.5M at shift 1.5), but the
-effective sample size collapses to **2,276 of 20,000 paths (11.4 %)** and the estimator's
-standard error is **2.96× the plain-MC standard error**; larger shifts are worse (up to
-≈ 13.8×). For a *granular* portfolio the tail is driven by idiosyncratic noise rather than
-the single systematic factor, so importance sampling is the wrong tool here. The full shift
-curve is in `sim_importance_sampling_sensitivity.csv`.
+**Finding M-3 (Medium).** **Importance sampling on the systematic factor works, and it was
+verified rather than asserted.** Shifting `Z` towards the loss tail and reweighting by the
+likelihood ratio `w(z) = φ(z)/φ(z + shift)` yields an unbiased 99.9 % VaR: a unit test
+(`test_importance_sampling_is_unbiased_for_the_closed_form_var`) confirms the reweighted
+estimator converges to the closed-form Vasicek VaR of an infinitely granular homogeneous
+portfolio, and the factor quantile matching the 99.9 % level (`|Φ⁻¹(0.001)| ≈ 3.09`) is
+reported alongside each run. On the real 69-bucket portfolio the single-run estimates are
+IS $733.5M vs naive $741.5M (shift 1.5), and — using a **replication-based RMSE study** rather
+than the earlier, invalid `se/√ESS` scaling — IS reduces the tail-VaR RMSE by **4.36×** at
+equal paths (RMSE 3.23M vs 14.10M over 40 replications); the batched standard error agrees
+(SE ratio **0.21×**). The real cost is the effective sample size: it falls to **2,276 of
+20,000 paths (11.4 %)**, and pushing the shift to the factor quantile (≈ 3.09) collapses it to
+≈ 23 and biases the weighted quantile **upward**, which is why the shift is tuned to 1.5. The
+shift curve is in `sim_importance_sampling_sensitivity.csv` and the RMSE study in
+`sim_importance_sampling_variance_reduction.csv`.
+
+> **Correction to an earlier draft.** A previous version of this report claimed IS *increased*
+> variance by 2.96× and attributed that to the tail being idiosyncratic (a granularity story).
+> Both were wrong: the 2.96× figure came from an inapplicable `se/√ESS` formula, and the
+> granularity explanation does not hold — for a granular portfolio the tail *is* driven by the
+> systematic factor, which is exactly what the shift exploits. The estimator and its error
+> metric were fixed, a closed-form unit test was added, and the negative finding was withdrawn.
 
 ### 8.3 Stress scenarios (ρ = 0.12)
 
@@ -400,7 +415,8 @@ over-reading the stress grid.
 | **E-1** | Medium | EL of 9.85 % of EAD reflects a high (~14 %) default rate in a resolved-only sample. |
 | **P-4** | Medium | Out-of-time under-prediction (12.13 % vs 14.47 %); in-sample calibrator does not repair it (Brier worsens, slope 0.39). |
 | **P-1** | Medium | Absolute discrimination is moderate (Gini 0.2315); trees show real in/out decay. |
-| **M-2 / M-3** | Medium | Neither antithetic variates (+0.19 % SE) nor importance sampling (2.96× SE) reduce variance in this bucketed design. |
+| **M-2** | Medium | Antithetic variates give no meaningful reduction (+0.19 % SE) in this bucketed design. |
+| **M-3** | Low | Importance sampling **does** reduce tail-VaR variance (RMSE 4.36× smaller) but cuts the effective sample size to 11.4 %; shift is tuned, not arbitrary. |
 | **C-1 / C-2** | Medium | Segments differ by only 1.31 pp in default rate; k = 2 is metric-driven though now stability-backed. |
 | **P-3** | Low | All variable PSIs stable on the mature window (largest `purpose` 0.0820). |
 | **P-5** | Low | Cutoff is statistical, not economic (36.94 % bad rate among approved). |

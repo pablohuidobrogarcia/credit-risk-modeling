@@ -1,0 +1,11 @@
+{
+  "level": 0.999,
+  "shift": 1.5,
+  "n_paths": 20000,
+  "n_replications": 40,
+  "mean_var_importance_sampling": 734180264.1396961,
+  "mean_var_naive": 732998040.2963575,
+  "rmse_importance_sampling": 3234208.8979118476,
+  "rmse_naive": 14103970.525526477,
+  "rmse_reduction_factor": 4.36087184554858
+}

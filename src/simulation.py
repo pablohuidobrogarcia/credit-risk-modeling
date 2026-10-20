@@ -24,7 +24,13 @@ loans.
 
 Reported statistics: Expected Loss (EL), Unexpected Loss (UL), Value-at-Risk at
 99% and 99.9%, Expected Shortfall (ES), a convergence study and a stress-test
-grid. Antithetic variates are used as a variance-reduction technique.
+grid. Two variance-reduction techniques are studied: antithetic variates on the
+systematic factor, and importance sampling on that factor for the tail VaR. The
+importance-sampling estimator is validated against the closed-form Vasicek VaR
+of an infinitely granular homogeneous portfolio (:func:`vasicek_var_closed_form`)
+and its spread is measured with a replication-based RMSE study
+(:func:`variance_reduction_comparison`) rather than the (invalid for quantiles)
+``se / sqrt(ESS)`` scaling.
 """
 from __future__ import annotations
 
@@ -245,49 +251,95 @@ def variance_reduction_report(
 # ---------------------------------------------------------------------------
 # Importance sampling on the systematic factor (tail / VaR estimation)
 # ---------------------------------------------------------------------------
+def _weighted_quantile(values: np.ndarray, weights: np.ndarray, level: float) -> float:
+    """Weighted empirical ``level``-quantile (weights need not be normalised)."""
+    order = np.argsort(values)
+    v = np.asarray(values, dtype=float)[order]
+    w = np.asarray(weights, dtype=float)[order]
+    total = w.sum()
+    if total <= 0:
+        return float("nan")
+    cum = np.cumsum(w) / total
+    idx = int(np.searchsorted(cum, float(level)))
+    return float(v[min(idx, len(v) - 1)])
+
+
+def _batch_quantile_se(
+    losses: np.ndarray, z: np.ndarray, shift: float, level: float, n_batches: int = 20
+) -> float:
+    """Standard error of the IS quantile via the batched-means (independent groups) method.
+
+    The naive formula ``se_plain / sqrt(ESS)`` is valid for weighted *means* but
+    **not** for a weighted empirical quantile: the quantile is an order statistic
+    driven by the location of the loss distribution, so inflating it by the weight
+    ESS overstates the IS error badly. Instead the reweighted sample is split into
+    ``n_batches`` disjoint groups, the weighted quantile is recomputed in each, and
+    the standard error is the usual ``sd / sqrt(n_batches)`` of those batch
+    estimates - a genuine, replication-free measure of the estimator's spread.
+    """
+    losses = np.asarray(losses, dtype=float)
+    n = len(losses)
+    if n < n_batches * 2:
+        return float("nan")
+    shift = float(shift)
+    log_w = shift * z - 0.5 * shift**2
+    bounds = np.linspace(0, n, n_batches + 1).astype(int)
+    batch = np.empty(n_batches)
+    for b in range(n_batches):
+        sl = slice(bounds[b], bounds[b + 1])
+        lw = log_w[sl]
+        w = np.exp(lw - lw.max())
+        batch[b] = _weighted_quantile(losses[sl], w, level)
+    if not np.all(np.isfinite(batch)):
+        return float("nan")
+    return float(batch.std(ddof=1) / np.sqrt(n_batches))
+
+
 def importance_sampling_var(
     portfolio: BucketedPortfolio,
     rho: float = 0.12,
     level: float = 0.999,
     n_paths: int = 20_000,
-    shift: float = 2.5,
+    shift: float = 1.5,
     seed: int = 42,
 ) -> Dict[str, float]:
     """Estimate the tail VaR with importance sampling on the systematic factor Z.
 
-    Plain Monte Carlo needs very many paths to populate a 99.9% tail: with a
-    Gaussian systematic factor the loss quantile sits far out in the ``Z``
-    distribution, so only a tiny fraction of draws explore it. Losses rise when
-    the systematic factor is *low* (a bad macro state), so the sampling
-    distribution is shifted towards that region,
-    ``Z ~ N(-shift, 1)`` instead of ``N(0, 1)``, and every path is reweighted by
-    the likelihood ratio
+    Plain Monte Carlo needs very many paths to populate a 99.9% tail: the loss
+    quantile sits far out in the ``Z`` distribution, so only a tiny fraction of
+    draws explore it. Losses rise when the systematic factor is *low* (a bad
+    macro state), so the sampling distribution is shifted towards that region,
+    ``Z ~ N(-shift, 1)`` instead of ``N(0, 1)``. Because the loss is monotone
+    *decreasing* in ``Z``, the level-quantile of the loss corresponds to the
+    ``1 - level`` quantile of ``Z`` (``z = Phi^{-1}(1 - level)``, i.e. about
+    ``-3.09`` at 99.9%), which is why the shift is centred near that value.
+
+    Each path is reweighted by the likelihood ratio
 
     .. math::
         w(Z) = \\frac{\\phi(Z)}{\\phi(Z + \\text{shift})}
              = \\exp\\!\\left(\\text{shift}\\,Z - \\tfrac{1}{2}\\text{shift}^2\\right),
 
-    where ``phi`` is the standard normal density. The loss quantile is then read
-    off the *weighted empirical* CDF.
-
-    Returns the IS estimate together with the naive estimate and the effective
-    sample size of the reweighted sample, so the variance reduction is verifiable.
+    where ``phi`` is the standard normal density, and the loss quantile is read
+    off the *weighted empirical* CDF. The estimator is unbiased by construction;
+    the effective sample size :math:`\\mathrm{ESS} = 1/\\sum w_i^2` (weights
+    normalised to sum to one) controls how much the shift can buy, and it is
+    reported alongside a **batched** standard error that does not rely on the
+    (invalid here) ``se/sqrt(ESS)`` scaling. A shift much larger than
+    ``|Phi^{-1}(1-level)|`` collapses the ESS and biases the estimate upward.
     """
     rng = np.random.default_rng(seed)
-    z = rng.normal(loc=-float(shift), scale=1.0, size=int(n_paths))
+    n_paths = int(n_paths)
+    shift = float(shift)
+    z = rng.normal(loc=-shift, scale=1.0, size=n_paths)
     losses = _loss_paths(portfolio, rng, z, rho)
     # Likelihood ratio phi(z)/phi(z + shift).
-    log_w = float(shift) * z - 0.5 * float(shift) ** 2
+    log_w = shift * z - 0.5 * shift**2
     w = np.exp(log_w - log_w.max())
     w = w / w.sum()
 
-    order = np.argsort(losses)
-    losses_sorted = losses[order]
-    w_sorted = w[order]
-    cum_w = np.cumsum(w_sorted)
-    idx = int(np.searchsorted(cum_w, float(level)))
-    idx = min(idx, len(losses_sorted) - 1)
-    var_is = float(losses_sorted[idx])
+    var_is = _weighted_quantile(losses, w, level)
+    # ES under the same (reweighted) measure: weights of the paths at/above VaR.
     tail_mask = losses >= var_is
     if tail_mask.any():
         w_tail = w[tail_mask]
@@ -295,44 +347,51 @@ def importance_sampling_var(
     else:
         es_is = var_is
 
-    # Effective sample size and a crude standard error of the IS quantile.
     ess = float(1.0 / np.sum(w**2)) if np.sum(w**2) > 0 else float("nan")
+    se_is = _batch_quantile_se(losses, z, shift, level)
+
     # Naive estimate on the same number of paths for an apples-to-apples comparison.
-    z_naive = rng.standard_normal(int(n_paths))
+    z_naive = rng.standard_normal(n_paths)
     losses_naive = _loss_paths(portfolio, rng, z_naive, rho)
     var_naive = float(np.quantile(losses_naive, float(level)))
     se_naive = _quantile_se(losses_naive, float(level))
     return {
         "level": float(level),
-        "shift": float(shift),
-        "n_paths": int(n_paths),
+        "shift": shift,
+        "shift_target": float(-abs(norm.ppf(1.0 - float(level)))),
+        "n_paths": n_paths,
         "var_importance_sampling": var_is,
         "es_importance_sampling": es_is,
         "var_naive_same_paths": var_naive,
         "effective_sample_size": ess,
+        "effective_sample_size_share": ess / n_paths if n_paths else float("nan"),
         "es_naive_same_paths": float(np.mean(losses_naive[losses_naive >= var_naive])) if np.any(losses_naive >= var_naive) else var_naive,
-        "se_importance_sampling": se_naive / np.sqrt(max(ess, 1.0)) * np.sqrt(len(losses_naive)),
+        "se_importance_sampling": se_is,
         "se_naive": se_naive,
+        "se_ratio_is_over_naive": (se_is / se_naive if se_naive else float("nan")),
         "var_pct_ead_is": var_is / portfolio.total_ead if portfolio.total_ead else float("nan"),
         "var_pct_ead_naive": var_naive / portfolio.total_ead if portfolio.total_ead else float("nan"),
     }
 
 
 def _quantile_se(losses: np.ndarray, level: float) -> float:
-    """Asymptotic standard error of a sample quantile (kernel-free approximation)."""
+    """Standard error of the naive sample quantile via the batched-means method.
+
+    Splitting the sample into ``n_batches`` disjoint groups, recomputing the
+    quantile in each and taking ``sd / sqrt(n_batches)`` of the group estimates
+    gives a consistent, distribution-free measure of the estimator's spread that
+    can be compared directly with :func:`_batch_quantile_se`.
+    """
     losses = np.asarray(losses, dtype=float)
     n = len(losses)
-    if n < 10:
+    n_batches = 20
+    if n < n_batches * 2:
         return float("nan")
-    q = float(np.quantile(losses, level))
-    # Density estimate via a small bandwidth around the quantile.
-    h = 1.06 * losses.std(ddof=1) * n ** (-1 / 5)
-    if h <= 0:
+    bounds = np.linspace(0, n, n_batches + 1).astype(int)
+    batch = np.array([float(np.quantile(losses[bounds[b] : bounds[b + 1]], level)) for b in range(n_batches)])
+    if not np.all(np.isfinite(batch)):
         return float("nan")
-    density = np.mean(np.abs(losses - q) <= h) / (2 * h)
-    if density <= 0:
-        return float("nan")
-    return float(np.sqrt(level * (1 - level) / n) / density)
+    return float(batch.std(ddof=1) / np.sqrt(n_batches))
 
 
 def importance_sampling_sensitivity(
@@ -343,12 +402,17 @@ def importance_sampling_sensitivity(
     rho: float = 0.12,
     seed: int = 42,
 ) -> pd.DataFrame:
-    """How the IS tail estimate and its effective sample size move with the shift.
+    """How the IS tail estimate, its effective sample size and its real SE move with the shift.
 
-    A larger shift explores the tail more aggressively **but** concentrates the
-    likelihood-ratio weights on fewer paths (the effective sample size falls),
-    which can make the estimator *noisier* than plain Monte Carlo. Reporting the
-    whole curve - instead of a single tuned shift - makes that trade-off visible.
+    A larger shift explores the tail more aggressively, pushing more paths into
+    the region that matters, but it also concentrates the likelihood-ratio
+    weights on fewer paths: the effective sample size falls and the weighted
+    quantile eventually drifts *upward*. The shift should therefore be centred
+    near the factor quantile that maps to the target level
+    (``|Phi^{-1}(1 - level)|``, about ``3.09`` at 99.9%) and tuned by the
+    measured standard error, not a single arbitrary constant. The whole curve is
+    reported so the trade-off is visible; ``se_ratio_is_over_naive`` below 1
+    means importance sampling genuinely beats plain Monte Carlo.
     """
     rows = []
     for s in rhos_shift:
@@ -358,18 +422,82 @@ def importance_sampling_sensitivity(
         rows.append(
             {
                 "shift": float(s),
+                "shift_target": out["shift_target"],
                 "var_is": out["var_importance_sampling"],
                 "var_naive": out["var_naive_same_paths"],
+                "var_diff_is_minus_naive": out["var_importance_sampling"] - out["var_naive_same_paths"],
                 "effective_sample_size": out["effective_sample_size"],
-                "ess_share": out["effective_sample_size"] / float(n_paths),
+                "ess_share": out["effective_sample_size_share"],
                 "se_is": out["se_importance_sampling"],
                 "se_naive": out["se_naive"],
-                "se_ratio_is_over_naive": (
-                    out["se_importance_sampling"] / out["se_naive"] if out["se_naive"] else float("nan")
-                ),
+                "se_ratio_is_over_naive": out["se_ratio_is_over_naive"],
             }
         )
     return pd.DataFrame(rows)
+
+
+def variance_reduction_comparison(
+    portfolio: BucketedPortfolio,
+    rho: float = 0.12,
+    level: float = 0.999,
+    n_paths: int = 20_000,
+    shift: Optional[float] = None,
+    seed: int = 42,
+    n_replications: int = 40,
+) -> Dict[str, float]:
+    """Real RMSE comparison of IS vs naive on the tail VaR, by replication.
+
+    Independently of the single-run standard errors, the estimator's true
+    spread is measured by repeating both the importance-sampling and the plain
+    estimator many times and taking the root-mean-square deviation from their
+    common mean. This is the honest, replication-based evidence for how much the
+    variance reduction actually buys (used as a unit test and reported in the
+    validation report).
+    """
+    if shift is None:
+        shift = abs(float(norm.ppf(1.0 - float(level))))
+    reps_is = np.empty(int(n_replications))
+    reps_naive = np.empty(int(n_replications))
+    for r in range(int(n_replications)):
+        out = importance_sampling_var(
+            portfolio, rho=rho, level=level, n_paths=n_paths, shift=shift, seed=seed + r
+        )
+        reps_is[r] = out["var_importance_sampling"]
+        reps_naive[r] = out["var_naive_same_paths"]
+    target = float(reps_is.mean())
+    rmse_is = float(np.sqrt(np.mean((reps_is - target) ** 2)))
+    rmse_naive = float(np.sqrt(np.mean((reps_naive - target) ** 2)))
+    return {
+        "level": float(level),
+        "shift": float(shift),
+        "n_paths": int(n_paths),
+        "n_replications": int(n_replications),
+        "mean_var_importance_sampling": float(reps_is.mean()),
+        "mean_var_naive": float(reps_naive.mean()),
+        "rmse_importance_sampling": rmse_is,
+        "rmse_naive": rmse_naive,
+        "rmse_reduction_factor": (rmse_naive / rmse_is if rmse_is else float("nan")),
+    }
+
+
+def vasicek_var_closed_form(pd_value: float, rho: float, level: float) -> float:
+    """Closed-form ``level``-VaR of an infinitely granular homogeneous portfolio.
+
+    For a homogeneous pool with default probability ``pd``, unit LGD and unit
+    EAD, the portfolio loss rate is exactly the conditional PD ``p(Z)`` and the
+    ``level``-quantile of the loss is ``p(z_level)`` with
+    ``z_level = Phi^{-1}(1 - level)``:
+
+    .. math::
+        \\mathrm{VaR}_{\\text{level}} = \\Phi\\!\\left(
+        \\frac{\\Phi^{-1}(pd) - \\sqrt{\\rho}\\,\\Phi^{-1}(1 - level)}
+        {\\sqrt{1 - \\rho}}\\right).
+
+    Used as the analytic benchmark for the Monte Carlo and importance-sampling
+    estimators (unit tests and the validation report).
+    """
+    z_level = float(norm.ppf(1.0 - float(level)))
+    return float(norm.cdf((norm.ppf(float(pd_value)) - np.sqrt(rho) * z_level) / np.sqrt(1.0 - rho)))
 
 
 # ---------------------------------------------------------------------------

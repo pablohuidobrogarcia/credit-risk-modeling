@@ -51,18 +51,37 @@ DEGENERATE_SHARE = 0.01        # a segment below 1% of the sample is flagged
 # Preprocessing
 # ---------------------------------------------------------------------------
 class Preprocessor:
-    """Winsorise -> median-impute -> standardise, with reusable fit statistics."""
+    """Winsorise -> median-impute -> standardise, with reusable fit statistics.
 
-    def __init__(self, lower: float = 0.01, upper: float = 0.99):
+    When ``log`` is set, ``log1p`` is applied to the non-negative columns before
+    winsorisation. Income, balances and loan amounts are heavy-tailed and
+    right-skewed, so the log scale makes the Euclidean distances (and therefore
+    k-means / GMM geometry) behave like the *relative* differences a risk
+    analyst actually cares about.
+    """
+
+    def __init__(self, lower: float = 0.01, upper: float = 0.99, log: bool = False, log_cols: Optional[List[str]] = None):
         self.lower = float(lower)
         self.upper = float(upper)
+        self.log = bool(log)
+        self.log_cols = list(log_cols) if log_cols else None
         self.lo: Optional[pd.Series] = None
         self.hi: Optional[pd.Series] = None
         self.medians: Optional[pd.Series] = None
         self.scaler = StandardScaler()
 
+    def _maybe_log(self, X: pd.DataFrame) -> pd.DataFrame:
+        if not self.log:
+            return X
+        cols = self.log_cols if self.log_cols is not None else list(X.columns)
+        Xf = X.astype(float).copy()
+        for c in cols:
+            if c in Xf.columns:
+                Xf[c] = np.log1p(Xf[c].clip(lower=0.0))
+        return Xf
+
     def fit(self, X: pd.DataFrame) -> "Preprocessor":
-        Xf = X.astype(float)
+        Xf = self._maybe_log(X)
         self.lo = Xf.quantile(self.lower)
         self.hi = Xf.quantile(self.upper)
         clipped = Xf.clip(self.lo, self.hi, axis=1)
@@ -72,18 +91,18 @@ class Preprocessor:
 
     def transform(self, X: pd.DataFrame) -> np.ndarray:
         assert self.medians is not None and self.lo is not None and self.hi is not None, "call fit() first"
-        Xf = X.astype(float).clip(self.lo, self.hi, axis=1)
+        Xf = self._maybe_log(X).clip(self.lo, self.hi, axis=1)
         return self.scaler.transform(Xf.fillna(self.medians).to_numpy())
 
 
-def impute_and_scale(X: pd.DataFrame) -> Tuple[np.ndarray, StandardScaler, pd.Series]:
+def impute_and_scale(X: pd.DataFrame, log: bool = False) -> Tuple[np.ndarray, StandardScaler, pd.Series]:
     """Winsorise, median-impute and standardise a numeric feature matrix.
 
     Returns ``(Z, scaler, medians)``. The clipping bounds are fitted on ``X``
     itself, so use this only where the matrix *is* the fitting sample (PCA,
     hierarchical clustering, k-selection).
     """
-    pp = Preprocessor().fit(X)
+    pp = Preprocessor(log=log).fit(X)
     return pp.transform(X), pp.scaler, pp.medians
 
 
@@ -204,7 +223,7 @@ def choose_k(
     n_boot: int = 5,
 ) -> pd.DataFrame:
     """Elbow (inertia), silhouette, stability (ARI) and balance diagnostics per k."""
-    Z, _, _ = impute_and_scale(subsample(X, stability_sample, seed))
+    Z, _, _ = impute_and_scale(subsample(X, stability_sample, seed), log=True)
     rows = []
     for k in k_range:
         if int(k) >= len(Z):
@@ -299,10 +318,10 @@ def elbow_silhouette_plot(
 class KMeansSegmenter:
     """k-means segmenter that can assign clusters to new loans."""
 
-    def __init__(self, k: int = 4, seed: int = 42):
+    def __init__(self, k: int = 4, seed: int = 42, log: bool = True):
         self.k = int(k)
         self.seed = seed
-        self.pp = Preprocessor()
+        self.pp = Preprocessor(log=log)
         self.model = None
 
     @property
@@ -324,6 +343,79 @@ class KMeansSegmenter:
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         assert self.model is not None, "fit() must be called before predict()"
         return np.asarray(self.model.predict(self.pp.transform(X)), dtype=int)
+
+
+class GMMSegmenter:
+    """Gaussian-mixture segmenter (soft-assignment alternative to k-means).
+
+    A GMM allows ellipsoidal, differently-sized clusters and returns a
+    probability of belonging to each segment, which is the natural alternative
+    when the risk-driver space is not made of equal, spherical blobs.
+    """
+
+    def __init__(self, k: int = 4, seed: int = 42, covariance_type: str = "full"):
+        self.k = int(k)
+        self.seed = seed
+        self.covariance_type = covariance_type
+        self.pp = Preprocessor(log=True)
+        self.model = None
+
+    def fit(self, X: pd.DataFrame) -> "GMMSegmenter":
+        from sklearn.mixture import GaussianMixture
+
+        self.pp.fit(X)
+        self.model = GaussianMixture(
+            n_components=self.k,
+            covariance_type=self.covariance_type,
+            n_init=3,
+            random_state=self.seed,
+            reg_covar=1e-4,
+        )
+        self.model.fit(self.pp.transform(X))
+        return self
+
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        assert self.model is not None, "fit() must be called before predict()"
+        return np.asarray(self.model.predict(self.pp.transform(X)), dtype=int)
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        assert self.model is not None, "fit() must be called before predict()"
+        return np.asarray(self.model.predict_proba(self.pp.transform(X)), dtype=float)
+
+
+def cluster_stability_gmm(
+    X: pd.DataFrame, k: int, seed: int = 42, n_boot: int = 5, sample_size: int = 20_000
+) -> float:
+    """Stability of a GMM solution across bootstrap resamples (mean ARI)."""
+    from sklearn.metrics import adjusted_rand_score
+
+    rng = np.random.default_rng(seed)
+    Xs = subsample(X, sample_size, seed)
+    pp = Preprocessor(log=True).fit(Xs)
+    Z = pp.transform(Xs)
+    n = len(Z)
+    if n < 50:
+        return float("nan")
+    from sklearn.mixture import GaussianMixture
+
+    ref = GaussianMixture(n_components=int(k), covariance_type="full", n_init=3, random_state=seed).fit_predict(Z)
+    scores = []
+    for b in range(n_boot):
+        boot = rng.choice(n, size=n, replace=True)
+        try:
+            lab = GaussianMixture(
+                n_components=int(k), covariance_type="full", n_init=3, random_state=seed + b
+            ).fit_predict(Z[boot])
+        except Exception:  # pragma: no cover - degenerate bootstrap
+            continue
+        pred = {}
+        for row, lab_i in zip(boot.tolist(), lab.tolist()):
+            pred.setdefault(row, lab_i)
+        common = [r for r in pred if r in set(range(n))]
+        if len(common) < 10:
+            continue
+        scores.append(adjusted_rand_score(ref[common], [pred[r] for r in common]))
+    return float(np.mean(scores)) if scores else float("nan")
 
 
 def hierarchical_labels(
@@ -428,10 +520,21 @@ def run_clustering(
     elbow_silhouette_plot(scores, chosen_k=k)
     print(f"    chosen k={k} (silhouette-based)")
 
-    segmenter = KMeansSegmenter(k=k, seed=seed).fit(X_fit)
+    segmenter = KMeansSegmenter(k=k, seed=seed, log=True).fit(X_fit)
     km_labels = segmenter.predict(X_all)
     kmeans_profile = profile_segments(work, km_labels, feature_cols)
     save_table(kmeans_profile, "clustering_kmeans_profile.csv")
+
+    # Gaussian-mixture alternative (soft, ellipsoidal clusters on log features).
+    try:
+        gmm = GMMSegmenter(k=k, seed=seed).fit(X_fit)
+        gmm_labels = gmm.predict(X_all)
+        gmm_profile = profile_segments(work, gmm_labels, feature_cols)
+        save_table(gmm_profile, "clustering_gmm_profile.csv")
+        gmm_stability = cluster_stability_gmm(X_fit, int(k), seed=seed, n_boot=5)
+    except Exception as exc:  # pragma: no cover - defensive
+        print(f"    GMM segmentation skipped: {exc}")
+        gmm_profile, gmm_labels, gmm_stability = None, None, None
 
     hier_sample = subsample(X_fit, 5000, seed)
     hier_labels, link = hierarchical_labels(hier_sample, k=k, seed=seed)
@@ -451,12 +554,23 @@ def run_clustering(
         "max_default_rate": round(float(rates.max()), 4) if len(rates) else None,
         "spread_pp": round(float(rates.max() - rates.min()) * 100.0, 2) if len(rates) else None,
     }
+    gmm_spread = None
+    if gmm_profile is not None:
+        grates = gmm_profile["default_rate"].dropna()
+        gmm_spread = {
+            "min_default_rate": round(float(grates.min()), 4) if len(grates) else None,
+            "max_default_rate": round(float(grates.max()), 4) if len(grates) else None,
+            "spread_pp": round(float(grates.max() - grates.min()) * 100.0, 2) if len(grates) else None,
+        }
     print(f"    segment default-rate spread: {spread['spread_pp']} pp ({spread['min_default_rate']} -> {spread['max_default_rate']})")
 
     return {
         "k": int(k),
         "k_selection": scores,
         "kmeans_profile": kmeans_profile,
+        "gmm_profile": gmm_profile,
+        "gmm_spread": gmm_spread,
+        "gmm_stability_ari": gmm_stability,
         "hierarchical_profile": hier_profile,
         "hierarchical_labels": hier_labels,
         "linkage": link,

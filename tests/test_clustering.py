@@ -151,3 +151,47 @@ def test_subsample_is_deterministic_and_keeps_order():
     assert len(a) == 200
     assert a.index.equals(b.index)
     assert cl.subsample(X, 5000, seed=7).shape[0] == 1000  # no-op when small enough
+
+
+# ---------------------------------------------------------------------------
+# Block 6: log preprocessor and Gaussian-mixture alternative
+# ---------------------------------------------------------------------------
+def test_preprocessor_log_transform_reduces_skew():
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame({"income": rng.lognormal(11, 1.5, 2000)})
+    raw = cl.Preprocessor(log=False).fit(X)
+    logged = cl.Preprocessor(log=True).fit(X)
+    # After winsorisation both are bounded, but the log scale keeps the interior
+    # spread of a heavy-tailed variable closer to symmetric.
+    assert np.isfinite(logged.transform(X)).all()
+    assert abs(float(pd.Series(logged.transform(X)[:, 0]).skew())) < abs(
+        float(pd.Series(raw.transform(X)[:, 0]).skew())
+    )
+
+
+def test_gmm_segmenter_fits_predicts_and_profiles_soft_membership():
+    X = _frame(500, seed=8)[["a", "b"]]
+    gmm = cl.GMMSegmenter(k=3, seed=8).fit(X)
+    labels = gmm.predict(X)
+    proba = gmm.predict_proba(X)
+    assert labels.shape == (500,)
+    assert proba.shape == (500, 3)
+    assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-6)
+    assert len(np.unique(labels)) >= 2
+
+
+def test_gmm_stability_is_high_for_well_separated_blobs():
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame(
+        {
+            "a": np.concatenate([rng.normal(-5, 0.3, 150), rng.normal(5, 0.3, 150)]),
+            "b": np.concatenate([rng.normal(-5, 0.3, 150), rng.normal(5, 0.3, 150)]),
+        }
+    )
+    ari = cl.cluster_stability_gmm(X, k=2, seed=1, n_boot=3, sample_size=200)
+    assert np.isfinite(ari) and ari > 0.8
+
+
+def test_kmeans_segmenter_uses_log_by_default():
+    seg = cl.KMeansSegmenter(k=3, seed=5)
+    assert seg.pp.log is True

@@ -7,7 +7,10 @@ data:
   rejected_csv: data/raw/rejected_2007_to_2018Q4.csv
   accepted_parquet: data/processed/accepted.parquet
   modeling_parquet: data/processed/modeling_sample.parquet
-  sample_size: 500000
+  # Full resolved population (1,345,350 loans) instead of the old 500k sample:
+  # the mature train window (2010-2013, 36m) grows ~2.7x, which is what the
+  # discrimination work (block 2) needs. Set to a smaller number to subsample.
+  sample_size: 1400000
   resolved_statuses:
     - Fully Paid
     - Charged Off
@@ -36,10 +39,62 @@ modeling:
   train_years: [2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016]
   test_years: [2017, 2018]
 
+  # ---------------------------------------------------------------------
+  # Challenger feature set (block 2)
+  # ---------------------------------------------------------------------
+  # The interpretable scorecard keeps the IV-selected WoE variables only; the
+  # tree/boosting challengers use the *wider* leakage-free origination set
+  # (all of NUMERIC_FEATURES + CATEGORICAL_FEATURES, see src/features.py)
+  # instead of inheriting the scorecard's parsimonious selection.
+  challenger_uses_full_features: true
+
+  # LightGBM tuning by *temporal* cross-validation inside the mature train
+  # window: fit on 2010-2012, validate on 2013 (never touches 2014-2015).
+  lgbm_tuning:
+    enabled: true
+    tuning_train_years: [2010, 2011, 2012]
+    tuning_valid_years: [2013]
+    n_trials: 12
+    # Business-sensible monotone constraints on the raw numeric drivers
+    # (+1 = higher value -> higher PD, -1 = higher value -> lower PD).
+    monotone_constraints:
+      annual_inc: -1
+      credit_history_months: -1
+      dti: 1
+      revol_util: 1
+      installment_to_income: 1
+      loan_amnt_to_income: 1
+      delinq_2yrs: 1
+      inq_last_6mths: 1
+      pub_rec: 1
+
+  # Probability calibration (block 3). Calibrators are fitted on out-of-sample
+  # scores from a *later* temporal slice of the training window, and the method
+  # is chosen on a separate validation slice - never on the 2014-2015 test window.
+  calibration:
+    # Slice used to FIT the calibrators (scored by a model trained on the years before it).
+    fit_years: [2013]
+    model_fit_years: [2010, 2011, 2012]
+    # Slice used to CHOOSE the calibration method.
+    select_years: [2012]
+    select_model_fit_years: [2010, 2011]
+    methods: [none, intercept, platt, isotonic]
+
+  # Exploratory reject-inference sample size (block 8). This stage is labelled
+  # exploratory and feeds no headline number.
+  reject_sample_size: 200000
+
 simulation:
   n_simulations: 100000
   # Base case: mid-range value inside the Basel IRB retail correlation band.
   asset_correlation: 0.12
+  # Variance reduction. Stratified sampling of the systematic factor is the
+  # technique of record (it measurably reduces the standard error); antithetic
+  # variates are kept as a reported negative result - on a 100k-path portfolio
+  # they barely move the estimate. Both arms are compared against plain sampling
+  # in sim_variance_reduction.csv.
+  stratified_sampling: true
+  antithetic_variates: false
   # Sensitivity grid spanning the Basel retail range (0.02-0.16).
   rho_sensitivity: [0.02, 0.05, 0.10, 0.15]
   # Importance sampling on the systematic factor for the 99.9% VaR estimate.

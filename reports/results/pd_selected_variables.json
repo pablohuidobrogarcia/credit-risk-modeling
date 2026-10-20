@@ -5,7 +5,7 @@
     "dti",
     "revol_util",
     "home_ownership",
-    "credit_history_months",
+    "inq_last_6mths",
     "purpose"
   ],
   "iv_pass": [
@@ -15,7 +15,7 @@
     "dti",
     "revol_util",
     "home_ownership",
-    "credit_history_months",
+    "inq_last_6mths",
     "purpose"
   ]
 }

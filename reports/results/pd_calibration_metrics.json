@@ -1,25 +1,26 @@
 {
-  "method": "isotonic_regression",
-  "fit_on": "training window (in-sample scores)",
+  "method": "isotonic",
+  "fit_on": "out-of-sample scores from the [2013] slice (model fitted on [2010, 2011, 2012])",
+  "selected_on": "out-of-sample scores from the [2012] slice (model fitted on [2010, 2011])",
   "raw_oot": {
-    "mean_predicted": 0.12125792326297351,
-    "observed_rate": 0.14465237896821803,
-    "calibration_in_the_large": 0.20339706943581404,
-    "slope": 0.9429361054551954,
-    "brier": 0.12176169708631432
+    "mean_predicted": 0.12327679602257537,
+    "observed_rate": 0.1446310110503685,
+    "calibration_in_the_large": 0.18441193021167224,
+    "slope": 0.9086736237661065,
+    "brier": 0.11948568163995604
   },
   "calibrated_oot": {
-    "mean_predicted": 0.11956237411170158,
-    "observed_rate": 0.14465237896821803,
-    "calibration_in_the_large": 0.21940640876069395,
-    "slope": 0.3864205447727861,
-    "brier": 0.12369728788143758
+    "mean_predicted": 0.12175223063018291,
+    "observed_rate": 0.1446310110503685,
+    "calibration_in_the_large": 0.19859347389072068,
+    "slope": 1.076502781844181,
+    "brier": 0.11970119513032162
   },
   "calibrated_train": {
-    "mean_predicted": 0.12364078893203884,
-    "observed_rate": 0.12364077669902912,
-    "calibration_in_the_large": -1.1289882340115298e-07,
-    "slope": 1.000082944791492,
-    "brier": 0.10033075181240704
+    "mean_predicted": 0.12264772908262209,
+    "observed_rate": 0.12388636240755982,
+    "calibration_in_the_large": 0.011461241257415544,
+    "slope": 1.599352346302267,
+    "brier": 0.10266815743063212
   }
 }

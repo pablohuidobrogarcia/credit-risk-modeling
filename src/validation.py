@@ -50,11 +50,63 @@ def comparison_table(
     return pd.DataFrame(rows).sort_values("auc", ascending=False).reset_index(drop=True)
 
 
+def _select_matrix(model: FittedModel, X: pd.DataFrame) -> pd.DataFrame:
+    """Return the columns a model was trained on (raw trees need their own set)."""
+    if model.kind == "raw" and all(c in X.columns for c in model.features):
+        return X[model.features]
+    return X
+
+
+def comparison_table_multi(
+    models: Sequence[FittedModel],
+    X_test_all: pd.DataFrame,
+    y_test: pd.Series,
+    X_train_all: Optional[pd.DataFrame] = None,
+    y_train: Optional[pd.Series] = None,
+    label: str = "oot",
+) -> pd.DataFrame:
+    """AUC/Gini/KS table when models consume *different* feature matrices.
+
+    Linear scorecard models read the WoE-selected columns; the tree challengers
+    read their own (wider) raw feature set. Each model is scored on the columns
+    it was actually fitted on, so the comparison is apples to apples.
+    """
+    rows = []
+    for m in models:
+        row = evaluate(m, _select_matrix(m, X_test_all), y_test, label)
+        row["cv_auc"] = round(float(m.cv_auc), 4) if m.cv_auc is not None else np.nan
+        if X_train_all is not None and y_train is not None:
+            row["train_auc"] = round(M.auc(y_train, m.predict_proba(_select_matrix(m, X_train_all))), 4)
+        row["n_features"] = len(m.features)
+        rows.append(row)
+    return pd.DataFrame(rows).sort_values("auc", ascending=False).reset_index(drop=True)
+
+
 def roc_plot(models: Sequence[FittedModel], X_test: pd.DataFrame, y_test: pd.Series, name: str = "roc_curves.png"):
     """ROC curves for all models on the out-of-time sample."""
     fig, ax = plt.subplots(figsize=(7, 7))
     for m in models:
         p = m.predict_proba(X_test)
+        fpr, tpr, _ = roc_curve(y_test, p)
+        ax.plot(fpr, tpr, lw=1.8, label=f"{m.name} (AUC={M.auc(y_test, p):.3f})")
+    ax.plot([0, 1], [0, 1], "k--", lw=1, label="random")
+    ax.set_xlabel("False positive rate")
+    ax.set_ylabel("True positive rate")
+    ax.set_title("Out-of-time ROC curves")
+    ax.legend(loc="lower right", fontsize=8)
+    return save_fig(fig, name)
+
+
+def roc_plot_multi(
+    models: Sequence[FittedModel],
+    X_test_all: pd.DataFrame,
+    y_test: pd.Series,
+    name: str = "roc_curves.png",
+):
+    """ROC curves when models consume different feature matrices."""
+    fig, ax = plt.subplots(figsize=(7, 7))
+    for m in models:
+        p = m.predict_proba(_select_matrix(m, X_test_all))
         fpr, tpr, _ = roc_curve(y_test, p)
         ax.plot(fpr, tpr, lw=1.8, label=f"{m.name} (AUC={M.auc(y_test, p):.3f})")
     ax.plot([0, 1], [0, 1], "k--", lw=1, label="random")

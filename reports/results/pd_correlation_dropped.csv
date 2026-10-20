@@ -1,2 +1,2 @@
 variable,correlated_with,abs_corr
-loan_amnt_to_income,installment_to_income,0.9472270290237895
+loan_amnt_to_income,installment_to_income,0.9635870025623728

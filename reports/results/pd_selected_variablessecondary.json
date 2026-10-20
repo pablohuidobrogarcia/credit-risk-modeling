@@ -6,10 +6,9 @@
     "verification_status",
     "tot_cur_bal",
     "loan_amnt",
-    "annual_inc",
     "total_rev_hi_lim",
-    "home_ownership",
-    "revol_util"
+    "annual_inc",
+    "home_ownership"
   ],
   "iv_pass": [
     "term",
@@ -19,9 +18,8 @@
     "verification_status",
     "tot_cur_bal",
     "loan_amnt",
-    "annual_inc",
     "total_rev_hi_lim",
-    "home_ownership",
-    "revol_util"
+    "annual_inc",
+    "home_ownership"
   ]
 }

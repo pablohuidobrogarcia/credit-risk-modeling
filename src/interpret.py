@@ -49,6 +49,11 @@ def shap_summary(
     pipeline = model.estimator
     pre = pipeline.named_steps["prep"]
     clf = pipeline.named_steps["clf"]
+    # The monotone-constrained LightGBM lives inside a thin wrapper (it needs to
+    # resolve the constraint vector after the ColumnTransformer widens the
+    # categoricals). TreeExplainer only understands the underlying booster, so
+    # unwrap to it when present.
+    clf = getattr(clf, "model_", clf)
     Xt = pre.transform(Xs)
     feature_names = _transformed_feature_names(pipeline)
 

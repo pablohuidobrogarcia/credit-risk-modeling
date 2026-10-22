@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<title>Credit Risk Modeling — Lending Club PD, LGD &amp; Monte Carlo portfolio risk</title>
+<meta name="description" content="End-to-end credit-risk case study on Lending Club loans: how right-censoring inflates validation metrics, a PD scorecard, calibrations, LGD, expected loss and Monte-Carlo portfolio capital. Fully reproducible.">
+<meta name="author" content="Pablo Huido Brogarcia">
+<link rel="canonical" href="https://pablohuidobrogarcia.github.io/credit-risk-modeling/">
+
+<!-- Open Graph (LinkedIn) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Credit Risk Modeling">
+<meta property="og:title" content="Credit Risk Modeling — PD, LGD &amp; Monte Carlo portfolio risk (Lending Club)">
+<meta property="og:description" content="A reproducible credit-risk case study: right-censoring inflates validation the most, discrimination is moderate, calibration is a null result, and the Monte-Carlo tail is what matters for capital.">
+<meta property="og:url" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/">
+<meta property="og:image" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/assets/og-card.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Credit Risk Modeling summary card: champion AUC, expected loss, VaR 99.9% and the censoring gap.">
+
+<!-- Twitter card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Credit Risk Modeling — PD, LGD &amp; Monte Carlo portfolio risk">
+<meta name="twitter:description" content="Right-censoring inflates validation the most. A reproducible Lending Club credit-risk case study.">
+<meta name="twitter:image" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/assets/og-card.png">
+
+<!-- Favicon (inline SVG, no extra request) -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230072B2'/%3E%3Cpath d='M7 21l5-6 4 3 3-5 6 8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#top">Credit&nbsp;Risk&nbsp;Modeling</a>
+    <nav aria-label="Section navigation">
+      <a href="#problem">Problem</a>
+      <a href="#censoring">Censoring</a>
+      <a href="#scorecard">Scorecard</a>
+      <a href="#lgd">LGD &amp; EL</a>
+      <a href="#simulation">Simulation</a>
+      <a href="#limitations">Limitations</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <!-- ================================================================= 1. HERO -->
+  <section class="hero" id="top" aria-labelledby="hero-title">
+    <div class="wrap">
+      <h1 id="hero-title">Credit-risk modeling on 1.3M Lending&nbsp;Club loans</h1>
+      <p class="lead">
+        An end-to-end, reproducible credit-risk study: probability of default, loss given
+        default, expected loss and a Monte-Carlo portfolio loss distribution — built so the
+        numbers can be trusted, including the ones that did not work.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">View code on GitHub</a>
+        <a class="btn btn-secondary" href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Read the validation report</a>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi">
+          <div class="label">Resolved loans</div>
+          <div class="value" data-field="display.n_rows">—</div>
+          <div class="sub">Lending Club, 2007–2018</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Champion AUC</div>
+          <div class="value" data-field="display.champion_auc">—</div>
+          <div class="sub">Gini <span data-field="display.champion_gini">—</span>, mature 2014–2015, <span data-field="display.n_oot">—</span> loans</div>
+        </div>
+        <div class="kpi">
+          <div class="label">Expected loss</div>
+          <div class="value" data-field="display.el_rate">—</div>
+          <div class="sub">of EAD (<span data-field="display.el_amount">—</span>)</div>
+        </div>
+        <div class="kpi">
+          <div class="label">VaR 99.9%</div>
+          <div class="value" data-field="display.sim_var999">—</div>
+          <div class="sub">of EAD, base &rho;=<span data-field="display.rho">—</span></div>
+        </div>
+      </div>
+      <p class="rho-readout" style="margin-top:1rem">
+        Portfolio EAD <span data-field="display.portfolio_ead">—</span>. All figures on this page are read
+        from <code>reports/results/summary.json</code> at build time; nothing here is hardcoded.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================================================== 2. PROBLEM -->
+  <section id="problem" aria-labelledby="problem-title">
+    <div class="wrap">
+      <h2 id="problem-title"><span class="num">01</span>The problem and the data</h2>
+      <p class="section-lead">
+        Lending Club publishes every loan it originated, with the outcome as of the end of
+        2018. The task is the one a lender actually faces: estimate how much of a portfolio
+        will default, how much is lost when it does, and how much capital the tail requires.
+      </p>
+      <p>
+        Of <span data-field="display.n_accepted">—</span> originated loans,
+        <span data-field="display.n_resolved">—</span> have reached a final status
+        (Fully Paid, Charged Off or Default). A loan is labelled <em>default</em> when its
+        status is Charged Off or Default; the overall resolved default rate is
+        <span data-field="display.default_rate">—</span>.
+      </p>
+      <p>
+        The primary model is trained on the <strong><span data-field="display.train_years">—</span></strong>
+        vintages and evaluated, once, on the <strong><span data-field="display.oot_years">—</span></strong>
+        36-month vintages (<span data-field="display.default_rate_train">—</span> and
+        <span data-field="display.default_rate_oot">—</span> default rates). The test window is used
+        only for the final number — never for tuning.
+      </p>
+      <div class="note">
+        <strong>Why this split matters.</strong> The dataset is a snapshot: recent loans are
+        mostly still open, so their outcomes are unknown. Choosing the validation window
+        carelessly is the single most common way to fool yourself with this dataset — see the
+        next section.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 3. CENSORING -->
+  <section id="censoring" aria-labelledby="censoring-title">
+    <div class="wrap">
+      <h2 id="censoring-title"><span class="num">02</span>The pitfall: right-censoring</h2>
+      <p class="section-lead">
+        A loan can only be scored as paid or defaulted once it has finished. Late vintages
+        are still running, so they look healthier than they are — and a model evaluated on
+        them looks better than it is. This is the headline finding of the project.
+      </p>
+
+      <figure>
+        <div class="chart-host" id="chart-censoring" role="img"
+             data-fallback-src="assets/censoring.png"
+             aria-label="Grouped bars of resolved share by issue year for 36- and 60-month terms, with a 90% threshold line."></div>
+        <noscript>
+          <img src="assets/censoring.png" alt="Resolved share by issue year and term. Early vintages are fully resolved; from 2016 onwards the resolved share collapses.">
+        </noscript>
+        <figcaption>
+          Share of each vintage's loans that already have a final outcome. The dashed line is
+          the 90% threshold that a (year, term) cell must clear to enter the primary split.
+        </figcaption>
+      </figure>
+
+      <figure>
+        <div class="chart-host" id="chart-auc-window" style="min-height:300px" role="img"
+             data-fallback-src="assets/scorecard_panel.png"
+             aria-label="Bar chart comparing out-of-time AUC on the mature window and the censored window."></div>
+        <noscript>
+          <img src="assets/scorecard_panel.png" alt="Model comparison panel including mature versus censored AUC.">
+        </noscript>
+      </figure>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Mature vs censored validation window (same model recipe)</caption>
+          <thead>
+            <tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Mature (primary)</td><td>2014–2015</td><td data-field="display.window_mature_auc">—</td><td data-field="display.window_mature_psi">—</td></tr>
+            <tr><td>Censored (secondary)</td><td>2017–2018</td><td data-field="display.window_immature_auc">—</td><td data-field="display.window_immature_psi">—</td></tr>
+            <tr><td colspan="2"><strong>Inflation from censoring</strong></td><td class="highlight" data-field="display.window_gap">—</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        The censored window reports a higher AUC (<span data-field="display.window_immature_auc">—</span>)
+        than the mature one (<span data-field="display.window_mature_auc">—</span>), a gap of
+        <strong><span data-field="display.window_gap">—</span></strong>. That is not a better model: the
+        loans that would have defaulted late are still open and are simply excluded, and they
+        are excluded non-uniformly across vintages. The 2017–2018 window is shown for
+        comparison only and drives no headline number.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ 4. SCORECARD -->
+  <section id="scorecard" aria-labelledby="scorecard-title">
+    <div class="wrap">
+      <h2 id="scorecard-title"><span class="num">03</span>The PD scorecard</h2>
+      <p class="section-lead">
+        A weight-of-evidence logistic scorecard is compared against gradient boosting and
+        tree challengers on the same out-of-time window, all with leakage-free features
+        known at origination.
+      </p>
+
+      <figure>
+        <div class="chart-host" id="chart-models" style="min-height:320px" role="img"
+             data-fallback-src="assets/scorecard_panel.png"
+             aria-label="Horizontal bars of out-of-time AUC by model, champion highlighted."></div>
+        <noscript>
+          <img src="assets/scorecard_panel.png" alt="Scorecard panel: AUC by model, mature versus censored AUC, information value ranking, and champion versus benchmark.">
+        </noscript>
+        <figcaption>Out-of-time AUC on the mature window. The champion is highlighted.</figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table id="model-table">
+          <caption>Model comparison, mature out-of-time window (★ = selected champion)</caption>
+          <thead>
+            <tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr>
+          </thead>
+          <tbody><!-- filled from data.json --></tbody>
+        </table>
+      </div>
+
+      <div class="table-scroll">
+        <table id="benchmark-row">
+          <caption>The lender's own grade still beats a leakage-free model</caption>
+          <thead>
+            <tr><th scope="col">Benchmark (wide features + grade / int_rate)</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">AUC vs champion</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>LightGBM on all variables incl. lender grade &amp; rate</td>
+              <td data-field="display.benchmark_auc">—</td>
+              <td data-field="display.benchmark_gini">—</td>
+              <td data-field="display.auc_gap_vs_benchmark">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <strong>Honest read.</strong> Discrimination is moderate — champion KS
+        <span data-field="display.champion_ks">—</span>, score PSI
+        <span data-field="display.score_psi">—</span>. The lender's own grade and
+        interest rate, which are not available to an outside modeler at origination, still add
+        about <span data-field="display.auc_gap_vs_benchmark">—</span> AUC. That gap is an upper
+        bound on what a genuine challenger could hope to recover, not a failure of the
+        pipeline.
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== 5. LGD & CALIB -->
+  <section id="lgd" aria-labelledby="lgd-title">
+    <div class="wrap">
+      <h2 id="lgd-title"><span class="num">04</span>Calibration, LGD and expected loss</h2>
+      <p class="section-lead">
+        A score only becomes money once it is calibrated to a probability and combined with
+        loss given default. Both steps here are reported as they stand, including the null
+        results.
+      </p>
+
+      <figure>
+        <div class="chart-host" id="chart-calibration" role="img"
+             data-fallback-src="assets/calibration_lift.png"
+             aria-label="Calibration curves: raw and isotonic-calibrated predicted PD against observed default rate."></div>
+        <noscript>
+          <img src="assets/calibration_lift.png" alt="Calibration curve and Brier-score comparison across calibration methods.">
+        </noscript>
+        <figcaption>
+          Reliability of the champion score by predicted-PD decile. Points below the diagonal
+          mean the score over-predicts default.
+        </figcaption>
+      </figure>
+
+      <div class="note">
+        <strong>Calibration is a null result.</strong> Recalibration barely changes the Brier
+        score (raw <span data-field="display.cal_raw_brier">—</span> vs calibrated
+        <span data-field="display.cal_brier">—</span>); calibration-in-the-large moves
+        from <span data-field="display.cal_raw_citl">—</span> to
+        <span data-field="display.cal_citl">—</span>. The selected method is
+        <em><span data-field="display.cal_method">—</span></em>, but the honest conclusion is
+        that the score is already about as calibrated as it can get on this data.
+      </div>
+
+      <figure>
+        <div class="chart-host" id="chart-el-grade" style="min-height:300px" role="img"
+             data-fallback-src="assets/hero.png"
+             aria-label="Bars of expected loss as a share of exposure by lender grade."></div>
+        <noscript>
+          <img src="assets/hero.png" alt="Expected loss by grade alongside discrimination and portfolio-risk summaries.">
+        </noscript>
+        <figcaption>Expected loss by lender grade (PD × LGD × EAD), sharing a single LGD model across grades.</figcaption>
+      </figure>
+
+      <div class="table-scroll">
+        <table id="lgd-table">
+          <caption>Loan-level LGD models, out of time (★ = best by RMSE)</caption>
+          <thead>
+            <tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr>
+          </thead>
+          <tbody><!-- filled from data.json --></tbody>
+        </table>
+      </div>
+      <div class="note">
+        <strong>Loan-level LGD is not usable.</strong> Every LGD model has a negative
+        out-of-time R² — worse than predicting the mean. There is real signal in the
+        loss-rate <em>distribution</em> (the share of zero-recovery defaults rises from
+        <span data-field="display.boundary_train">—</span> in training to
+        <span data-field="display.boundary_oot">—</span> out of time), but per-loan
+        prediction does not generalise, so expected loss uses a portfolio-level LGD
+        (<span data-field="display.realised_lgd">—</span> realised out of time).
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== 6. SIMULATION -->
+  <section id="simulation" aria-labelledby="simulation-title">
+    <div class="wrap">
+      <h2 id="simulation-title"><span class="num">05</span>Portfolio risk by Monte Carlo</h2>
+      <p class="section-lead">
+        A single-factor Vasicek model turns the calibrated PDs, LGDs and exposures into a
+        full loss distribution, so capital can be read off the tail instead of a point
+        estimate. <span data-field="display.sim_n">—</span> paths, run in Python;
+        the page only displays the result.
+      </p>
+
+      <div class="control-row">
+        <label for="rho-select">Asset correlation scenario</label>
+        <select id="rho-select" aria-label="Asset correlation scenario"></select>
+        <span class="rho-readout" id="rho-readout"></span>
+      </div>
+
+      <figure>
+        <div class="chart-host" id="chart-loss" role="img"
+             data-fallback-src="assets/loss_distribution.png"
+             aria-label="Histogram of simulated portfolio losses with expected loss, VaR 99%, VaR 99.9% and expected-shortfall markers."></div>
+        <noscript>
+          <img src="assets/loss_distribution.png" alt="Simulated portfolio loss distribution with expected loss, value-at-risk and expected-shortfall markers.">
+        </noscript>
+        <figcaption>
+          Simulated loss distribution for the selected &rho;. Markers are read from the same
+          precomputed paths as the headline statistics — the page never re-simulates.
+        </figcaption>
+      </figure>
+
+      <div class="kpis" style="margin-top:1.4rem">
+        <div class="kpi"><div class="label">Expected loss</div><div class="value" data-field="display.sim_el">—</div><div class="sub" data-field="display.sim_el_usd">—</div></div>
+        <div class="kpi"><div class="label">Unexpected loss</div><div class="value" data-field="display.sim_ul">—</div><div class="sub" data-field="display.sim_ul_usd">—</div></div>
+        <div class="kpi"><div class="label">VaR 99%</div><div class="value" data-field="display.sim_var99">—</div><div class="sub" data-field="display.sim_var99_usd">—</div></div>
+        <div class="kpi"><div class="label">VaR 99.9%</div><div class="value" data-field="display.sim_var999">—</div><div class="sub" data-field="display.sim_var999_usd">—</div></div>
+        <div class="kpi"><div class="label">ES 99%</div><div class="value" data-field="display.sim_es99">—</div><div class="sub" data-field="display.sim_es99_usd">—</div></div>
+        <div class="kpi"><div class="label">ES 99.9%</div><div class="value" data-field="display.sim_es999">—</div><div class="sub" data-field="display.sim_es999_usd">—</div></div>
+      </div>
+
+      <figure>
+        <div class="chart-host" id="chart-rho" style="min-height:340px" role="img"
+             data-fallback-src="assets/rho_sensitivity.png"
+             aria-label="Grouped bars of expected loss, ES 99% and ES 99.9% across asset-correlation scenarios."></div>
+        <noscript>
+          <img src="assets/rho_sensitivity.png" alt="Expected loss, ES 99% and ES 99.9% across the asset-correlation grid.">
+        </noscript>
+        <figcaption>
+          Capital is highly sensitive to &rho;, so every figure is quoted with this grid. The
+          base case is &rho; = <span data-field="display.rho">—</span>; the
+          PD-dependent Basel-implied value for this portfolio is
+          <span data-field="display.rho_basel">—</span>.
+        </figcaption>
+      </figure>
+
+      <p style="margin-top:1.4rem;color:var(--fg-muted);font-size:0.92rem">
+        Variance reduction was measured, not assumed: stratified sampling cuts the standard
+        error by <span data-field="display.se_stratified">—</span> and
+        antithetic variates by <span data-field="display.se_antithetic">—</span>.
+        Stratified sampling is the technique of record.
+      </p>
+    </div>
+  </section>
+
+  <!-- ========================================================== 7. LIMITATIONS -->
+  <section id="limitations" aria-labelledby="limitations-title">
+    <div class="wrap">
+      <h2 id="limitations-title"><span class="num">06</span>What did not work, and limitations</h2>
+      <p class="section-lead">
+        Kept visible on purpose. A portfolio that only shows its wins is not a portfolio you
+        can trust.
+      </p>
+
+      <ul class="limitations" id="limitations-list"><!-- filled from data.json --></ul>
+
+      <h3>Forecasting the monthly default rate</h3>
+      <div class="table-scroll">
+        <table id="forecast-table">
+          <caption>17-month holdout: an honest seasonal model is beaten by the naive benchmark</caption>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr>
+          </thead>
+          <tbody><!-- filled from data.json --></tbody>
+        </table>
+      </div>
+      <div class="note">
+        A last-value naive forecast wins outright. Residual autocorrelation is only marginal
+        (Ljung–Box at lag 10, p = <span data-field="display.forecast_ljung_box_p">—</span>), which is
+        consistent with a series that is close to a random walk. This is reported as a
+        limitation, not dressed up.
+      </div>
+
+      <h3>Behavioural segmentation</h3>
+      <div class="table-scroll">
+        <table id="cluster-table">
+          <caption>k-means segments (k = <span data-field="display.cluster_k">2</span>) — descriptive only</caption>
+          <thead>
+            <tr><th scope="col">Segment</th><th scope="col">Loans</th><th scope="col">Share</th><th scope="col">Default rate</th></tr>
+          </thead>
+          <tbody><!-- filled from data.json --></tbody>
+        </table>
+      </div>
+      <p style="color:var(--fg-muted);font-size:0.92rem">
+        Silhouette <span data-field="display.cluster_silhouette">—</span>, stability ARI
+        <span data-field="display.cluster_stability_ari">—</span>. k-means separates default rate by
+        only <span data-field="display.cluster_spread_pp">—</span>; a Gaussian mixture separates
+        more (<span data-field="display.cluster_gmm_spread_pp">—</span>) but is less stable. Neither
+        is used as a model feature.
+      </p>
+
+      <figure>
+        <img src="assets/segments.png" loading="lazy"
+             alt="Segment sizes and default rates for k-means and Gaussian-mixture solutions, plus the k-selection silhouette curve.">
+        <figcaption>
+          Segmentation is descriptive only: the segment default-rate spread is small next to the
+          spread the supervised PD model already captures.
+        </figcaption>
+      </figure>
+
+      <h3>Selection bias</h3>
+      <p style="font-size:0.94rem">
+        The data only contains approved loans. An exploratory reject-inference pass suggests
+        the rejected applicants would default more often (illustrative PD gap
+        <span data-field="display.reject_gap">—</span>), but rejected applicants have no observed
+        outcome, so the gap cannot be validated. It is labelled exploratory and feeds no
+        headline number.
+      </p>
+    </div>
+  </section>
+
+  <!-- ======================================================= 8. REPRODUCE -->
+  <section id="reproduce" aria-labelledby="reproduce-title">
+    <div class="wrap">
+      <h2 id="reproduce-title"><span class="num">07</span>How to reproduce</h2>
+      <p class="section-lead">
+        Everything is deterministic (seed 42). The pipeline runs from raw CSV to the figures
+        and this page's <code>data.json</code>; the <span data-field="display.test_count">—</span>-test
+        suite checks that no number drifts.
+      </p>
+<pre><code>git clone https://github.com/pablohuidobrogarcia/credit-risk-modeling.git
+cd credit-risk-modeling
+
+python -m venv .venv &amp;&amp; source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements-dev.txt
+
+# download the Lending Club data (see README) into data/raw/, then:
+python -m src.pipeline all          # full modelling run
+python -m src.pipeline figures      # rebuild the site figures + docs/data.json
+python -m pytest                    # full test suite, incl. number-integrity checks
+python -m src.report_tables --check # verify README numbers against summary.json</code></pre>
+
+      <h3>Stack</h3>
+      <p style="font-size:0.94rem">
+        Python · pandas · scikit-learn · LightGBM · SHAP · statsmodels · matplotlib · DuckDB /
+        HiveQL · Plotly (pinned CDN). Data quality, SQL, EDA and time series, PD scorecard and
+        challengers, calibration, LGD/EAD/EL, clustering, and a Monte-Carlo Vasicek portfolio
+        simulation.
+      </p>
+
+      <h3>Links</h3>
+      <ul style="font-size:0.94rem">
+        <li><a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">Source code on GitHub</a></li>
+        <li><a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Validation report</a></li>
+        <li><a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling#readme">Full README (methods &amp; results)</a></li>
+        <li><a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club">Dataset: Lending Club (Kaggle)</a></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p id="data-error" hidden><strong>Note:</strong> live data could not be loaded; static figures are shown instead.</p>
+    <p>
+      Credit-risk modeling case study · every number read from
+      <code>reports/results/summary.json</code> · generated with
+      <code>python -m src.pipeline figures</code>.
+    </p>
+    <div class="links">
+      <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">GitHub</a>
+      <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Validation report</a>
+      <a href="#top">Back to top</a>
+    </div>
+  </div>
+</footer>
+
+<!-- Plotly, pinned to an exact version. The page works without it (noscript PNGs). -->
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"
+        integrity="sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7"
+        crossorigin="anonymous" defer></script>
+<script src="assets/site.js" defer></script>
+</body>
+</html>

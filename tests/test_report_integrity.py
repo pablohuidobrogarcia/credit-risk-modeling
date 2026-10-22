@@ -14,6 +14,7 @@ read from ``reports/results/summary.json``:
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import pytest
 
@@ -137,6 +138,70 @@ def test_no_stale_repo_slugs_in_docs():
         if path.exists():
             hit = pattern.search(path.read_text(encoding="utf-8"))
             assert hit is None, f"Stale repo slug {hit.group(0)!r} in {path.name}"
+
+
+# ---------------------------------------------------------------------------
+# 2b. Repository hygiene: no large binaries, no data, US spelling.
+# ---------------------------------------------------------------------------
+def _tracked_files() -> list[str]:
+    """Return the list of git-tracked files, or [] if git is unavailable."""
+    import subprocess
+
+    try:
+        out = subprocess.run(
+            ["git", "ls-files"],
+            cwd=project_root(),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    return [line for line in out.stdout.splitlines() if line.strip()]
+
+
+def test_no_tracked_file_exceeds_5mb():
+    """Large binaries must not be committed (they bloat clones and hit GitHub limits)."""
+    tracked = _tracked_files()
+    if not tracked:
+        pytest.skip("git not available")
+    root = project_root()
+    limit = 5 * 1024 * 1024
+    big = []
+    for rel in tracked:
+        p = root / rel
+        if p.exists() and p.stat().st_size > limit:
+            big.append(f"{rel} ({p.stat().st_size / 1e6:.1f} MB)")
+    assert not big, f"Tracked files over 5 MB: {big}"
+
+
+def test_no_data_or_local_notes_are_tracked():
+    """`data/` (raw/processed) and the local interview notes must stay untracked."""
+    tracked = _tracked_files()
+    if not tracked:
+        pytest.skip("git not available")
+    offenders = [
+        rel
+        for rel in tracked
+        if rel.startswith("data/") or Path(rel).name == "INTERVIEW_NOTES.md"
+    ]
+    assert not offenders, f"Private/large paths tracked: {offenders}"
+
+
+def test_docs_use_us_spelling():
+    """House style is US English; guard against British spellings creeping back in."""
+    british = re.compile(
+        r"\b(modelling|modelled|labelled|behavioural?|optimisation|analysed|centred)\b"
+    )
+    offenders = []
+    for path in (README, REPORT):
+        if not path.exists():
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            hit = british.search(line)
+            if hit:
+                offenders.append(f"{path.name}:{i}: {hit.group(0)!r}")
+    assert not offenders, f"British spellings in docs: {offenders}"
 
 
 # ---------------------------------------------------------------------------

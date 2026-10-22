@@ -1,6 +1,6 @@
 """Leakage-control tests.
 
-These tests enforce the modelling contract that *every* fitted artefact is
+These tests enforce the modeling contract that *every* fitted artefact is
 learned on the training window only:
 
 * the chronological split never mixes train and test rows, and honours the

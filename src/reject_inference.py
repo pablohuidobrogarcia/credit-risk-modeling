@@ -1,4 +1,4 @@
-"""Exploratory reject-inference analysis (clearly labelled as such).
+"""Exploratory reject-inference analysis (clearly labeled as such).
 
 LendingClub publishes the *rejected* applications alongside the accepted ones.
 Because only accepted loans have a known outcome, the PD model is trained on a
@@ -18,7 +18,7 @@ the evidence that the problem is real:
    calibrated reject-inference correction and is not used anywhere else in the
    pipeline.
 
-Everything here is exploratory and clearly labelled; no headline number depends
+Everything here is exploratory and clearly labeled; no headline number depends
 on it.
 """
 from __future__ import annotations
@@ -71,7 +71,7 @@ def rejected_sample(n: int = 200_000, seed: int = 42) -> pd.DataFrame:
 
 
 def _accepted_common(df: pd.DataFrame) -> pd.DataFrame:
-    """Reduce the accepted modelling frame to the variables shared with the rejected file."""
+    """Reduce the accepted modeling frame to the variables shared with the rejected file."""
     out = pd.DataFrame(
         {
             "amount_requested": pd.to_numeric(df.get("loan_amnt"), errors="coerce"),
@@ -169,7 +169,7 @@ def extrapolation_gap(accepted: pd.DataFrame, rejected: pd.DataFrame, seed: int 
 
 
 def run_reject_inference(df: pd.DataFrame, n_rejected: int = 200_000, seed: int = 42) -> Dict[str, pd.DataFrame]:
-    """End-to-end exploratory reject-inference summary (labelled exploratory)."""
+    """End-to-end exploratory reject-inference summary (labeled exploratory)."""
     rej = rejected_sample(n=n_rejected, seed=seed)
     shift = common_variable_shift(df, rej)
     gap = extrapolation_gap(df, rej, seed=seed)

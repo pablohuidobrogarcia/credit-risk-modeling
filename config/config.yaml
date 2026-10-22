@@ -80,7 +80,7 @@ modeling:
     select_model_fit_years: [2010, 2011]
     methods: [none, intercept, platt, isotonic]
 
-  # Exploratory reject-inference sample size (block 8). This stage is labelled
+  # Exploratory reject-inference sample size (block 8). This stage is labeled
   # exploratory and feeds no headline number.
   reject_sample_size: 200000
 

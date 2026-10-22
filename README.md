@@ -200,7 +200,7 @@ END
 * The modeling sample contains **resolved loans only** (`Fully Paid`, `Charged Off`,
   `Default`). Loans still `Current`, `In Grace`, `Late` or `Issued` are excluded:
   including them would mean training on a label that is only known *later*.
-* This is an **as-of-observation ("evergreen") label**: a loan is labelled with its final
+* This is an **as-of-observation ("evergreen") label**: a loan is labeled with its final
   state, but a loan that never completes its term can only be "default" if it charged off
   early — see
   [right-censoring](#71-right-censoring-is-now-handled-by-design).
@@ -289,7 +289,7 @@ ETS/Holt-Winters forecast on the *same* chronological holdout. See
 4. **Challengers:** Lasso/Ridge logit (CV over `C`), decision tree, random forest and
    LightGBM. The challengers deliberately use the **full leakage-free origination set**
    (30 variables: 22 numeric, 8 categorical) rather than the scorecard's 7 IV-selected
-   inputs, so the comparison measures *modelling capacity*, not variable selection.
+   inputs, so the comparison measures *modeling capacity*, not variable selection.
 5. **LightGBM is tuned by temporal cross-validation inside the train window only**
    (fit 2010–2012, validate 2013) — the 2014–2015 test window is never used for tuning.
    Business-sensible monotone constraints are applied through a `MonotoneLGBMClassifier`
@@ -338,7 +338,7 @@ logit scorecard reaches AUC 0.6217, and the lender-grade benchmark reaches AUC 0
 
 ### 3.6 Segmentation
 
-k-means on 12 behavioural features (loan size, income, DTI, utilisation, credit
+k-means on 12 behavioral features (loan size, income, DTI, utilization, credit
 histories, balances, affordability ratios) with a rigorous preprocessing chain:
 
 * **Winsorisation at the 1st/99th percentile before standardising** — on raw values a
@@ -466,20 +466,20 @@ The unit tests run on **synthetic data**, so CI passes without the dataset.
 | `grade`, `sub_grade`, `int_rate` **excluded** from the main feature set | These are the lender's own model outputs: using them would not test our ability to score a borrower, only our ability to copy the lender. They are kept as an explicit *benchmark* model instead. |
 | All post-origination payment/recovery variables dropped | Pure outcome leakage. |
 | Chronological (out-of-time) split, never random | Random splits leak the credit cycle across train and test and overstate performance. |
-| Primary split restricted to ≥ 90 %-resolved `(year, term)` cells | Removes right-censoring bias from the headline metrics; the censored window is kept as a labelled secondary comparison. |
+| Primary split restricted to ≥ 90 %-resolved `(year, term)` cells | Removes right-censoring bias from the headline metrics; the censored window is kept as a labeled secondary comparison. |
 | Winsorisation/encoders fitted on train only | Test-window statistics must not influence the fit. |
 | Linear/GLM models on the WoE matrix; tree models on raw features | WoE is what makes an interpretable logistic scorecard behave linearly; trees do not need it. |
-| Challengers get the **full** leakage-free feature set, not the scorecard's 7 WoE inputs | Otherwise the model comparison measures *variable selection*, not *modelling capacity*. |
+| Challengers get the **full** leakage-free feature set, not the scorecard's 7 WoE inputs | Otherwise the model comparison measures *variable selection*, not *modeling capacity*. |
 | LightGBM tuned by temporal CV **inside** the train window (2010–2012 → 2013) | Tuning on the 2014–2015 test window would violate the golden rule. |
 | Calibrators fit on out-of-sample scores, method chosen on a separate inner slice | A calibrator fit on in-sample scores inherits the overfit it is meant to fix. |
-| LGD modelled in two parts (boundary + severity) | Realised LGD piles up at 0 and 1 and the `LGD=1` mass shifts across vintages. |
+| LGD modeled in two parts (boundary + severity) | Realised LGD piles up at 0 and 1 and the `LGD=1` mass shifts across vintages. |
 | DuckDB over Parquet for SQL | Same queries run on Hive/Spark; no cluster needed to reproduce. |
 | `log1p` before winsorising in clustering | Heavy-tailed income/balance variables otherwise dominate the distance metric. |
 | Winsorise before clustering | Prevents degenerate clusters driven by outliers. |
 | Silhouette on a stratified sample | Plain random subsamples raise `ValueError: Number of labels is 1` on unbalanced clusterings. |
 | Simulation at bucket level, not one average PD | Correlation risk is a *portfolio* effect; averaging PD first destroys the tail. |
 | Stratified sampling of the systematic factor; antithetic kept as a reported null | Stratification is a valid variance reducer; antithetic is a no-op on bucketed binomial draws and is reported as such. |
-| Non-blocking stages fail soft and are labelled (forecast, reject inference, R) | A weak result is *reported*, never hidden and never allowed to break the pipeline. |
+| Non-blocking stages fail soft and are labeled (forecast, reject inference, R) | A weak result is *reported*, never hidden and never allowed to break the pipeline. |
 
 ---
 
@@ -496,7 +496,7 @@ they under-represent loans that were still performing and over-represent fast de
 on `(year, term)` cells whose population is ≥ 90 % resolved
 (see [the validation split](#the-validation-split-read-this-first)): train 2010–2013
 (36 m, 99.59 % resolved), test 2014–2015 (36 m, 99.97 % resolved). The censored window is
-retained as a labelled *secondary* analysis, and the difference between the two is the
+retained as a labeled *secondary* analysis, and the difference between the two is the
 measured censoring effect:
 
 | Window | OOT years | Test resolution | Champion | AUC | Gini | KS | Default rate |
@@ -536,7 +536,7 @@ reported forecast error on the full series.
 **What is still not fixed.** Censoring is a *design* fix for the metrics, not a repair of
 the underlying data: the scorecard cannot be deployed to score a *new* borrower whose loan
 has not yet matured, and the mature window is an older, easier credit environment than the
-censored one. The right long-run fix remains survival/hazard modelling of the
+censored one. The right long-run fix remains survival/hazard modeling of the
 time-to-default, which is out of scope here.
 
 ### 7.2 Discrimination is moderate, and the lender's own variables do better
@@ -572,7 +572,7 @@ Full OOT table (see [`pd_model_comparison.csv`](reports/results/pd_model_compari
 | decision_tree | 0.5509 | 0.1018 | 0.1018 |
 
 The tree models now consume the **wide leakage-free feature set** (30 variables) rather than
-the scorecard's 7 IV-selected inputs, so the gap to the logit reflects genuine modelling
+the scorecard's 7 IV-selected inputs, so the gap to the logit reflects genuine modeling
 capacity. Even so, the interpretable logit scorecard stays within ~0.035 AUC of the
 champion, and the lender's own variables still lead by ~0.023 AUC.
 
@@ -661,7 +661,7 @@ no improvement is claimed.
   gap on the handful of shared variables (Amount Requested, DTI, Employment Length, State,
   Risk_Score): rejected DTI is a median **+2.31** points higher and Amount Requested a median
   **−$2,000** lower, and a small logit on the accepted book implies a rejected-minus-accepted
-  PD gap of roughly **+0.058**. This is labelled **exploratory** — it is *not* used to
+  PD gap of roughly **+0.058**. This is labeled **exploratory** — it is *not* used to
   reweight, retrain, or adjust any headline number, and the selection bias remains open.
 * **No macro-economic variables.** The simulation applies PD/LGD *shocks*; it does not
   model the credit cycle through a real macro factor, so the "stress" scenarios are
@@ -689,7 +689,7 @@ no improvement is claimed.
   (19.67 % vs 20.21 % — a **0.54 pp spread**), so the k-means segments are **not** a useful
   risk-rating substitute. The **Gaussian-mixture alternative** does separate the default rate
   materially (14.98 % vs 21.26 % — a **6.28 pp spread**, ARI 0.978), and it is reported as
-  the better behavioural segmentation; even so, both remain descriptive groupings, not
+  the better behavioral segmentation; even so, both remain descriptive groupings, not
   calibrated ratings.
 * **Cutoff choice.** The confusion matrix uses the KS-optimal cutoff selected on the
   **training** window (0.136088) and applied out of time, not a business-optimal cutoff.

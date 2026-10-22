@@ -2,7 +2,7 @@
 
 Design notes
 ------------
-* **Winsorisation before scaling.** The behavioural features are heavy tailed
+* **Winsorisation before scaling.** The behavioral features are heavy tailed
   (``annual_inc`` reaches 9.3M, ``dti`` 999, ``loan_amnt_to_income`` 30k).
   On raw values the Euclidean distance is dominated by a handful of borrowers
   and k-means degenerates into "one cluster with ~99.9% of the loans + a

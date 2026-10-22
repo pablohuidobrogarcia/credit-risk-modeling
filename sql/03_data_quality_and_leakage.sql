@@ -13,7 +13,7 @@ SELECT
     round(avg(default_flag) FILTER (WHERE resolved_flag = 1), 4) AS default_rate_resolved
 FROM accepted;
 
--- (b) Missing-value profile for the modelling features ---------------------
+-- (b) Missing-value profile for the modeling features ---------------------
 -- (share of NULLs per candidate feature, descending)
 SELECT 'loan_amnt' AS variable, avg(CASE WHEN loan_amnt IS NULL THEN 1.0 ELSE 0 END) AS pct_missing FROM accepted
 UNION ALL SELECT 'annual_inc',   avg(CASE WHEN annual_inc   IS NULL THEN 1.0 ELSE 0 END) FROM accepted

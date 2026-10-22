@@ -34,8 +34,9 @@ following files exist under `reports/results/`:
 | `pd_woe_oot.csv` | WoE matrix + `default_flag` for the test window |
 
 `pd_woe_oot.csv` is written by the pipeline for exactly this cross-check (see
-`stage_pd` → `save_table(..., "pd_woe_oot.csv")`). If the file is absent, run
-`python -m src.pipeline pd` first.
+`stage_pd` → `save_table(..., "pd_woe_oot.csv")`). It is a large loan-level file
+(≈30 MB) and is therefore **git-ignored**; run `python -m src.pipeline pd` first to
+regenerate it if it is absent.
 
 ## Running it
 

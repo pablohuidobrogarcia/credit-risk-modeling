@@ -257,7 +257,7 @@ def mature_split_rule(
     A ``(year, term)`` cell is usable for the primary out-of-time test when at
     least ``min_resolved_share`` (default 90%) of its population loans had a
     *final* outcome by the data cut-off. Cells below the threshold are excluded
-    from the primary split and analysed separately as the "immature" window,
+    from the primary split and analyzed separately as the "immature" window,
     so their censoring bias cannot leak into the headline metrics.
 
     The returned object records the rule, the threshold, every immature cell and

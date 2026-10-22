@@ -349,7 +349,7 @@ def importance_sampling_var(
     ``Z ~ N(-shift, 1)`` instead of ``N(0, 1)``. Because the loss is monotone
     *decreasing* in ``Z``, the level-quantile of the loss corresponds to the
     ``1 - level`` quantile of ``Z`` (``z = Phi^{-1}(1 - level)``, i.e. about
-    ``-3.09`` at 99.9%), which is why the shift is centred near that value.
+    ``-3.09`` at 99.9%), which is why the shift is centered near that value.
 
     Each path is reweighted by the likelihood ratio
 
@@ -444,7 +444,7 @@ def importance_sampling_sensitivity(
     A larger shift explores the tail more aggressively, pushing more paths into
     the region that matters, but it also concentrates the likelihood-ratio
     weights on fewer paths: the effective sample size falls and the weighted
-    quantile eventually drifts *upward*. The shift should therefore be centred
+    quantile eventually drifts *upward*. The shift should therefore be centered
     near the factor quantile that maps to the target level
     (``|Phi^{-1}(1 - level)|``, about ``3.09`` at 99.9%) and tuned by the
     measured standard error, not a single arbitrary constant. The whole curve is

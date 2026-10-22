@@ -46,7 +46,7 @@ from .woe_iv import fit_encoders, iv_summary, transform_frame
 
 STAGES = ["data", "quality", "sql", "eda", "pd", "lgd", "clustering", "simulation", "reject"]
 
-# Borrower / bureau variables used for the behavioural segmentation. They are
+# Borrower / bureau variables used for the behavioral segmentation. They are
 # all known at origination, so a segment can be assigned to a new applicant.
 CLUSTER_FEATURES: List[str] = [
     "loan_amnt",
@@ -216,7 +216,7 @@ def stage_sql() -> Dict[str, pd.DataFrame]:
 
 
 # ---------------------------------------------------------------------------
-# Stage 2: EDA and time-series modelling
+# Stage 2: EDA and time-series modeling
 # ---------------------------------------------------------------------------
 def stage_eda(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
     """Vintage analysis, censoring diagnostics and SARIMAX forecast."""
@@ -504,7 +504,7 @@ def _run_pd_window(
     # --- Challenger feature set -------------------------------------------------
     # The scorecard above is deliberately parsimonious (IV + corr + VIF). The
     # challengers instead receive every leakage-free origination variable, so
-    # the comparison measures modelling capacity rather than the scorecard's
+    # the comparison measures modeling capacity rather than the scorecard's
     # variable selection. This is the single biggest change of block 2.
     use_full = bool(cfg.modeling.get("challenger_uses_full_features", True))
     if use_full:
@@ -1064,7 +1064,7 @@ def _summarise_lgd(res: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Stage 4: behavioural segmentation
+# Stage 4: behavioral segmentation
 # ---------------------------------------------------------------------------
 def stage_clustering(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
     """k-means (auto-k with silhouette + stability), hierarchical clustering, PCA."""
@@ -1255,7 +1255,7 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
 # Stage 6: exploratory reject inference
 # ---------------------------------------------------------------------------
 def stage_reject(df: pd.DataFrame, cfg: Config) -> Dict[str, Any]:
-    """Exploratory reject-inference evidence (labelled exploratory).
+    """Exploratory reject-inference evidence (labeled exploratory).
 
     Nothing in the main PD/LGD/simulation chain depends on this stage; it exists
     to quantify - not fix - the selection bias introduced by training only on the

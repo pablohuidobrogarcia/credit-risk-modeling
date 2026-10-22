@@ -56,7 +56,7 @@ def test_common_variable_shift_clips_dti_outliers():
     assert dti_row["rejected_mean_clipped"] <= 100.0
 
 
-def test_extrapolation_gap_is_produced_and_labelled_illustrative():
+def test_extrapolation_gap_is_produced_and_labeled_illustrative():
     gap = ri.extrapolation_gap(_accepted(), _rejected())
     assert "mean_pd_accepted" in gap
     assert "mean_pd_rejected" in gap

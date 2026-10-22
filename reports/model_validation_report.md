@@ -17,7 +17,7 @@ champion (`lightgbm`, tuned by temporal CV inside the train window only) reaches
 (Gini 0.3144), and a LightGBM given the lender's own `grade`/`int_rate` on the same wide
 feature set reaches AUC 0.6799 (Gini 0.3599). Testing on the old, censored 2017–2018 window
 would have reported AUC 0.7152 — **the censored window inflates AUC by +0.0580**, which is
-why it is now only a labelled secondary analysis. The LGD model still has a **negative**
+why it is now only a labeled secondary analysis. The LGD model still has a **negative**
 out-of-time R² (all three candidates). Probability calibration, honestly, **does not improve
 the test-window Brier here**. The portfolio forecast is weak and loses to naive benchmarks.
 The Monte Carlo layer is sound, its dominant assumption (asset correlation) is disclosed and
@@ -25,7 +25,7 @@ swept, and its importance-sampling estimator is **verified against a closed-form
 and shown to cut the tail-VaR RMSE by **5.11×** at equal paths.
 
 > **What changed in this revision.** This report was updated to reflect a rework that grew the
-> modelling sample to the full resolved population, moved the challengers onto the wide
+> modeling sample to the full resolved population, moved the challengers onto the wide
 > leakage-free feature set, added temporal LightGBM tuning, a four-way calibration study, a
 > two-part LGD model, a Gaussian-mixture segmentation alternative, a benchmarked forecast and
 > stratified sampling. Numbers that this rework *did not* improve (calibration, the forecast,
@@ -48,7 +48,7 @@ and shown to cut the tail-VaR RMSE by **5.11×** at equal paths.
 
 **Target definition.** `default_flag = 1` for `loan_status in ('Charged Off','Default')`,
 `0` for `Fully Paid`, undefined otherwise. Only resolved loans enter the sample, so no
-loan is labelled with a future-unknown state.
+loan is labeled with a future-unknown state.
 
 **Assessment.** The definition is consistent, reproducible and standard for this dataset.
 The shipped `modeling.sample_size` (1,400,000) exceeds the resolved population, so the
@@ -123,7 +123,7 @@ discrimination is limited, and weaker than the censored window would have sugges
 
 Note the deliberate asymmetry: the **challengers** (§3.3) do not use these 7 WoE inputs;
 they consume the **full leakage-free origination set** (30 variables: 22 numeric, 8
-categorical) via a `ColumnTransformer`, so the model comparison measures *modelling
+categorical) via a `ColumnTransformer`, so the model comparison measures *modeling
 capacity* rather than the scorecard's variable selection.
 
 ### 3.3 Out-of-time discrimination (primary window, 2014–2015)
@@ -214,7 +214,7 @@ Cutoff = **0.136088**, KS-optimal on the **training** window, applied out of tim
 
 **Finding P-5 (Low).** This cutoff is a *statistical* default, not an economic optimum: the
 32.39 % bad rate among approved loans is high, and a business cutoff (rate/return
-optimisation) would be set elsewhere. Any decision use requires a proper cost matrix.
+optimization) would be set elsewhere. Any decision use requires a proper cost matrix.
 
 ### 3.8 Interpretability
 
@@ -322,7 +322,7 @@ risk-rating substitute.
 **Finding C-2 (High).** The **Gaussian-mixture** alternative separates the default rate
 materially better: **6.28 pp** (14.98 % vs 21.26 %) with bootstrap ARI **0.978**. It is the
 first segmentation in this project with a usable default-rate gap, and it is reported as the
-better behavioural segmentation. Even so, both remain descriptive groupings, not calibrated
+better behavioral segmentation. Even so, both remain descriptive groupings, not calibrated
 ratings.
 
 **Finding C-3 (Medium).** Silhouette monotonically favours the smallest k tested. The
@@ -342,7 +342,7 @@ corroborates a two-group split at sample scale.
 
 | Issue found | Root cause | Resolution |
 |---|---|---|
-| Right-censoring biased the OOT metrics | The OOT window (2017–2018) was only 38.17 % / 11.37 % resolved. | Validation split derived from `(year, term)` resolved shares: primary = cells ≥ 90 % resolved (train 2010–2013, test 2014–2015, term 36); censored window kept as a labelled secondary comparison. |
+| Right-censoring biased the OOT metrics | The OOT window (2017–2018) was only 38.17 % / 11.37 % resolved. | Validation split derived from `(year, term)` resolved shares: primary = cells ≥ 90 % resolved (train 2010–2013, test 2014–2015, term 36); censored window kept as a labeled secondary comparison. |
 | `ValueError: Number of labels is 1` in the silhouette step | sklearn's `sample_size=` draws a plain random subsample; with very unbalanced clusters it can contain a single label. | Winsorise at the 1st/99th percentile before standardising; compute the silhouette on a **stratified** subsample containing every cluster and return `NaN` instead of raising. |
 | k selected on a bare grid boundary | Maximum-silhouette selection returned k = 2 (the first k tested) with no evidence it was stable. | `select_k` scores `0.6·silhouette + 0.4·bootstrap-ARI` and rejects a boundary winner unless no interior k is within 5 %; stability is reported per k. |
 | `TypeError: Must provide 'func' or tuples` in `profile_segments` | Mixing named-tuple aggregation with plain `col="mean"` kwargs in `DataFrame.agg`. | Rebuilt the aggregation with `groupby()[cols].mean()` + `insert`. |
@@ -486,7 +486,7 @@ over-reading the stress grid.
    above ~90 % (≤ 2015 here) and always report the naive benchmark alongside.
 4. **Report every capital figure with its ρ**, using the Basel implied ρ (0.0322 at this
    PD) as the reference and 0.12–0.15 as a stress band.
-5. **Prefer the Gaussian-mixture segmentation** over k-means for any behavioural use, but
+5. **Prefer the Gaussian-mixture segmentation** over k-means for any behavioral use, but
    treat it as descriptive — not a calibrated rating.
 6. **Before any decision use**, re-estimate the cutoff against an explicit cost/return
    matrix and validate on a vintage that is fully matured.

@@ -6,7 +6,7 @@ numpy>=1.26,<3
 scipy>=1.11
 PyYAML>=6.0
 
-# Modelling
+# Modeling
 scikit-learn>=1.4
 statsmodels>=0.14
 lightgbm>=4.0

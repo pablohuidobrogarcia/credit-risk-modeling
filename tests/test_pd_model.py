@@ -1,4 +1,4 @@
-"""Tests for the block-2 modelling additions: wider challenger features, the
+"""Tests for the block-2 modeling additions: wider challenger features, the
 monotone-constrained LightGBM wrapper and the temporal LightGBM tuner."""
 from __future__ import annotations
 

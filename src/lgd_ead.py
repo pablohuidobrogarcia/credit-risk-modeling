@@ -81,7 +81,7 @@ def prepare_lgd_matrix(lgd_df: pd.DataFrame, num_features, cat_features) -> Tupl
 def fit_lgd_gamma(X_train: pd.DataFrame, y_train: pd.Series, num_features, cat_features) -> Tuple[object, pd.DataFrame]:
     """Gamma GLM with a log link (the 'Beta/Gamma-type' LGD model).
 
-    LGD is squeezed away from the 0/1 boundary and the mean response is modelled
+    LGD is squeezed away from the 0/1 boundary and the mean response is modeled
     with a Gamma family, which respects the positive, right-skewed support.
     """
     n = len(y_train)

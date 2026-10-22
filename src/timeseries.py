@@ -71,7 +71,7 @@ def monthly_default_series(df: pd.DataFrame) -> pd.Series:
     -----
     Only loans with a resolved outcome enter the series, so recent vintages are
     mechanically under-represented (immaturity bias). ``run_timeseries``
-    truncates the immature tail before modelling.
+    truncates the immature tail before modeling.
     """
     d = df.dropna(subset=["issue_ym", "default_flag"]).copy()
     d["issue_ym"] = d["issue_ym"].astype(str)

@@ -161,7 +161,7 @@ def build_model_matrix(
     df: pd.DataFrame,
     include_lender_grade: bool = False,
 ) -> Tuple[pd.DataFrame, pd.Series, List[str], List[str]]:
-    """Return (X, y, numeric_features, categorical_features) ready for modelling.
+    """Return (X, y, numeric_features, categorical_features) ready for modeling.
 
     Parameters
     ----------

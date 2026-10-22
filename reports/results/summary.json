@@ -2615,5 +2615,6 @@
       "note": "Illustrative only: the rejected applicants have no observed outcome, so the gap cannot be validated. Common variables are requested amount and DTI."
     }
   },
-  "elapsed_seconds": 2850.4
+  "elapsed_seconds": 2850.4,
+  "test_count": 120
 }

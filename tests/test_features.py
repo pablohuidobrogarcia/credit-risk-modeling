@@ -32,7 +32,7 @@ def test_build_model_matrix_shape(synthetic_loans):
     assert not X[num].isna().all().any()
 
 
-def test_winsorisation_bounds_are_monotone(synthetic_loans):
+def test_winsorization_bounds_are_monotone(synthetic_loans):
     eng = features.engineer_features(synthetic_loans)
     X, _, num, _ = features.build_model_matrix(eng)
     bounds = features.fit_clip_bounds(X, num)

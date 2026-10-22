@@ -289,7 +289,7 @@ def variance_reduction_report(
 # Importance sampling on the systematic factor (tail / VaR estimation)
 # ---------------------------------------------------------------------------
 def _weighted_quantile(values: np.ndarray, weights: np.ndarray, level: float) -> float:
-    """Weighted empirical ``level``-quantile (weights need not be normalised)."""
+    """Weighted empirical ``level``-quantile (weights need not be normalized)."""
     order = np.argsort(values)
     v = np.asarray(values, dtype=float)[order]
     w = np.asarray(weights, dtype=float)[order]
@@ -360,7 +360,7 @@ def importance_sampling_var(
     where ``phi`` is the standard normal density, and the loss quantile is read
     off the *weighted empirical* CDF. The estimator is unbiased by construction;
     the effective sample size :math:`\\mathrm{ESS} = 1/\\sum w_i^2` (weights
-    normalised to sum to one) controls how much the shift can buy, and it is
+    normalized to sum to one) controls how much the shift can buy, and it is
     reported alongside a **batched** standard error that does not rely on the
     (invalid here) ``se/sqrt(ESS)`` scaling. A shift much larger than
     ``|Phi^{-1}(1-level)|`` collapses the ESS and biases the estimate upward.

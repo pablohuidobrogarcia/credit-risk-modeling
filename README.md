@@ -3,7 +3,6 @@
 ![CI](https://github.com/pablohuidobrogarcia/credit-risk-modeling/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
 
 An end-to-end, reproducible credit-risk pipeline built on the public Lending Club
 loan book (2007–2018):
@@ -58,8 +57,9 @@ is reported separately as the censoring-exposed secondary analysis.
 | **LGD — boundary mass** (`recoveries = 0`) | **5.20 %** train / **26.86 %** OOT |
 | **Expected loss** | **$574.8M** on $5,670.3M EAD → **10.14 %** of EAD (primary OOT portfolio) |
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
-| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.14 %**, UL **5.88 %**, VaR 99 % **28.52 %**, VaR 99.9 % **37.39 %** of EAD |
+| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.14 %**, UL **5.88 %**, VaR 99 % **28.52 %**, VaR 99.9 % **37.39 %**, ES 99 % **32.40 %**, ES 99.9 % **40.67 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
+| **Test suite** | **120** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 
@@ -111,8 +111,13 @@ a negative out-of-time R², and even the mature window is a single, historical c
 The loan book ends at **2018-12**, but a loan only enters the modeling sample once it has a
 *final* outcome (Fully Paid / Charged Off / Default). A 60-month loan issued in 2016 cannot
 be Fully Paid before 2021, so the late vintages are **right-censored**: only their *fast*
-resolutions are observed, which biases their default rate upwards. Training or testing on
-those vintages therefore mixes a real signal with a measurement artefact.
+resolutions are observed. That bias is **not uniform across vintages** — early *defaults* are
+over-represented (they resolve quickly), but so are early *prepayments*, so the observed
+default rate can land above or below the true one depending on which effect dominates. In the
+per-vintage table the 2017 cells show a **higher** observed rate (23.13 %) while 2018 shows a
+**lower** one (15.76 %); see [§7.1](#71-right-censoring-is-now-handled-by-design-and-its-size-is-measured)
+and `summary.json → eda.resolution_by_year_term`. Training or testing on
+those vintages therefore mixes a real signal with a measurement artifact.
 
 The pipeline derives the validation split **from the data** instead of fixing a year by
 hand. `data_prep.resolution_by_year_term()` computes, for every (origination year × term)
@@ -148,14 +153,14 @@ censoring effect is *measured* rather than asserted.
 
 | | |
 |---|---|
-| **Dataset** | Lending Club Loan Data (accepted + rejected applications), distributed on Kaggle as `wordsforthewiselending-club` |
+| **Dataset** | Lending Club Loan Data (accepted + rejected applications), distributed on Kaggle as `wordsforthewise/lending-club` |
 | **Files** | `accepted_2007_to_2018Q4.csv.gz`, `rejected_2007_to_2018Q4.csv.gz` |
 | **Where to put them** | `data/raw/` (this folder is **git-ignored**; the pipeline never downloads anything) |
 | **Period** | 2007 – 2018 Q4 |
 
 Download the dataset from Kaggle and drop both `*.csv.gz` files into `data/raw/`.
 `src/data_prep.py` detects them by name (`accepted` / `rejected`), so the exact
-capitalisation does not matter.
+capitalization does not matter.
 
 ### Accepted vs rejected
 
@@ -209,13 +214,13 @@ END
 
 ## 2. Pipeline
 
-| Stage | Command | What it does | Key artefacts |
+| Stage | Command | What it does | Key artifacts |
 |---|---|---|---|
 | Data | `data` | Raw CSV → typed Parquet, resolved-loan modeling sample | `data/processed/*.parquet` |
 | Quality | `quality` | Missingness, outliers, leakage audit | `data_quality_*.csv/json` |
 | SQL | `sql` | Vintage and default-rate queries over Parquet (Hive/Spark stand-in) | `sql_0*_*.csv` |
 | EDA | `eda` | Monthly default-rate series, censoring diagnostic, decomposition, stationarity tests, SARIMAX forecast **benchmarked against naive/ETS** | `ts_*.csv`, `ts_*.json`, `ts_*.png` |
-| PD | `pd` | WoE binning + IV, variable selection, logit/probit scorecard, regularised and tree challengers on the wide feature set, temporal LightGBM tuning, four-way probability calibration, OOT validation on the mature window, secondary censored-window comparison, PSI, SHAP | `pd_*.csv/json`, `roc_curves.png`, `ks_curve.png`, `calibration.png`, `shap_summary.png` |
+| PD | `pd` | WoE binning + IV, variable selection, logit/probit scorecard, regularized and tree challengers on the wide feature set, temporal LightGBM tuning, four-way probability calibration, OOT validation on the mature window, secondary censored-window comparison, PSI, SHAP | `pd_*.csv/json`, `roc_curves.png`, `ks_curve.png`, `calibration.png`, `shap_summary.png` |
 | LGD/EAD | `lgd` | LGD on defaults (Gamma GLM vs tree vs **two-part boundary/severity** model), grade/portfolio calibration, EAD from outstanding principal, EL = PD × LGD × EAD | `lgd_*.csv`, `el_*.csv` |
 | Clustering | `clustering` | k-means **and Gaussian-mixture** segmentation on log features, elbow/silhouette/stability, PCA, segment profiles | `clustering_*.csv`, `clustering_*.png` |
 | Simulation | `simulation` | Vasicek single-factor Monte Carlo: EL, UL, VaR, ES, ρ sensitivity, **stratified + antithetic + importance-sampling** variance reduction, stress | `sim_*.csv`, `mc_*.png` |
@@ -238,7 +243,7 @@ The final `reports/results/summary.json` collects every headline number.
 
 * Missingness is reported per column, together with the imputation policy actually used
   downstream (median for numeric, explicit `"Missing"` level for categorical).
-* Outliers are reported per column at the 1st/99th percentile **and** winsorised on the
+* Outliers are reported per column at the 1st/99th percentile **and** winsorized on the
   training window only, so no information from the test window leaks into the fit.
 * **Leakage control:** every post-origination variable is dropped before modeling —
   `recoveries`, `collection_recovery_fee`, `last_pymnt_d`, `last_pymnt_amnt`,
@@ -296,7 +301,7 @@ ETS/Holt-Winters forecast on the *same* chronological holdout. See
    that resolves the constraint vector after the `ColumnTransformer` widens the
    categoricals.
 6. **Out-of-time validation:** train = 2010–2013, test = 2014–2015, 36-month loans only
-   (the fully-mature primary split described at the top). Winsorisation bounds, encoders
+   (the fully-mature primary split described at the top). Winsorization bounds, encoders
    and WoE maps are fit on train only. Reported: AUC, Gini, KS, ROC and KS curves, decile
    calibration, confusion matrix at the train-selected cutoff, and PSI per variable and per
    score. The same stack is re-run on the censored 2017–2018 window and the two are
@@ -341,11 +346,11 @@ logit scorecard reaches AUC 0.6217, and the lender-grade benchmark reaches AUC 0
 k-means on 12 behavioral features (loan size, income, DTI, utilization, credit
 histories, balances, affordability ratios) with a rigorous preprocessing chain:
 
-* **Winsorisation at the 1st/99th percentile before standardising** — on raw values a
+* **Winsorization at the 1st/99th percentile before standardising** — on raw values a
   handful of extreme borrowers (`annual_inc` up to millions, `dti = 999`) dominate the
   Euclidean distance and k-means degenerates into “one cluster with ~99.9 % of the
   loans”.
-* **A `log1p` transform before winsorisation** for the heavy-tailed variables (income,
+* **A `log1p` transform before winsorization** for the heavy-tailed variables (income,
   balances), so a handful of large borrowers no longer dominate the distance metric.
 * Median imputation, then `StandardScaler`.
 * The **same algorithm is used for the k-selection study and the shipped fit**: exact
@@ -357,7 +362,7 @@ histories, balances, affordability ratios) with a rigorous preprocessing chain:
   clusterings and raises `ValueError`.
 * **k is chosen on silhouette *and* stability**, never on a bare grid boundary
   (`clustering.select_k`): each candidate is scored as
-  `0.6 · silhouette + 0.4 · bootstrap-ARI` (both normalised over the grid), and a boundary
+  `0.6 · silhouette + 0.4 · bootstrap-ARI` (both normalized over the grid), and a boundary
   winner is only kept when no interior k comes within 5 % of it. Stability is the mean
   Adjusted Rand Index of the labels across bootstrap resamples (`cluster_stability`).
 * **A Gaussian-mixture alternative** (`GMMSegmenter`, soft/ellipsoidal clusters on the
@@ -467,15 +472,15 @@ The unit tests run on **synthetic data**, so CI passes without the dataset.
 | All post-origination payment/recovery variables dropped | Pure outcome leakage. |
 | Chronological (out-of-time) split, never random | Random splits leak the credit cycle across train and test and overstate performance. |
 | Primary split restricted to ≥ 90 %-resolved `(year, term)` cells | Removes right-censoring bias from the headline metrics; the censored window is kept as a labeled secondary comparison. |
-| Winsorisation/encoders fitted on train only | Test-window statistics must not influence the fit. |
+| Winsorization/encoders fitted on train only | Test-window statistics must not influence the fit. |
 | Linear/GLM models on the WoE matrix; tree models on raw features | WoE is what makes an interpretable logistic scorecard behave linearly; trees do not need it. |
 | Challengers get the **full** leakage-free feature set, not the scorecard's 7 WoE inputs | Otherwise the model comparison measures *variable selection*, not *modeling capacity*. |
 | LightGBM tuned by temporal CV **inside** the train window (2010–2012 → 2013) | Tuning on the 2014–2015 test window would violate the golden rule. |
 | Calibrators fit on out-of-sample scores, method chosen on a separate inner slice | A calibrator fit on in-sample scores inherits the overfit it is meant to fix. |
 | LGD modeled in two parts (boundary + severity) | Realised LGD piles up at 0 and 1 and the `LGD=1` mass shifts across vintages. |
 | DuckDB over Parquet for SQL | Same queries run on Hive/Spark; no cluster needed to reproduce. |
-| `log1p` before winsorising in clustering | Heavy-tailed income/balance variables otherwise dominate the distance metric. |
-| Winsorise before clustering | Prevents degenerate clusters driven by outliers. |
+| `log1p` before winsorizing in clustering | Heavy-tailed income/balance variables otherwise dominate the distance metric. |
+| Winsorize before clustering | Prevents degenerate clusters driven by outliers. |
 | Silhouette on a stratified sample | Plain random subsamples raise `ValueError: Number of labels is 1` on unbalanced clusterings. |
 | Simulation at bucket level, not one average PD | Correlation risk is a *portfolio* effect; averaging PD first destroys the tail. |
 | Stratified sampling of the systematic factor; antithetic kept as a reported null | Stratification is a valid variance reducer; antithetic is a no-op on bucketed binomial draws and is reported as such. |
@@ -489,8 +494,13 @@ The unit tests run on **synthetic data**, so CI passes without the dataset.
 
 The dataset stops at 2018-12 and the modeling sample only contains loans with a
 **resolved** outcome, so a loan issued in 2017–2018 can only enter the sample if it
-defaulted or was fully repaid *early*. That makes the late vintages non-representative:
-they under-represent loans that were still performing and over-represent fast defaults.
+defaulted or was fully repaid *early*. That makes the late vintages non-representative, but
+the bias is **not uniform across vintages**: fast *defaults* are over-represented (they
+resolve quickly) while fast *prepayments* are too, so the observed default rate can be too
+high in one vintage and too low in the next. The per-vintage table below makes this concrete —
+2017 resolves only 40.12 % of its book yet shows a **higher** default rate (23.13 %), while
+2018 resolves just 11.97 % and shows a **lower** one (15.76 %). The sign of the bias therefore
+depends on which early-resolution channel dominates in that vintage.
 
 **The redesign handles this by construction.** The primary split is trained and tested only
 on `(year, term)` cells whose population is ≥ 90 % resolved
@@ -505,8 +515,10 @@ measured censoring effect:
 | Immature (secondary) | 2017–2018 | 40.12 % / 11.97 % | lightgbm | **0.7152** | 0.4303 | 0.3129 | 21.29 % |
 
 Testing on the censored window **inflates AUC by +0.0580** (0.7152 vs 0.6572). That gap is
-a measurement artefact, not model quality — it is exactly why the earlier headline figure
-of 0.6736 is no longer quoted as the headline.
+a measurement artifact, not model quality — it is exactly why the earlier headline figure
+of 0.6736 is no longer quoted as the headline. Note that this discriminates well even though
+the default-rate bias is not one-directional (2017 up, 2018 down); resolution timing, not the
+level of the default rate, is what leaks information into the score.
 
 Per-vintage resolved share (population, from `data/processed/accepted.parquet`):
 
@@ -714,7 +726,9 @@ no improvement is claimed.
 * Every artifact under `reports/results/` and `reports/figures/` is regenerated by
   `python -m src.pipeline all`; nothing is hand-edited.
 * `python -m ruff check src tests` and `python -m pytest -q` must be clean before a
-  commit (115 tests).
+  commit. The live test count is recorded in `summary.json` (`test_count`) by
+  `python -m src.report_tables --write-test-count` and quoted in the results block
+  above, so it cannot go stale.
 * CI runs lint + tests on Python 3.10 and 3.11 **without** the dataset.
 * The README results block is generated from `summary.json` by
   `python -m src.report_tables --write`; `tests/test_report_integrity.py` fails if the

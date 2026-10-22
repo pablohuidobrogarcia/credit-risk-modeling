@@ -20,6 +20,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -39,6 +41,52 @@ def load_summary(path: Path | None = None) -> Dict[str, Any]:
     source = path or (RESULTS_DIR / "summary.json")
     with open(source, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def collect_test_count() -> int:
+    """Return the number of tests pytest actually collects for this repository.
+
+    The count is read from `pytest --collect-only` rather than hard-coded, so the
+    figure quoted in the documentation can never go stale.
+    """
+    out = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        cwd=project_root(),
+        capture_output=True,
+        text=True,
+    )
+    combined = f"{out.stdout}\n{out.stderr}"
+    match = re.search(r"(\d+)\s+tests?\s+collected", combined)
+    if match:
+        return int(match.group(1))
+    # Quiet mode may only print a per-file breakdown ("tests/test_x.py: 5").
+    per_file = re.findall(r"^\s*tests[/\\]\S+:\s*(\d+)\s*$", out.stdout, re.MULTILINE)
+    if per_file:
+        return sum(int(n) for n in per_file)
+    nodeids = [line for line in out.stdout.splitlines() if "::" in line]
+    if nodeids:
+        return len(nodeids)
+    raise RuntimeError(
+        "Could not determine the pytest collection count:\n" + combined[-2000:]
+    )
+
+
+def write_test_count(path: Path | None = None) -> int:
+    """Persist the collected test count into ``summary.json`` under ``test_count``.
+
+    Returns the count that was written. The key is kept in ``summary.json`` so the
+    README block remains a pure function of that file, exactly like every other
+    headline number.
+    """
+    source = path or (RESULTS_DIR / "summary.json")
+    count = collect_test_count()
+    with open(source, "r", encoding="utf-8") as f:
+        summary = json.load(f)
+    summary["test_count"] = count
+    with open(source, "w", encoding="utf-8", newline="\n") as f:
+        json.dump(summary, f, indent=2)
+        f.write("\n")
+    return count
 
 
 def _years_display(years: Any) -> str:
@@ -207,7 +255,9 @@ def render_results_block(summary: Dict[str, Any]) -> str:
             f"EL **{_pct_stat('expected_loss_pct_ead')}**, "
             f"UL **{_pct_stat('unexpected_loss_pct_ead')}**, "
             f"VaR 99 % **{_pct_stat('var_0.99_pct_ead')}**, "
-            f"VaR 99.9 % **{_pct_stat('var_0.999_pct_ead')}** of EAD |"
+            f"VaR 99.9 % **{_pct_stat('var_0.999_pct_ead')}**, "
+            f"ES 99 % **{_pct_stat('es_0.99_pct_ead')}**, "
+            f"ES 99.9 % **{_pct_stat('es_0.999_pct_ead')}** of EAD |"
         )
     if se_strat is not None:
         note = (
@@ -217,6 +267,12 @@ def render_results_block(summary: Dict[str, Any]) -> str:
             else f"stratified **{_num(se_strat, 1)} %**"
         )
         lines.append(f"| **Monte Carlo — variance reduction** | SE reduction at {sim.get('n_simulations', 0):,} paths: {note} |")
+    test_count = summary.get("test_count")
+    if test_count is not None:
+        lines.append(
+            f"| **Test suite** | **{test_count}** unit tests on synthetic data, "
+            f"`ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |"
+        )
 
     # Primary vs secondary PD comparison.
     wc = pd_.get("window_comparison", []) or []
@@ -359,7 +415,17 @@ def main(argv: List[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Sync README results tables from summary.json")
     parser.add_argument("--write", action="store_true", help="rewrite README in place")
     parser.add_argument("--check", action="store_true", help="fail if README is out of sync")
+    parser.add_argument(
+        "--write-test-count",
+        action="store_true",
+        help="run pytest --collect-only and store the count in summary.json",
+    )
     args = parser.parse_args(argv)
+
+    if args.write_test_count:
+        count = write_test_count()
+        print(f"[report_tables] recorded test_count={count} in summary.json")
+        return
 
     summary = load_summary()
     if args.write:

@@ -320,7 +320,7 @@ def _fit_all_pd_models(
     monotone: Dict[str, int] | None = None,
     years: pd.Series | None = None,
 ) -> Tuple[List[pd_model.FittedModel], pd.DataFrame]:
-    """Fit the scorecard logit/probit, the regularised logits and the tree challengers.
+    """Fit the scorecard logit/probit, the regularized logits and the tree challengers.
 
     Linear/GLM models consume the WoE matrix built from the IV-selected variables
     (the interpretable scorecard). The tree/boosting challengers consume the
@@ -340,7 +340,7 @@ def _fit_all_pd_models(
     print(f"    probit   pseudo-R2={probit.params['pseudo_r2']:.4f}")
 
     for penalty in ("l2", "l1"):
-        reg, coef_reg, grid = pd_model.fit_regularised_logit(
+        reg, coef_reg, grid = pd_model.fit_regularized_logit(
             X, y, encoders, penalty=penalty, seed=cfg.seed, cv_sample_size=150_000
         )
         save_table(coef_reg, f"pd_logit_{penalty}_coefficients.csv")
@@ -470,7 +470,7 @@ def _run_pd_window(
 
     ``tag`` is a filename suffix (``""`` for the primary window, ``"_secondary"``
     for the immature one) so the two runs never overwrite each other's artifacts.
-    Every fit (winsorisation bounds, WoE bins, variable selection, the
+    Every fit (winsorization bounds, WoE bins, variable selection, the
     calibrator, the KS cut-off) uses the training window only.
     """
     train, oot = train_oot_split(df, cfg, kind=kind)
@@ -478,7 +478,7 @@ def _run_pd_window(
     X_all, y_all, num_all, cat_all = features.build_model_matrix(train)
     X_oot_all, y_oot, _, _ = features.build_model_matrix(oot)
 
-    # Winsorisation bounds learned on the training window only (no leakage).
+    # Winsorization bounds learned on the training window only (no leakage).
     bounds = features.fit_clip_bounds(X_all, num_all)
     X_all = features.apply_clip_bounds(X_all, bounds)
     X_oot_all = features.apply_clip_bounds(X_oot_all, bounds)

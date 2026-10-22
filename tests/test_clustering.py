@@ -1,4 +1,4 @@
-"""Segmentation: winsorisation, safe silhouette, degenerate-cluster reporting."""
+"""Segmentation: winsorization, safe silhouette, degenerate-cluster reporting."""
 from __future__ import annotations
 
 import numpy as np
@@ -23,7 +23,7 @@ def test_preprocessor_clips_the_heavy_tail_before_scaling():
     X.iloc[0, 1] = 1e9  # a borrower with an implausible balance
     Z, scaler, medians = cl.impute_and_scale(X)
     assert np.isfinite(Z).all()
-    assert abs(Z[0, 1]) < 10  # without winsorisation this would be ~1e6
+    assert abs(Z[0, 1]) < 10  # without winsorization this would be ~1e6
 
 
 def test_preprocessor_transform_reuses_fit_statistics():
@@ -161,7 +161,7 @@ def test_preprocessor_log_transform_reduces_skew():
     X = pd.DataFrame({"income": rng.lognormal(11, 1.5, 2000)})
     raw = cl.Preprocessor(log=False).fit(X)
     logged = cl.Preprocessor(log=True).fit(X)
-    # After winsorisation both are bounded, but the log scale keeps the interior
+    # After winsorization both are bounded, but the log scale keeps the interior
     # spread of a heavy-tailed variable closer to symmetric.
     assert np.isfinite(logged.transform(X)).all()
     assert abs(float(pd.Series(logged.transform(X)[:, 0]).skew())) < abs(

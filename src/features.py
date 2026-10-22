@@ -97,7 +97,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     elif "issue_d" in out.columns:
         out["issue_d_dt"] = pd.to_datetime(out["issue_d"], format="%b-%Y", errors="coerce")
         out["issue_ym"] = out["orig_issue_ym"] = out["issue_d"]
-    # Normalise issue_year
+    # Normalize issue_year
     if "issue_year" not in out.columns and "issue_ym" in out.columns:
         out["issue_year"] = pd.to_datetime(out["issue_ym"]).dt.year
 
@@ -118,7 +118,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     out["revol_bal_to_income"] = out["revol_bal"] / inc
     out["limit_utilisation"] = out["revol_bal"] / out["total_rev_hi_lim"].replace(0, np.nan)
 
-    # --- term: normalise "36 months" -> "36" (kept as a categorical level) ---
+    # --- term: normalize "36 months" -> "36" (kept as a categorical level) ---
     out["term"] = out["term"].astype(str).str.replace("months", "", regex=False).str.strip()
 
     # --- ordinal employment length ---

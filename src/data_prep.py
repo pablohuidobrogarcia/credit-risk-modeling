@@ -14,7 +14,7 @@ def detect_raw_files(root_dir: Path | None = None) -> Tuple[Path | None, Path | 
     """Locate the accepted and rejected Lending Club CSV files in ``data/raw``.
 
     Detection is keyword based (``accepted``/``rejected`` in the file name) so
-    that slight differences in capitalisation or suffixes still work.
+    that slight differences in capitalization or suffixes still work.
     """
     if root_dir is None:
         c = Config.load()

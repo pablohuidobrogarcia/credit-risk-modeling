@@ -2,7 +2,7 @@
 
 Design notes
 ------------
-* **Winsorisation before scaling.** The behavioral features are heavy tailed
+* **Winsorization before scaling.** The behavioral features are heavy tailed
   (``annual_inc`` reaches 9.3M, ``dti`` 999, ``loan_amnt_to_income`` 30k).
   On raw values the Euclidean distance is dominated by a handful of borrowers
   and k-means degenerates into "one cluster with ~99.9% of the loans + a
@@ -51,10 +51,10 @@ DEGENERATE_SHARE = 0.01        # a segment below 1% of the sample is flagged
 # Preprocessing
 # ---------------------------------------------------------------------------
 class Preprocessor:
-    """Winsorise -> median-impute -> standardise, with reusable fit statistics.
+    """Winsorize -> median-impute -> standardise, with reusable fit statistics.
 
     When ``log`` is set, ``log1p`` is applied to the non-negative columns before
-    winsorisation. Income, balances and loan amounts are heavy-tailed and
+    winsorization. Income, balances and loan amounts are heavy-tailed and
     right-skewed, so the log scale makes the Euclidean distances (and therefore
     k-means / GMM geometry) behave like the *relative* differences a risk
     analyst actually cares about.
@@ -96,7 +96,7 @@ class Preprocessor:
 
 
 def impute_and_scale(X: pd.DataFrame, log: bool = False) -> Tuple[np.ndarray, StandardScaler, pd.Series]:
-    """Winsorise, median-impute and standardise a numeric feature matrix.
+    """Winsorize, median-impute and standardise a numeric feature matrix.
 
     Returns ``(Z, scaler, medians)``. The clipping bounds are fitted on ``X``
     itself, so use this only where the matrix *is* the fitting sample (PCA,
@@ -179,7 +179,7 @@ def cluster_stability(
     solution. Because the bootstrap sample contains duplicated rows, the ARI is
     computed on the unique rows shared with the reference labelling (the first
     occurrence of each duplicated row). A high ARI means the segmentation is
-    reproducible rather than an artefact of one particular sample.
+    reproducible rather than an artifact of one particular sample.
     """
     from sklearn.metrics import adjusted_rand_score
 
@@ -253,7 +253,7 @@ def select_k(scores: pd.DataFrame, default: int = 4) -> int:
     1. Drop candidates with a degenerate cluster (<1% of the sample) or an
        undefined silhouette/stability score.
     2. Score each candidate by ``0.6 * silhouette + 0.4 * stability_ari``
-       (each normalised to its own range over the grid), so discrimination
+       (each normalized to its own range over the grid), so discrimination
        structure dominates while stability breaks near-ties.
     3. If the winner sits on the grid boundary (the first or last candidate),
        move to the best *interior* k whenever its combined score is within 5%
@@ -454,7 +454,7 @@ def pca_plot(X: pd.DataFrame, labels: np.ndarray, name: str = "clustering_pca.pn
         ax.scatter(coords[m, 0], coords[m, 1], s=4, alpha=0.4, label=f"cluster {int(cluster)}")
     ax.set_xlabel("Principal component 1")
     ax.set_ylabel("Principal component 2")
-    ax.set_title("Loan segments - PCA projection of the winsorised, standardised features")
+    ax.set_title("Loan segments - PCA projection of the winsorized, standardised features")
     ax.legend(markerscale=4, fontsize=8)
     return save_fig(fig, name)
 

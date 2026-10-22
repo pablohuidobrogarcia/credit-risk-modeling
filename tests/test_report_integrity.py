@@ -189,19 +189,102 @@ def test_no_data_or_local_notes_are_tracked():
 
 
 def test_docs_use_us_spelling():
-    """House style is US English; guard against British spellings creeping back in."""
+    """House style is US English; guard against British spellings creeping back in.
+
+    Covers every British form that has appeared in this repository. Matching is
+    case-insensitive on whole words, and the dataset column ``limit_utilisation``
+    (a data name, not prose) is explicitly whitelisted.
+    """
     british = re.compile(
-        r"\b(modelling|modelled|labelled|behavioural?|optimisation|analysed|centred)\b"
+        r"\b("
+        r"winsoris(?:e|ed|es|ing|ation)|"
+        r"artefacts?|"
+        r"capitalisation|"
+        r"regularis(?:e|ed|es|ing|ation)|"
+        r"normalis(?:e|ed|es|ing|ation)|"
+        r"behaviour(?:s|al|ally)?|"
+        r"modelling|modelled|"
+        r"optimis(?:e|ed|es|ing|ation)|"
+        r"analyse|analysed|analyses|analysing|"
+        r"labelled|"
+        r"centred"
+        r")\b",
+        re.IGNORECASE,
     )
+    protected = "limit_utilisation"
     offenders = []
     for path in (README, REPORT):
         if not path.exists():
             continue
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            hit = british.search(line)
+            scrubbed = line.replace(protected, "")
+            hit = british.search(scrubbed)
             if hit:
                 offenders.append(f"{path.name}:{i}: {hit.group(0)!r}")
     assert not offenders, f"British spellings in docs: {offenders}"
+
+
+def test_repo_source_uses_us_spelling():
+    """The same US-spelling rule applies to source, tests, notebooks, SQL and config."""
+    british = re.compile(
+        r"\b("
+        r"winsoris(?:e|ed|es|ing|ation)|"
+        r"artefacts?|"
+        r"capitalisation|"
+        r"regularis(?:e|ed|es|ing|ation)|"
+        r"normalis(?:e|ed|es|ing|ation)|"
+        r"behaviour(?:s|al|ally)?|"
+        r"modelling|modelled|"
+        r"optimis(?:e|ed|es|ing|ation)|"
+        r"analyse|analysed|analyses|analysing|"
+        r"labelled|"
+        r"centred"
+        r")\b",
+        re.IGNORECASE,
+    )
+    protected = "limit_utilisation"
+    root = project_root()
+    targets = [root / "tests", root / "src", root / "sql", root / "config", root / "notebooks"]
+    offenders = []
+    for target in targets:
+        if not target.exists():
+            continue
+        for path in target.rglob("*"):
+            if not path.is_file() or path.suffix not in {".py", ".sql", ".yaml", ".yml", ".ipynb"}:
+                continue
+            if path.name == "test_report_integrity.py":
+                continue  # this file defines the patterns it searches for
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            scrubbed = text.replace(protected, "")
+            hit = british.search(scrubbed)
+            if hit:
+                offenders.append(f"{path.relative_to(root)}: {hit.group(0)!r}")
+    assert not offenders, f"British spellings in source: {offenders}"
+
+
+def test_readme_test_count_matches_pytest_collection():
+    """The quoted test count must equal the live pytest collection count.
+
+    ``summary.json`` stores the count under ``test_count`` (written by
+    ``python -m src.report_tables --write-test-count``); the generated README block
+    quotes it. A stale figure therefore fails CI on both counts.
+    """
+    summary = _summary()
+    recorded = summary.get("test_count")
+    if recorded is None:
+        pytest.skip("test_count not recorded (partial run)")
+    live = report_tables.collect_test_count()
+    assert recorded == live, (
+        f"summary.json says {recorded} tests but pytest collects {live}; "
+        "run `python -m src.report_tables --write-test-count` then `--write`."
+    )
+    readme = README.read_text(encoding="utf-8")
+    assert f"**{live}** unit tests" in readme or f"{live} tests" in readme, (
+        f"README does not quote the live test count ({live})"
+    )
 
 
 # ---------------------------------------------------------------------------

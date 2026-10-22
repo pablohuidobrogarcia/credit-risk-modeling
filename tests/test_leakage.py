@@ -1,11 +1,11 @@
 """Leakage-control tests.
 
-These tests enforce the modeling contract that *every* fitted artefact is
+These tests enforce the modeling contract that *every* fitted artifact is
 learned on the training window only:
 
 * the chronological split never mixes train and test rows, and honours the
   configured years/terms;
-* winsorisation bounds are functions of the training frame alone - changing an
+* winsorization bounds are functions of the training frame alone - changing an
   out-of-time value must not move the bounds;
 * the WoE encoders and the isotonic calibrator are fitted on train only, so an
   extreme out-of-time row cannot affect their parameters;

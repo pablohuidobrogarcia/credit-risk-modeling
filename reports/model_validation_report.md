@@ -5,7 +5,7 @@ the customer segmentation and the Monte Carlo portfolio loss simulation produced
 `python -m src.pipeline all`.
 
 **Evidence base.** Every figure in this report is read from
-[`reports/results/summary.json`](results/summary.json) and the CSV artefacts in
+[`reports/results/summary.json`](results/summary.json) and the CSV artifacts in
 `reports/results/`. Nothing is quoted from memory or from a different run.
 Run seed: **42**; full pipeline wall time **2850.4 s**.
 
@@ -72,9 +72,9 @@ be used to re-score rejected applications.
   project and it is enforced in `src/features.py`, shared by every model.
 * `grade`, `sub_grade`, `int_rate` are **excluded** from the main feature set (they are
   the lender's own model output) and used only in the explicit benchmark of §3.6.
-* Winsorisation bounds, encoders and WoE maps are fitted on the **training window only**.
+* Winsorization bounds, encoders and WoE maps are fitted on the **training window only**.
 
-**Finding Q-1 (accepted).** Outliers are extreme but handled by winsorisation rather than
+**Finding Q-1 (accepted).** Outliers are extreme but handled by winsorization rather than
 deletion, which is the conservative choice for scorecard stability.
 
 ---
@@ -108,7 +108,12 @@ issue-year ≥ 2017 window so the censoring effect is *measured*:
 window versus the censored window changes the champion AUC from **0.7152** to **0.6572**,
 i.e. **the censored window inflates discounting power by +0.0580 AUC**. All headline
 metrics in this report are stated on the mature window; the censored figure is quoted only
-as the secondary comparison in §3.3.
+as the secondary comparison in §3.3. Note that the *default-rate* bias is **not
+one-directional**: 2017 (40.12 % resolved) shows a higher observed rate (23.13 %) while 2018
+(11.97 % resolved) shows a lower one (15.76 %), because early defaults and early prepayments
+are both over-represented and their mix differs by vintage (per-vintage table in
+`summary.json → eda.resolution_by_year_term`). What leaks into the score is resolution
+*timing*, not the level of the rate.
 
 ### 3.2 Variable selection
 
@@ -314,7 +319,7 @@ Gaussian-mixture segment profiles (`GMMSegmenter`, soft/ellipsoidal clusters on 
 | 0 | 20.60 % | **0.1498** | $10,703 | $91,835 | 15.86 | 198.3 |
 | 1 | 79.40 % | **0.2126** | $15,385 | $72,202 | 18.91 | 194.3 |
 
-**Finding C-1 (Medium).** After winsorisation no segment is degenerate (0 flagged). The
+**Finding C-1 (Medium).** After winsorization no segment is degenerate (0 flagged). The
 **k-means** segments differ mainly in **size, income and loan amount**, with a default-rate
 spread of only **0.54 pp** (0.1967 vs 0.2021) — descriptive customer groups, **not** a
 risk-rating substitute.
@@ -328,7 +333,7 @@ ratings.
 **Finding C-3 (Medium).** Silhouette monotonically favours the smallest k tested. The
 selection rule (`0.6·silhouette + 0.4·stability`, boundary kept only if no interior k comes
 within 5 %) returns **k = 2** honestly: the combined score for k = 2 is well above the best
-interior candidate k = 3, so the boundary is not merely an artefact. Stability (ARI 0.9566)
+interior candidate k = 3, so the boundary is not merely an artifact. Stability (ARI 0.9566)
 confirms the split is reproducible. It remains a *metric-driven* choice, not an obviously
 "business-correct" one.
 
@@ -343,7 +348,7 @@ corroborates a two-group split at sample scale.
 | Issue found | Root cause | Resolution |
 |---|---|---|
 | Right-censoring biased the OOT metrics | The OOT window (2017–2018) was only 38.17 % / 11.37 % resolved. | Validation split derived from `(year, term)` resolved shares: primary = cells ≥ 90 % resolved (train 2010–2013, test 2014–2015, term 36); censored window kept as a labeled secondary comparison. |
-| `ValueError: Number of labels is 1` in the silhouette step | sklearn's `sample_size=` draws a plain random subsample; with very unbalanced clusters it can contain a single label. | Winsorise at the 1st/99th percentile before standardising; compute the silhouette on a **stratified** subsample containing every cluster and return `NaN` instead of raising. |
+| `ValueError: Number of labels is 1` in the silhouette step | sklearn's `sample_size=` draws a plain random subsample; with very unbalanced clusters it can contain a single label. | Winsorize at the 1st/99th percentile before standardising; compute the silhouette on a **stratified** subsample containing every cluster and return `NaN` instead of raising. |
 | k selected on a bare grid boundary | Maximum-silhouette selection returned k = 2 (the first k tested) with no evidence it was stable. | `select_k` scores `0.6·silhouette + 0.4·bootstrap-ARI` and rejects a boundary winner unless no interior k is within 5 %; stability is reported per k. |
 | `TypeError: Must provide 'func' or tuples` in `profile_segments` | Mixing named-tuple aggregation with plain `col="mean"` kwargs in `DataFrame.agg`. | Rebuilt the aggregation with `groupby()[cols].mean()` + `insert`. |
 | Hierarchical profile length mismatch | Linkage computed on a 5,000-loan subsample while labels were applied to 120,000 rows. | Subsample once and profile the *same* rows. |
@@ -356,10 +361,14 @@ corroborates a two-group split at sample scale.
 | Forecast benchmark was silently broken | The vintage series had interior holes (months below the resolved-loan volume threshold), which made MASE `NaN`, Holt-Winters non-convergent and Ljung-Box `NaN`. | New `_contiguous_monthly` keeps the longest gap-free monthly block (85 months) so all four forecast arms are scored on the same grid; ETS/MASE/Ljung-Box now populate. |
 | All-NaN warning path / SHAP list-type output | Newer SHAP returns a list of ndarray for binary LightGBM; the code assumed an array. | Output type handled; `shap_top` now populates. |
 
-Test suite: **115 unit tests**, all passing on synthetic data; `ruff check src tests` clean;
-CI runs lint + tests on Python 3.10 and 3.11 without the dataset. A dedicated
+Test suite: all unit tests pass on synthetic data; `ruff check src tests` clean;
+CI runs lint + tests on Python 3.10 and 3.11 without the dataset. The live count is read
+from `summary.json` (`test_count`, written by
+`python -m src.report_tables --write-test-count` from the pytest collection) and reappears
+in the generated README results block, so a stale figure fails
+`tests/test_report_integrity.py`. A dedicated
 `tests/test_leakage.py` enforces that the split never mixes train/test rows and that
-winsorisation bounds, WoE encoders and the calibrator are fitted on train only, and
+winsorization bounds, WoE encoders and the calibrator are fitted on train only, and
 `tests/test_report_integrity.py` fails if the README/`summary.json` numbers drift.
 
 ---
@@ -471,7 +480,7 @@ over-reading the stress grid.
 | **P-3** | Low | Score PSI 0.0145 on the mature window: stable population. |
 | **P-5** | Low | Cutoff is statistical, not economic (32.39 % bad rate among approved). |
 | **S-1** | Low | Accepted-only sample; reject inference now quantifies the gap (+0.058 illustrative PD) but does not fix it. |
-| **Q-1** | Low | Outliers handled by winsorisation rather than removal (conservative). |
+| **Q-1** | Low | Outliers handled by winsorization rather than removal (conservative). |
 
 ## 10. Recommendation
 

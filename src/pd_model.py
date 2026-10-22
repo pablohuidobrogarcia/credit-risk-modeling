@@ -6,7 +6,7 @@ Models implemented
                               interpretable scorecard; coefficients + odds
                               ratios).
 * ``probit``                : statsmodels Probit (GLM link comparison).
-* ``logit_l1`` / ``logit_l2``: regularised logistic regression (Lasso/Ridge)
+* ``logit_l1`` / ``logit_l2``: regularized logistic regression (Lasso/Ridge)
                               with ``C`` tuned by 5-fold cross-validation.
 * ``decision_tree``         : CART with cost-complexity pruning.
 * ``random_forest``         : bagged trees.
@@ -120,7 +120,7 @@ def fit_statsmodels_woe(
     return fitted, _coefficient_table(res, link)
 
 
-def fit_regularised_logit(
+def fit_regularized_logit(
     X_train: pd.DataFrame,
     y_train: pd.Series,
     encoders: Dict[str, WoEEncoder],
@@ -160,7 +160,7 @@ def fit_regularised_logit(
     clf = LogisticRegression(penalty=penalty, C=best_C, solver=solver, max_iter=5000, random_state=seed)
     clf.fit(woe.to_numpy(), y_all)
     columns = ["const", *woe.columns.tolist()]
-    wrapper = _RegularisedEstimator(clf, woe.columns.tolist())
+    wrapper = _RegularizedEstimator(clf, woe.columns.tolist())
 
     fitted = FittedModel(
         name=f"logit_{penalty}",
@@ -182,7 +182,7 @@ def fit_regularised_logit(
     return fitted, coef, pd.DataFrame(grid_rows)
 
 
-class _RegularisedEstimator:
+class _RegularizedEstimator:
     """Adapt a fitted sklearn LogisticRegression to the statsmodels-style API."""
 
     def __init__(self, clf: LogisticRegression, woe_columns: List[str]):
@@ -208,7 +208,7 @@ class MonotoneLGBMClassifier(BaseEstimator, ClassifierMixin):
     zeros for the one-hot columns, which are unconstrained).
 
     Business-sensible direction (+1 = higher value -> higher PD):
-    higher income / longer credit history lower PD; higher DTI, utilisation and
+    higher income / longer credit history lower PD; higher DTI, utilization and
     delinquency-related counts raise it.
     """
 

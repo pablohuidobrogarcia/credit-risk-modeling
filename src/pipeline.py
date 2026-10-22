@@ -34,6 +34,7 @@ from . import (
     reject_inference,
     scorecard,
     selection,
+    showcase,
     sql_runner,
     timeseries,
     validation,
@@ -44,7 +45,18 @@ from .config import Config
 from .utils import ensure_dirs, save_fig, save_json, save_table, set_seeds
 from .woe_iv import fit_encoders, iv_summary, transform_frame
 
-STAGES = ["data", "quality", "sql", "eda", "pd", "lgd", "clustering", "simulation", "reject"]
+STAGES = [
+    "data",
+    "quality",
+    "sql",
+    "eda",
+    "pd",
+    "lgd",
+    "clustering",
+    "simulation",
+    "reject",
+    "figures",
+]
 
 # Borrower / bureau variables used for the behavioral segmentation. They are
 # all known at origination, so a segment can be assigned to a new applicant.
@@ -1187,15 +1199,30 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
         )
     )
 
-    stress = sim.stress_test(
+    stress, stress_losses = sim.stress_test(
         portfolio,
         pd_shocks=tuple(cfg.simulation.get("pd_shocks", (0.30, 0.50))),
         lgd_shocks=tuple(cfg.simulation.get("lgd_shocks", (0.10,))),
         rho=rho,
         seed=cfg.seed,
+        return_losses=True,
     )
     save_table(stress.round(6), "sim_stress_test.csv")
     sim.stress_plot(stress)
+    save_json(
+        _jsonable(
+            {
+                "total_ead": float(portfolio.total_ead),
+                "n_simulations": int(n_sim),
+                "scenarios": stress["scenario"].tolist(),
+                "histograms": {
+                    name: sim.histogram_export(arr, portfolio.total_ead, n_bins=100)
+                    for name, arr in stress_losses.items()
+                },
+            }
+        ),
+        "sim_stress_histograms.json",
+    )
     print(
         stress[["scenario", "expected_loss", "var_0.999", "es_0.99"]].round(0).to_string(index=False)
     )
@@ -1209,15 +1236,41 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
     labels_map[round(rho, 6)] = f"rho={rho:.3f} (base)"
     labels_map[round(rho_basel, 6)] = f"rho={rho_basel:.3f} (Basel implied)"
     ordered = sorted(labels_map.items())
-    sens = sim.rho_sensitivity(
+    sens, sens_losses = sim.rho_sensitivity(
         portfolio,
         [r for r, _ in ordered],
         names=[n for _, n in ordered],
         n_simulations=n_sim,
         seed=cfg.seed,
+        return_losses=True,
     )
     save_table(sens.round(6), "sim_rho_sensitivity.csv")
     sim.rho_sensitivity_plot(sens, base_rho=rho)
+
+    # Histogram views of the already-simulated loss arrays, for the static
+    # showcase site. Purely additive: same paths, no new result. The base-case
+    # histogram is exported on its own; one small histogram per rho is grouped
+    # into a single compact file so the website's rho selector never simulates.
+    save_json(
+        _jsonable(sim.histogram_export(run["losses"], portfolio.total_ead)),
+        "sim_loss_histogram.json",
+    )
+    save_json(
+        _jsonable(
+            {
+                "total_ead": float(portfolio.total_ead),
+                "n_simulations": int(n_sim),
+                "base_label": labels_map[round(rho, 6)],
+                "rho": [round(float(r), 6) for r, _ in ordered],
+                "labels": [n for _, n in ordered],
+                "histograms": {
+                    label: sim.histogram_export(arr, portfolio.total_ead, n_bins=100)
+                    for label, arr in sens_losses.items()
+                },
+            }
+        ),
+        "sim_rho_histograms.json",
+    )
     print(
         sens[["label", "expected_loss", "var_0.99", "var_0.999", "es_0.99"]]
         .round(0)
@@ -1283,6 +1336,23 @@ def _summarise_reject(res: Dict[str, Any]) -> Dict[str, Any]:
         "common_variable_shift": _records(res["common_variable_shift"]),
         "extrapolation_gap": _jsonable(res["extrapolation_gap"]),
     }
+
+
+def stage_figures() -> Dict[str, Any]:
+    """Render the static showcase figures and ``docs/data.json``.
+
+    Reads only the artifacts already in ``reports/results`` (plus the Monte-Carlo
+    histogram exports). It neither loads the dataset nor refits a model, which is
+    what lets the site figures be regenerated in seconds and tested on fixtures.
+    """
+    print("[figures] static showcase figures + docs/data.json ...")
+    out = showcase.run_all()
+    for key, value in out.items():
+        if key == "assets":
+            print(f"    assets copied to docs/: {len(value)}")
+        else:
+            print(f"    {key}: {value}")
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -1351,7 +1421,20 @@ def main(argv: Optional[List[str]] = None) -> None:
         summary["reject"] = _summarise_reject(ctx["reject"])
 
     summary["elapsed_seconds"] = round(time.time() - t0, 1)
-    save_json(summary, "summary.json")
+    # The figures stage is a pure presentation pass over existing artifacts. When
+    # it is run on its own it must not overwrite the modeling summary with a
+    # stub that has no numbers, so only persist when a modeling stage ran too.
+    modeling_stages = [s for s in requested if s != "figures"]
+    if modeling_stages:
+        save_json(summary, "summary.json")
+    else:
+        print("[figures] standalone run: leaving reports/results/summary.json untouched")
+
+    # Render the site figures last, so in a full run they read the summary that
+    # was just written rather than the previous run's copy.
+    if "figures" in requested:
+        stage_figures()
+
     print(f"\n[done] pipeline finished in {summary['elapsed_seconds']}s")
 
 

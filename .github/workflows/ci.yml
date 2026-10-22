@@ -32,11 +32,16 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check src tests
+        run: ruff check src tests scripts
 
       - name: Docs number-integrity check
         # Fails if the README results tables drift from reports/results/summary.json.
         run: python -m src.report_tables --check
+
+      - name: Site check
+        # Validates the GitHub Pages site in docs/: local references exist,
+        # every data-field resolves in docs/data.json, size budget respected.
+        run: python scripts/check_site.py
 
       - name: Run tests
         run: python -m pytest -q

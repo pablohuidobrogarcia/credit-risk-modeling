@@ -222,6 +222,53 @@ def loss_statistics(losses: np.ndarray, total_ead: float, levels: Sequence[float
     return out
 
 
+def histogram_export(
+    losses: np.ndarray,
+    total_ead: float,
+    n_bins: int = 200,
+    smooth_pct: float = 1.01,
+    levels: Sequence[float] = (0.99, 0.999),
+) -> Dict[str, object]:
+    """Bounded, fixed-width loss histogram (as % of EAD) for the showcase site.
+
+    This is a *view* of an already-simulated loss array: it changes no result.
+    Bins are fixed-width over ``[0, smooth_pct * max(loss)]`` expressed as a
+    percentage of EAD, so the website can draw the distribution with Plotly
+    without ever running a simulation. The exact EL / VaR / ES values computed
+    from the same array are returned alongside the counts so the binned data can
+    be checked against the headline statistics.
+    """
+    losses = np.asarray(losses, dtype=float)
+    n = int(losses.size)
+    ead = float(total_ead)
+    hi_pct = (float(losses.max()) / ead * 100.0 * smooth_pct) if ead else 0.0
+    hi_pct = hi_pct if hi_pct > 0 else 1.0
+    edges_pct = np.linspace(0.0, hi_pct, n_bins + 1)
+    edges_abs = edges_pct / 100.0 * ead
+    counts, _ = np.histogram(losses, bins=edges_abs)
+    stats = loss_statistics(losses, ead, levels=levels)
+    exact = {
+        "expected_loss": stats["expected_loss"],
+        "expected_loss_pct_ead": stats["expected_loss_pct_ead"],
+        "unexpected_loss": stats["unexpected_loss"],
+        "unexpected_loss_pct_ead": stats["unexpected_loss_pct_ead"],
+        "total_ead": ead,
+    }
+    for level in levels:
+        key = f"{level:.4f}".rstrip("0").rstrip(".")
+        exact[f"var_{key}"] = stats[f"var_{key}"]
+        exact[f"var_{key}_pct_ead"] = stats[f"var_{key}_pct_ead"]
+        exact[f"es_{key}"] = stats[f"es_{key}"]
+        exact[f"es_{key}_pct_ead"] = stats[f"es_{key}_pct_ead"]
+    return {
+        "n_paths": n,
+        "n_bins": int(n_bins),
+        "bin_edges_pct_ead": [round(float(e), 4) for e in edges_pct],
+        "counts": [int(c) for c in counts],
+        "exact": {k: round(float(v), 6) for k, v in exact.items()},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Convergence and variance reduction
 # ---------------------------------------------------------------------------
@@ -547,8 +594,13 @@ def stress_test(
     rho: float = 0.12,
     n_simulations: int = 100_000,
     seed: int = 42,
-) -> pd.DataFrame:
-    """Re-run the simulation under PD/LGD shocks and tabulate the impact."""
+    return_losses: bool = False,
+):
+    """Re-run the simulation under PD/LGD shocks and tabulate the impact.
+
+    When ``return_losses`` is True the ``(stats_df, {scenario: losses})`` pair is
+    returned so callers can build histogram views of the same paths.
+    """
     scenarios: List[Tuple[str, float, float]] = [("baseline", 0.0, 0.0)]
     for s in pd_shocks:
         scenarios.append((f"PD +{int(round(s * 100))}%", s, 0.0))
@@ -564,6 +616,7 @@ def stress_test(
         )
 
     rows = []
+    arrays: Dict[str, np.ndarray] = {}
     for name, pd_shock, lgd_shock in scenarios:
         stressed = BucketedPortfolio(
             ead=portfolio.ead,
@@ -582,7 +635,10 @@ def stress_test(
         }
         row.update(out["stats"])
         rows.append(row)
-    return pd.DataFrame(rows)
+        if return_losses:
+            arrays[name] = np.asarray(out["losses"], dtype=float)
+    table = pd.DataFrame(rows)
+    return (table, arrays) if return_losses else table
 
 
 # ---------------------------------------------------------------------------
@@ -613,13 +669,19 @@ def rho_sensitivity(
     seed: int = 42,
     antithetic: bool = False,
     stratified: bool = True,
-) -> pd.DataFrame:
+    return_losses: bool = False,
+):
     """Re-run the simulation over a grid of asset correlations.
 
     The loss distribution is extremely sensitive to ``rho`` (systematic risk),
     so every capital figure in the report is quoted together with this grid.
+
+    When ``return_losses`` is True the ``(stats_df, {label: losses})`` pair is
+    returned, so callers can build histogram views of the *same* paths without
+    re-simulating.
     """
     rows = []
+    arrays: Dict[str, np.ndarray] = {}
     for i, r in enumerate(rhos):
         label = names[i] if names is not None else f"rho={float(r):.2f}"
         out = simulate_losses(
@@ -633,7 +695,10 @@ def rho_sensitivity(
         row = {"label": label, "rho": float(r)}
         row.update(out["stats"])
         rows.append(row)
-    return pd.DataFrame(rows)
+        if return_losses:
+            arrays[label] = np.asarray(out["losses"], dtype=float)
+    table = pd.DataFrame(rows)
+    return (table, arrays) if return_losses else table
 
 
 def rho_sensitivity_plot(

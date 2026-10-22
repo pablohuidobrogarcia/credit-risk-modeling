@@ -4,6 +4,12 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+**🔗 Live site:** <https://pablohuidobrogarcia.github.io/credit-risk-modeling/> — a short,
+visual case study of this project (built from `reports/results/summary.json`, served from
+`docs/` on GitHub Pages).
+
+[![Credit-risk case study: champion AUC, expected loss, VaR 99.9% and the censoring gap](docs/assets/og-card.png)](https://pablohuidobrogarcia.github.io/credit-risk-modeling/)
+
 An end-to-end, reproducible credit-risk pipeline built on the public Lending Club
 loan book (2007–2018):
 
@@ -59,7 +65,7 @@ is reported separately as the censoring-exposed secondary analysis.
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
 | **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.14 %**, UL **5.88 %**, VaR 99 % **28.52 %**, VaR 99.9 % **37.39 %**, ES 99 % **32.40 %**, ES 99.9 % **40.67 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
-| **Test suite** | **120** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
+| **Test suite** | **133** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 
@@ -422,9 +428,11 @@ pip install -r requirements-dev.txt                      # pytest + ruff + jupyt
 # 3. run
 python -m src.pipeline all          # full pipeline
 python -m src.pipeline eda pd       # a subset of stages
+python -m src.pipeline figures      # rebuild the showcase figures + docs/data.json
 
 # 4. quality gates
-python -m ruff check src tests
+python -m ruff check src tests scripts
+python scripts/check_site.py        # validate the GitHub Pages site
 python -m pytest -q
 ```
 
@@ -449,10 +457,16 @@ The unit tests run on **synthetic data**, so CI passes without the dataset.
 │   └── 06_monte_carlo_simulation.ipynb
 ├── reports/
 │   ├── figures/                # every chart referenced by the docs
+│   │   └── showcase/           # presentation-grade figures for the site
 │   ├── results/                # CSV/JSON artifacts + summary.json
 │   └── model_validation_report.md
+├── docs/                       # GitHub Pages site (static, no build step)
+│   ├── index.html
+│   ├── data.json               # generated from summary.json (no hardcoded metrics)
+│   └── assets/                 # site CSS/JS + PNGs + og-card.png
 ├── r/                          # optional R replication of the scorecard (not run here)
 ├── sql/                        # HiveQL-style queries executed with DuckDB
+├── scripts/check_site.py       # validates the docs/ site (links, data fields, sizes)
 ├── src/                        # typed, documented modules (one per stage)
 ├── tests/                      # pytest suite on synthetic data
 ├── .github/workflows/ci.yml    # ruff + pytest on 3.10 and 3.11

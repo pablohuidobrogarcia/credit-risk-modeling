@@ -106,50 +106,6 @@ img { max-width: 100%; height: auto; display: block; }
   .site-header nav { display: none; }
 }
 
-.sim-grid {
-  display: grid;
-  grid-template-columns: 1.1fr 1.4fr;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-.sim-controls {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.9rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
-.sim-ctrl {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-.sim-ctrl label {
-  font-size: 0.85rem;
-  color: var(--fg-muted);
-}
-.sim-ctrl select {
-  width: 100%;
-}
-.sim-results {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.9rem;
-}
-@media (max-width: 900px) {
-  .sim-grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 390px) {
-  .kpis { grid-template-columns: 1fr; }
-  .chart-host { min-height: 260px; }
-  figure { padding: 0.6rem; }
-}
-
 /* ------------------------------------------------------------------ hero */
 .hero {
   padding: 3.4rem 0 2.4rem;

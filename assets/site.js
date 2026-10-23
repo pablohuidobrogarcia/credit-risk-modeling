@@ -474,159 +474,27 @@
       const factor = scaler.factor || (scaler.pdo / Math.log(2));
       const offset = scaler.offset !== undefined ? scaler.offset : (scaler.base_score - factor * Math.log(scaler.base_odds));
       // points table gives per-variable points; total score
-      const score = Math.round(offset + pts); // approximation
+      const score = offset + pts;
       document.getElementById('app-score').textContent = Math.round(score);
-      // PD approx from scorecard
-      const odds = Math.exp((scaler.base_score - score)/factor);
-      const pd = 1/(1+odds);
+      const lnOddsGood = (score - offset) / factor;
+      const pd = 1.0 / (1.0 + Math.exp(lnOddsGood));
       document.getElementById('app-pd').textContent = (pd*100).toFixed(2) + '%';
       document.getElementById('app-pct').textContent = '—'; // descriptive
     }
     compute();
-    // Percentile chart
+    // Percentile chart from real test distribution
     const pel = document.getElementById('chart-app-percentile');
-    if (pel && typeof Plotly !== 'undefined' && !window.__plotlyLoadFailed) {
+    if (pel && typeof Plotly !== 'undefined' && !window.__plotlyLoadFailed && simd.test_score_hist) {
       try {
-        Plotly.newPlot(pel, [{x:[400,500,600,700,800], y:[0.3,0.2,0.15,0.1,0.05], type:'scatter', mode:'lines'}], Object.assign(themed(), {xaxis:{title:'Score'}, yaxis:{title:'Density (desc)'}, margin:{l:50,r:20,t:10,b:40}}), PLOTLY_CONFIG);
-      } catch(e) {}
-    }
-  }
-
-  function chartCutoffExplorer(d) {
-    const slider = document.getElementById('cutoff-slider');
-    if (!slider) return;
-    const ksCutoff = num(d.pd.cutoff) || 0.5;
-    const readout = document.getElementById('cutoff-readout');
-    const ksMarker = document.getElementById('cutoff-ks-marker');
-    if (ksMarker) ksMarker.textContent = `KS cutoff (train): ${ksCutoff.toFixed(4)}`;
-    const confusion = d.pd.confusion_oot || {};
-    function update() {
-      const cut = parseFloat(slider.value);
-      if (readout) readout.textContent = `Cutoff score: ${cut}`;
-      // Approximate from confusion if using PD cutoff
-      const tp = confusion.tp||0, fp = confusion.fp||0, fn = confusion.fn||0, tn = confusion.tn||0;
-      const total = tp+fp+fn+tn || 1;
-      const approved = tp+fp;
-      document.getElementById('cut-approval').textContent = (approved/total*100).toFixed(1)+'%';
-      document.getElementById('cut-bad-approved').textContent = (approved>0?(fp/(tp+fp)*100).toFixed(1):'0')+'%';
-      document.getElementById('cut-cm').textContent = `TP:${tp} FP:${fp} FN:${fn} TN:${tn}`;
-      document.getElementById('cut-default').textContent = ((tp+fn)/total*100).toFixed(1)+'%';
-    }
-    slider.addEventListener('input', update);
-    update();
-    const cel = document.getElementById('chart-cutoff');
-    if (cel && typeof Plotly !== 'undefined' && !window.__plotlyLoadFailed) {
-      try {
-        Plotly.newPlot(cel, [
-          {x:[0,1], y:[0,1], type:'scatter', mode:'lines', name:'Goods'},
-          {x:[0,1], y:[0,0.8], type:'scatter', mode:'lines', name:'Bads'}
-        ], Object.assign(themed(), {xaxis:{title:'Score'}, yaxis:{title:'Density'}, margin:{l:50,r:20,t:10,b:50}}), PLOTLY_CONFIG);
-      } catch(e) {}
-    }
-  }
-
-  function chartLoanMap(d) {
-    const el = document.getElementById('chart-loanmap');
-    if (!el) return;
-    const lm = (d.interactive && d.interactive.loan_map) || null;
-    if (!lm || !lm.points) { showStaticFallback(el); return; }
-    if (window.__plotlyLoadFailed || typeof window.Plotly === 'undefined') { showStaticFallback(el); return; }
-    const colorSel = document.getElementById('loanmap-color');
-    const toggleBtn = document.getElementById('loanmap-toggle');
-    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    let rotating = !reduce;
-    if (toggleBtn) {
-      toggleBtn.textContent = rotating ? 'Pause rotation' : 'Play rotation';
-      toggleBtn.addEventListener('click', () => {
-        rotating = !rotating;
-        toggleBtn.textContent = rotating ? 'Pause rotation' : 'Play rotation';
-      });
-    }
-    function draw() {
-      const colorBy = colorSel ? colorSel.value : 'default';
-      const pts = lm.points;
-      if (!hasWebGL() || window.innerWidth < 500) {
-        // 2D fallback
-        try {
-          Plotly.newPlot(el, [{
-            x: pts.map(p=>p.pc1), y: pts.map(p=>p.pc2),
-            mode:'markers', type:'scatter',
-            marker:{color: pts.map(p=> colorBy==='default' ? (p.default?'red':'blue') : (p.pd>0.2?'red':'blue')), size:4, opacity:0.5}
-          }], Object.assign(themed(), {title:'2D fallback (PCA)', xaxis:{title:'PC1'}, yaxis:{title:'PC2'}}), PLOTLY_CONFIG);
-        } catch(e) { showStaticFallback(el); }
-        return;
-      }
-      try {
-        Plotly.newPlot(el, [{
-          type:'scatter3d',
-          x: pts.map(p=>p.pc1), y: pts.map(p=>p.pc2), z: pts.map(p=>p.pc3),
-          mode:'markers',
-          marker:{size:3, color: pts.map(p=> colorBy==='default' ? (p.default?0:1) : p.pd), colorscale: colorBy==='default'?'RdBu':'Viridis', opacity:0.6}
-        }], Object.assign(themed(), {
-          scene:{xaxis:{title:'PC1'}, yaxis:{title:'PC2'}, zaxis:{title:'PC3'}},
-          margin:{l:0,r:0,t:30,b:0}
-        }), PLOTLY_CONFIG);
-        if (rotating && !reduce) {
-          let angle = 0;
-          const interval = setInterval(() => {
-            if (!rotating) { clearInterval(interval); return; }
-            angle += 0.01;
-            try {
-              Plotly.relayout(el, {'scene.camera': {eye:{x:1.5*Math.cos(angle), y:1.5*Math.sin(angle), z:1.2}}});
-            } catch(e) { clearInterval(interval); }
-          }, 50);
+        const bins = simd.test_score_bins || [];
+        const hist = simd.test_score_hist || [];
+        const x = [];
+        for (let i=0; i<hist.length && i<bins.length-1; i++) {
+          x.push((bins[i]+bins[i+1])/2.0);
         }
-      } catch(e) { showStaticFallback(el); }
-    }
-    if (colorSel) colorSel.addEventListener('change', draw);
-    draw();
-  }
-
-  function chartValidationTimeline(d) {
-    const el = document.getElementById('chart-timeline');
-    if (!el) return;
-    const tl = (d.interactive && d.interactive.validation_timeline) || null;
-    const toggle = document.getElementById('timeline-toggle');
-    if (!tl) { showStaticFallback(el); return; }
-    if (window.__plotlyLoadFailed || typeof window.Plotly === 'undefined') { showStaticFallback(el); return; }
-    function draw() {
-      const mode = toggle ? toggle.value : 'primary';
-      if (mode === 'secondary') {
-        try {
-          Plotly.newPlot(el, [
-            {x:['Train (<2017)','Test (2017-2018)'], y:[99,45], type:'bar', name:'Resolved %', marker:{color:['#0072B2','#D55E00']}}
-          ], Object.assign(themed(), {yaxis:{title:'Resolved share (%)', range:[0,110]}, margin:{l:60,r:20,t:20,b:50}}), PLOTLY_CONFIG);
-        } catch(e) { showStaticFallback(el); }
-      } else {
-        try {
-          Plotly.newPlot(el, [
-            {x:['Train (2010-2013)','Test (2014-2015)'], y:[99,98], type:'bar', name:'Resolved %', marker:{color:['#0072B2','#009E73']}}
-          ], Object.assign(themed(), {yaxis:{title:'Resolved share (%)', range:[0,110]}, margin:{l:60,r:20,t:20,b:50}}), PLOTLY_CONFIG);
-        } catch(e) { showStaticFallback(el); }
-      }
-    }
-    if (toggle) toggle.addEventListener('change', draw);
-    draw();
-  }
-
-  // -------------------------------------------------------------------- boot
-  function render(d) {
-    renderDisplay(d);
-    renderTables(d);
-    chartCensoring(d);
-    chartAucWindow(d);
-    chartModels(d);
-    chartCalibration(d);
-    chartElGrade(d);
-    chartSimulation(d);
-    try { chartRiskSurface(d); } catch(e) { console.error(e); }
-    try { chartScenarioExplorer(d); } catch(e) { console.error(e); }
-    try { chartApplicantSimulator(d); } catch(e) { console.error(e); }
-    try { chartCutoffExplorer(d); } catch(e) { console.error(e); }
-    try { chartLoanMap(d); } catch(e) { console.error(e); }
-    try { chartValidationTimeline(d); } catch(e) { console.error(e); }
-    document.documentElement.setAttribute("data-loaded", "true");
-
+        Plotly.newPlot(pel, [{x:x, y:hist, type:'bar', marker:{color:'#2f5d62'}}], Object.assign(themed(), {xaxis:{title:'Score'}, yaxis:{title:'Count'}}), {displayModeBar:false});
+      } catch(e) { if (typeof showStaticFallback==='function') showStaticFallback(pel); }
+    } else if (pel && typeof showStaticFallback==='function') { showStaticFallback(pel); }
     // Redraw charts with the right palette if the OS theme flips.
     if (window.matchMedia) {
       const mq = window.matchMedia("(prefers-color-scheme: dark)");

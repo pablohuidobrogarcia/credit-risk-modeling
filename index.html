@@ -43,6 +43,7 @@
       <a href="#scorecard">Scorecard</a>
       <a href="#lgd">LGD &amp; EL</a>
       <a href="#simulation">Simulation</a>
+      <a href="#interactive">Interactive</a>
       <a href="#limitations">Limitations</a>
     </nav>
   </div>
@@ -72,7 +73,7 @@
         <div class="kpi">
           <div class="label">Champion AUC</div>
           <div class="value" data-field="display.champion_auc">0.6572</div>
-          <div class="sub">Gini <span data-field="display.champion_gini">0.3144</span>; <span data-field="display.oot_years">2014-2015</span>; <span data-field="display.n_oot">445,596</span> loans</div>
+          <div class="sub">Gini <span data-field="display.champion_gini">0.3144</span>; <span data-field="display.oot_years">2014–2015</span>; <span data-field="display.n_oot">445,596</span> loans</div>
         </div>
         <div class="kpi">
           <div class="label">Expected loss</div>
@@ -356,7 +357,137 @@
     </div>
   </section>
 
-  <!-- ========================================================== 7. LIMITATIONS -->
+  <!-- ========================================================= 7. INTERACTIVE -->
+  <section id="interactive" aria-labelledby="interactive-title">
+    <div class="wrap">
+      <h2 id="interactive-title"><span class="num">07</span>Interactive exploration</h2>
+      <p class="section-lead">
+        Heavy computation happens in Python at build time; the browser only renders and does trivial lookups.
+        Every widget has static PNG fallbacks and respects accessibility preferences.
+      </p>
+
+      <h3>1) 3D risk surface</h3>
+      <p style="font-size:0.92rem;color:var(--fg-muted)">VaR 99.9% (and selector for ES 99.9% / EL) as a function of asset correlation ρ and PD stress multiplier. Simulation grid under stated assumptions, not a forecast.</p>
+      <div class="control-row">
+        <label for="risk-surface-metric">Metric</label>
+        <select id="risk-surface-metric">
+          <option value="var_0.999">VaR 99.9%</option>
+          <option value="es_0.999">ES 99.9%</option>
+          <option value="el">EL</option>
+          <option value="var_0.99">VaR 99%</option>
+        </select>
+        <span class="rho-readout" id="risk-surface-base"></span>
+      </div>
+      <figure>
+        <div class="chart-host" id="chart-risk-surface" style="min-height:420px" role="img"
+             data-fallback-src="assets/risk_surface_static.png"
+             aria-label="3D surface of VaR 99.9% as function of rho and PD stress"></div>
+        <noscript><img src="assets/risk_surface_static.png" alt="Static risk surface"></noscript>
+        <figcaption>Precomputed simulation grid (stated paths per point). Base case (ρ=0.12, no stress) marked. Rotatable in 3D where WebGL is available.</figcaption>
+      </figure>
+
+      <h3>2) Scenario explorer</h3>
+      <p style="font-size:0.92rem;color:var(--fg-muted)">Adjust scenario parameters; the loss distribution transitions smoothly and the tail metrics update from precomputed histograms.</p>
+      <div class="control-row">
+        <label for="scen-rho">ρ</label>
+        <select id="scen-rho"></select>
+        <label for="scen-pd">PD stress</label>
+        <select id="scen-pd"></select>
+        <label for="scen-lgd">LGD stress</label>
+        <select id="scen-lgd"></select>
+      </div>
+      <div class="kpis" style="margin-top:1rem">
+        <div class="kpi"><div class="label">EL</div><div class="value" id="scen-el">—</div><div class="sub">% of EAD</div></div>
+        <div class="kpi"><div class="label">UL</div><div class="value" id="scen-ul">—</div><div class="sub">% of EAD</div></div>
+        <div class="kpi"><div class="label">VaR 99%</div><div class="value" id="scen-var99">—</div><div class="sub">% of EAD</div></div>
+        <div class="kpi"><div class="label">VaR 99.9%</div><div class="value" id="scen-var999">—</div><div class="sub">% of EAD</div></div>
+        <div class="kpi"><div class="label">ES 99%</div><div class="value" id="scen-es99">—</div><div class="sub">% of EAD</div></div>
+        <div class="kpi"><div class="label">ES 99.9%</div><div class="value" id="scen-es999">—</div><div class="sub">% of EAD</div></div>
+      </div>
+      <figure>
+        <div class="chart-host" id="chart-scenario" role="img"
+             data-fallback-src="assets/scenario_explorer_static.png"
+             aria-label="Loss distribution for selected scenario"></div>
+        <noscript><img src="assets/scenario_explorer_static.png" alt="Static scenario explorer"></noscript>
+        <figcaption>Precomputed histograms for every grid combination (compact form). Transitions are animated where allowed.</figcaption>
+      </figure>
+
+      <h3>3) Applicant simulator (educational)</h3>
+      <p style="font-size:0.92rem;color:var(--fg-muted)">Educational illustration of the scorecard using the exported points table. <strong>Not a lending decision.</strong> Moderate discrimination (cite Gini from data). JS scoring uses lookup and arithmetic only.</p>
+      <div class="sim-grid">
+        <div class="sim-controls" id="app-sim-controls"></div>
+        <div class="sim-results">
+          <div class="kpis" style="grid-template-columns: repeat(3,1fr)">
+            <div class="kpi"><div class="label">Score</div><div class="value" id="app-score">—</div></div>
+            <div class="kpi"><div class="label">Implied PD</div><div class="value" id="app-pd">—</div></div>
+            <div class="kpi"><div class="label">Percentile (test)</div><div class="value" id="app-pct">—</div></div>
+          </div>
+          <p style="font-size:0.85rem;color:var(--fg-muted);margin-top:0.8rem">Gini (champion): <span data-field="display.champion_gini">0.3144</span>. This is an educational illustration only.</p>
+          <figure style="margin-top:1rem">
+            <div class="chart-host" id="chart-app-percentile" style="min-height:200px"></div>
+            <figcaption>Where the applicant falls relative to the test-window score distribution (descriptive).</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <h3>4) Cutoff explorer</h3>
+      <p style="font-size:0.92rem;color:var(--fg-muted)">Explore approval rate, bad rate among approved, and confusion matrix as a function of score cutoff. Marker for train-selected KS cutoff.</p>
+      <div class="control-row">
+        <label for="cutoff-slider">Score cutoff</label>
+        <input type="range" id="cutoff-slider" min="400" max="800" step="1" value="600">
+        <span class="rho-readout" id="cutoff-readout"></span>
+        <span class="rho-readout" id="cutoff-ks-marker"></span>
+      </div>
+      <div class="kpis" style="grid-template-columns: repeat(4,1fr);margin-top:1rem">
+        <div class="kpi"><div class="label">Approval rate</div><div class="value" id="cut-approval">—</div></div>
+        <div class="kpi"><div class="label">Bad rate (approved)</div><div class="value" id="cut-bad-approved">—</div></div>
+        <div class="kpi"><div class="label">TP/FP/FN/TN</div><div class="value" id="cut-cm" style="font-size:1.1rem">—</div></div>
+        <div class="kpi"><div class="label">Default rate overall</div><div class="value" id="cut-default">—</div></div>
+      </div>
+      <figure>
+        <div class="chart-host" id="chart-cutoff" style="min-height:260px"></div>
+        <figcaption>Computed from precomputed score histograms of goods and bads on the primary test window.</figcaption>
+      </figure>
+
+      <h3>5) 3D loan map</h3>
+      <p style="font-size:0.92rem;color:var(--fg-muted)">Stratified sample of ~5,000 loans in first three PCA components of clustering features. Toggle color by predicted PD or observed default. Descriptive projection; separation is weak.</p>
+      <div class="control-row">
+        <label for="loanmap-color">Color by</label>
+        <select id="loanmap-color">
+          <option value="default">Observed default</option>
+          <option value="pd">Predicted PD</option>
+        </select>
+        <button id="loanmap-toggle" class="btn btn-secondary" style="padding:0.4rem 0.8rem">Pause rotation</button>
+        <span class="rho-readout">Reduced motion respected</span>
+      </div>
+      <figure>
+        <div class="chart-host" id="chart-loanmap" style="min-height:420px" role="img"
+             data-fallback-src="assets/loan_map_static.png"
+             aria-label="3D scatter of PCA projection of loans"></div>
+        <noscript><img src="assets/loan_map_static.png" alt="Static loan map"></noscript>
+        <figcaption>Data rounded to 3 decimals, kept under ~250 KB. On narrow viewports/WebGL unavailable, falls back to 2D.</figcaption>
+      </figure>
+
+      <h3>6) Validation timeline</h3>
+      <p style="font-size:0.92rem;color:var(--fg-muted)">Train and test windows with toggle between primary (mature) and secondary (censored) split, showing resolved share per window.</p>
+      <div class="control-row">
+        <label for="timeline-toggle">View</label>
+        <select id="timeline-toggle">
+          <option value="primary">Primary (mature)</option>
+          <option value="secondary">Secondary (censored)</option>
+        </select>
+      </div>
+      <figure>
+        <div class="chart-host" id="chart-timeline" style="min-height:260px" role="img"
+             data-fallback-src="assets/validation_timeline_static.png"
+             aria-label="Timeline of train/test windows with resolved shares"></div>
+        <noscript><img src="assets/validation_timeline_static.png" alt="Static validation timeline"></noscript>
+        <figcaption>Resolved share per window from data.json. Censored window shown for quantification only.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- ========================================================== 8. LIMITATIONS -->
   <section id="limitations" aria-labelledby="limitations-title">
     <div class="wrap">
       <h2 id="limitations-title"><span class="num">06</span>What did not work, and limitations</h2>

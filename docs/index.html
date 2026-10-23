@@ -52,7 +52,7 @@
   <!-- ================================================================= 1. HERO -->
   <section class="hero" id="top" aria-labelledby="hero-title">
     <div class="wrap">
-      <h1 id="hero-title">Credit-risk modeling on 1.3M Lending&nbsp;Club loans</h1>
+      <h1 id="hero-title">Credit-risk modeling on <span data-field="display.n_rows">1,345,350</span> Lending&nbsp;Club loans</h1>
       <p class="lead">
         An end-to-end, reproducible credit-risk study: probability of default, loss given
         default, expected loss and a Monte-Carlo portfolio loss distribution — built so the
@@ -66,27 +66,27 @@
       <div class="kpis">
         <div class="kpi">
           <div class="label">Resolved loans</div>
-          <div class="value" data-field="display.n_rows">—</div>
-          <div class="sub">Lending Club, 2007–2018</div>
+          <div class="value" data-field="display.n_rows">1,345,350</div>
+          <div class="sub">Lending Club, <span data-field="display.data_years">2007–2018</span></div>
         </div>
         <div class="kpi">
           <div class="label">Champion AUC</div>
-          <div class="value" data-field="display.champion_auc">—</div>
-          <div class="sub">Gini <span data-field="display.champion_gini">—</span>, mature 2014–2015, <span data-field="display.n_oot">—</span> loans</div>
+          <div class="value" data-field="display.champion_auc">0.6572</div>
+          <div class="sub">Gini <span data-field="display.champion_gini">0.3144</span>; <span data-field="display.oot_years">2014-2015</span>; <span data-field="display.n_oot">445,596</span> loans</div>
         </div>
         <div class="kpi">
           <div class="label">Expected loss</div>
-          <div class="value" data-field="display.el_rate">—</div>
-          <div class="sub">of EAD (<span data-field="display.el_amount">—</span>)</div>
+          <div class="value" data-field="display.el_rate">10.14%</div>
+          <div class="sub">of EAD (<span data-field="display.el_amount">$574.8M</span>)</div>
         </div>
         <div class="kpi">
           <div class="label">VaR 99.9%</div>
-          <div class="value" data-field="display.sim_var999">—</div>
-          <div class="sub">of EAD, base &rho;=<span data-field="display.rho">—</span></div>
+          <div class="value" data-field="display.sim_var999">37.39%</div>
+          <div class="sub">of EAD, base &rho;=<span data-field="display.rho">0.12</span></div>
         </div>
       </div>
       <p class="rho-readout" style="margin-top:1rem">
-        Portfolio EAD <span data-field="display.portfolio_ead">—</span>. All figures on this page are read
+        Portfolio EAD <span data-field="display.portfolio_ead">$5,670.3M</span>. All figures on this page are read
         from <code>reports/results/summary.json</code> at build time; nothing here is hardcoded.
       </p>
     </div>
@@ -102,17 +102,17 @@
         will default, how much is lost when it does, and how much capital the tail requires.
       </p>
       <p>
-        Of <span data-field="display.n_accepted">—</span> originated loans,
-        <span data-field="display.n_resolved">—</span> have reached a final status
-        (Fully Paid, Charged Off or Default). A loan is labelled <em>default</em> when its
+        Of <span data-field="display.n_accepted">2,260,668</span> originated loans,
+        <span data-field="display.n_resolved">1,345,350</span> have reached a final status
+        (Fully Paid, Charged Off or Default). A loan is labeled <em>default</em> when its
         status is Charged Off or Default; the overall resolved default rate is
-        <span data-field="display.default_rate">—</span>.
+        <span data-field="display.default_rate">19.96%</span>.
       </p>
       <p>
-        The primary model is trained on the <strong><span data-field="display.train_years">—</span></strong>
-        vintages and evaluated, once, on the <strong><span data-field="display.oot_years">—</span></strong>
-        36-month vintages (<span data-field="display.default_rate_train">—</span> and
-        <span data-field="display.default_rate_oot">—</span> default rates). The test window is used
+        The primary model is trained on the <strong><span data-field="display.train_years">2010–2013</span></strong>
+        vintages and evaluated, once, on the <strong><span data-field="display.oot_years">2014–2015</span></strong>
+        36-month vintages (<span data-field="display.default_rate_train">12.4%</span> and
+        <span data-field="display.default_rate_oot">14.5%</span> default rates). The test window is used
         only for the final number — never for tuning.
       </p>
       <div class="note">
@@ -129,9 +129,9 @@
     <div class="wrap">
       <h2 id="censoring-title"><span class="num">02</span>The pitfall: right-censoring</h2>
       <p class="section-lead">
-        A loan can only be scored as paid or defaulted once it has finished. Late vintages
-        are still running, so they look healthier than they are — and a model evaluated on
-        them looks better than it is. This is the headline finding of the project.
+        A loan can only be scored as paid or defaulted once it has finished. In a snapshot,
+        the finished loans are not a random sample of the portfolio: which loans have an
+        outcome, and when, depends on the vintage. This is the headline finding of the project.
       </p>
 
       <figure>
@@ -149,11 +149,15 @@
 
       <figure>
         <div class="chart-host" id="chart-auc-window" style="min-height:300px" role="img"
-             data-fallback-src="assets/scorecard_panel.png"
-             aria-label="Bar chart comparing out-of-time AUC on the mature window and the censored window."></div>
+             data-fallback-src="assets/auc_window.png"
+             aria-label="Dot plot comparing out-of-time AUC on the mature window and the censored window, with a chance marker at 0.50."></div>
         <noscript>
-          <img src="assets/scorecard_panel.png" alt="Model comparison panel including mature versus censored AUC.">
+          <img src="assets/auc_window.png" alt="Dot plot of mature versus censored out-of-time AUC, with the axis range and chance level stated.">
         </noscript>
+        <figcaption>
+          Same model recipe on two windows. The censored window is incomplete and has a
+          different loan composition, so the two AUCs are not comparable.
+        </figcaption>
       </figure>
 
       <div class="table-scroll">
@@ -163,19 +167,14 @@
             <tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr>
           </thead>
           <tbody>
-            <tr><td>Mature (primary)</td><td>2014–2015</td><td data-field="display.window_mature_auc">—</td><td data-field="display.window_mature_psi">—</td></tr>
-            <tr><td>Censored (secondary)</td><td>2017–2018</td><td data-field="display.window_immature_auc">—</td><td data-field="display.window_immature_psi">—</td></tr>
-            <tr><td colspan="2"><strong>Inflation from censoring</strong></td><td class="highlight" data-field="display.window_gap">—</td><td></td></tr>
+            <tr><td>Mature (primary)</td><td>2014–2015</td><td data-field="display.window_mature_auc">0.6572</td><td data-field="display.window_mature_psi">0.0145</td></tr>
+            <tr><td>Censored (secondary)</td><td>2017–2018</td><td data-field="display.window_immature_auc">0.7152</td><td data-field="display.window_immature_psi">0.0028</td></tr>
+            <tr><td colspan="2"><strong>Inflation from censoring</strong></td><td class="highlight" data-field="display.window_gap">+0.0580</td><td></td></tr>
           </tbody>
         </table>
       </div>
       <div class="note">
-        The censored window reports a higher AUC (<span data-field="display.window_immature_auc">—</span>)
-        than the mature one (<span data-field="display.window_mature_auc">—</span>), a gap of
-        <strong><span data-field="display.window_gap">—</span></strong>. That is not a better model: the
-        loans that would have defaulted late are still open and are simply excluded, and they
-        are excluded non-uniformly across vintages. The 2017–2018 window is shown for
-        comparison only and drives no headline number.
+        <p data-field="display.censoring_note">Only resolved loans enter the sample, so early defaults and early prepayments are over-represented relative to loans that are still open. The censored 2017-2018 window has a higher observed default rate (21.29%) than the mature 2014-2015 window (14.46%), and its loan composition differs, so its AUC is not comparable. The +0.0580 AUC gap is a measurement artifact of the sampling; the censored window is shown only to quantify it and feeds no headline number.</p>
       </div>
     </div>
   </section>
@@ -195,7 +194,7 @@
              data-fallback-src="assets/scorecard_panel.png"
              aria-label="Horizontal bars of out-of-time AUC by model, champion highlighted."></div>
         <noscript>
-          <img src="assets/scorecard_panel.png" alt="Scorecard panel: AUC by model, mature versus censored AUC, information value ranking, and champion versus benchmark.">
+          <img src="assets/scorecard_panel.png" alt="Scorecard panel: AUC by model, information value ranking, and champion versus benchmark.">
         </noscript>
         <figcaption>Out-of-time AUC on the mature window. The champion is highlighted.</figcaption>
       </figure>
@@ -206,7 +205,7 @@
           <thead>
             <tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr>
           </thead>
-          <tbody><!-- filled from data.json --></tbody>
+          <tbody><tr><td>lightgbm ★</td><td>0.6572</td><td>0.3144</td><td>0.2274</td><td>30</td></tr><tr><td>random_forest</td><td>0.6468</td><td>0.2936</td><td>0.2088</td><td>30</td></tr><tr><td>probit</td><td>0.6219</td><td>0.2438</td><td>0.1770</td><td>8</td></tr><tr><td>logit_l2</td><td>0.6218</td><td>0.2436</td><td>0.1766</td><td>8</td></tr><tr><td>logit</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>logit_l1</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>decision_tree</td><td>0.5509</td><td>0.1018</td><td>0.1018</td><td>30</td></tr></tbody>
         </table>
       </div>
 
@@ -219,19 +218,19 @@
           <tbody>
             <tr>
               <td>LightGBM on all variables incl. lender grade &amp; rate</td>
-              <td data-field="display.benchmark_auc">—</td>
-              <td data-field="display.benchmark_gini">—</td>
-              <td data-field="display.auc_gap_vs_benchmark">—</td>
+              <td data-field="display.benchmark_auc">0.6799</td>
+              <td data-field="display.benchmark_gini">0.3599</td>
+              <td data-field="display.auc_gap_vs_benchmark">0.0227</td>
             </tr>
           </tbody>
         </table>
       </div>
       <div class="note">
         <strong>Honest read.</strong> Discrimination is moderate — champion KS
-        <span data-field="display.champion_ks">—</span>, score PSI
-        <span data-field="display.score_psi">—</span>. The lender's own grade and
+        <span data-field="display.champion_ks">0.2274</span>, score PSI
+        <span data-field="display.score_psi">0.0145</span>. The lender's own grade and
         interest rate, which are not available to an outside modeler at origination, still add
-        about <span data-field="display.auc_gap_vs_benchmark">—</span> AUC. That gap is an upper
+        about <span data-field="display.auc_gap_vs_benchmark">0.0227</span> AUC. That gap is an upper
         bound on what a genuine challenger could hope to recover, not a failure of the
         pipeline.
       </div>
@@ -255,20 +254,12 @@
         <noscript>
           <img src="assets/calibration_lift.png" alt="Calibration curve and Brier-score comparison across calibration methods.">
         </noscript>
-        <figcaption>
-          Reliability of the champion score by predicted-PD decile. Points below the diagonal
-          mean the score over-predicts default.
-        </figcaption>
+        <figcaption data-field="display.calibration_caption">—</figcaption>
       </figure>
 
       <div class="note">
-        <strong>Calibration is a null result.</strong> Recalibration barely changes the Brier
-        score (raw <span data-field="display.cal_raw_brier">—</span> vs calibrated
-        <span data-field="display.cal_brier">—</span>); calibration-in-the-large moves
-        from <span data-field="display.cal_raw_citl">—</span> to
-        <span data-field="display.cal_citl">—</span>. The selected method is
-        <em><span data-field="display.cal_method">—</span></em>, but the honest conclusion is
-        that the score is already about as calibrated as it can get on this data.
+        <strong>Calibration is a null result.</strong>
+        <p data-field="display.calibration_note">Recalibration barely changes the Brier score (raw 0.11949 vs calibrated 0.11970); calibration-in-the-large moves from 0.1844 to 0.1986. The selected method is isotonic, and no method beats the raw score. Every decile lies above the diagonal, so the score under-predicts default: on the test window the calibrated score is 2.3 pp below the observed rate.</p>
       </div>
 
       <figure>
@@ -287,17 +278,17 @@
           <thead>
             <tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr>
           </thead>
-          <tbody><!-- filled from data.json --></tbody>
+          <tbody><tr><td>gamma_glm</td><td>0.1004</td><td>0.1572</td><td>-0.0758</td></tr><tr><td>lightgbm ★</td><td>0.1015</td><td>0.1538</td><td>-0.0294</td></tr><tr><td>two_part</td><td>0.1000</td><td>0.1559</td><td>-0.0578</td></tr></tbody>
         </table>
       </div>
       <div class="note">
         <strong>Loan-level LGD is not usable.</strong> Every LGD model has a negative
         out-of-time R² — worse than predicting the mean. There is real signal in the
         loss-rate <em>distribution</em> (the share of zero-recovery defaults rises from
-        <span data-field="display.boundary_train">—</span> in training to
-        <span data-field="display.boundary_oot">—</span> out of time), but per-loan
-        prediction does not generalise, so expected loss uses a portfolio-level LGD
-        (<span data-field="display.realised_lgd">—</span> realised out of time).
+        <span data-field="display.boundary_train">5.2%</span> in training to
+        <span data-field="display.boundary_oot">26.9%</span> out of time), but per-loan
+        prediction does not generalize, so expected loss uses a portfolio-level LGD
+        (<span data-field="display.realized_lgd">0.8678</span> realized out of time).
       </div>
     </div>
   </section>
@@ -309,7 +300,7 @@
       <p class="section-lead">
         A single-factor Vasicek model turns the calibrated PDs, LGDs and exposures into a
         full loss distribution, so capital can be read off the tail instead of a point
-        estimate. <span data-field="display.sim_n">—</span> paths, run in Python;
+        estimate. <span data-field="display.sim_n">100,000</span> paths, run in Python;
         the page only displays the result.
       </p>
 
@@ -333,12 +324,12 @@
       </figure>
 
       <div class="kpis" style="margin-top:1.4rem">
-        <div class="kpi"><div class="label">Expected loss</div><div class="value" data-field="display.sim_el">—</div><div class="sub" data-field="display.sim_el_usd">—</div></div>
-        <div class="kpi"><div class="label">Unexpected loss</div><div class="value" data-field="display.sim_ul">—</div><div class="sub" data-field="display.sim_ul_usd">—</div></div>
-        <div class="kpi"><div class="label">VaR 99%</div><div class="value" data-field="display.sim_var99">—</div><div class="sub" data-field="display.sim_var99_usd">—</div></div>
-        <div class="kpi"><div class="label">VaR 99.9%</div><div class="value" data-field="display.sim_var999">—</div><div class="sub" data-field="display.sim_var999_usd">—</div></div>
-        <div class="kpi"><div class="label">ES 99%</div><div class="value" data-field="display.sim_es99">—</div><div class="sub" data-field="display.sim_es99_usd">—</div></div>
-        <div class="kpi"><div class="label">ES 99.9%</div><div class="value" data-field="display.sim_es999">—</div><div class="sub" data-field="display.sim_es999_usd">—</div></div>
+        <div class="kpi"><div class="label">Expected loss</div><div class="value" data-field="display.sim_el">10.14%</div><div class="sub" data-field="display.sim_el_usd">$574.7M</div></div>
+        <div class="kpi"><div class="label">Unexpected loss</div><div class="value" data-field="display.sim_ul">5.88%</div><div class="sub" data-field="display.sim_ul_usd">$333.5M</div></div>
+        <div class="kpi"><div class="label">VaR 99%</div><div class="value" data-field="display.sim_var99">28.52%</div><div class="sub" data-field="display.sim_var99_usd">$1,617.3M</div></div>
+        <div class="kpi"><div class="label">VaR 99.9%</div><div class="value" data-field="display.sim_var999">37.39%</div><div class="sub" data-field="display.sim_var999_usd">$2,120.3M</div></div>
+        <div class="kpi"><div class="label">ES 99%</div><div class="value" data-field="display.sim_es99">32.40%</div><div class="sub" data-field="display.sim_es99_usd">$1,837.4M</div></div>
+        <div class="kpi"><div class="label">ES 99.9%</div><div class="value" data-field="display.sim_es999">40.67%</div><div class="sub" data-field="display.sim_es999_usd">$2,306.2M</div></div>
       </div>
 
       <figure>
@@ -350,16 +341,16 @@
         </noscript>
         <figcaption>
           Capital is highly sensitive to &rho;, so every figure is quoted with this grid. The
-          base case is &rho; = <span data-field="display.rho">—</span>; the
+          base case is &rho; = <span data-field="display.rho">0.12</span>; the
           PD-dependent Basel-implied value for this portfolio is
-          <span data-field="display.rho_basel">—</span>.
+          <span data-field="display.rho_basel">0.0322</span>.
         </figcaption>
       </figure>
 
       <p style="margin-top:1.4rem;color:var(--fg-muted);font-size:0.92rem">
         Variance reduction was measured, not assumed: stratified sampling cuts the standard
-        error by <span data-field="display.se_stratified">—</span> and
-        antithetic variates by <span data-field="display.se_antithetic">—</span>.
+        error by <span data-field="display.se_stratified">0.50%</span> and
+        antithetic variates by <span data-field="display.se_antithetic">0.18%</span>.
         Stratified sampling is the technique of record.
       </p>
     </div>
@@ -374,42 +365,33 @@
         can trust.
       </p>
 
-      <ul class="limitations" id="limitations-list"><!-- filled from data.json --></ul>
+      <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
 
       <h3>Forecasting the monthly default rate</h3>
       <div class="table-scroll">
         <table id="forecast-table">
-          <caption>17-month holdout: an honest seasonal model is beaten by the naive benchmark</caption>
+          <caption data-field="display.forecast_caption">—</caption>
           <thead>
             <tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr>
           </thead>
-          <tbody><!-- filled from data.json --></tbody>
+          <tbody><tr><td>last value naive</td><td>0.0132</td><td>0.0112</td><td>0.5543</td></tr><tr><td>ets</td><td>0.0140</td><td>0.0119</td><td>0.5903</td></tr><tr><td>sarimax</td><td>0.0246</td><td>0.0229</td><td>1.1319</td></tr><tr><td>seasonal naive</td><td>0.0363</td><td>0.0344</td><td>1.7036</td></tr></tbody>
         </table>
       </div>
       <div class="note">
-        A last-value naive forecast wins outright. Residual autocorrelation is only marginal
-        (Ljung–Box at lag 10, p = <span data-field="display.forecast_ljung_box_p">—</span>), which is
-        consistent with a series that is close to a random walk. This is reported as a
-        limitation, not dressed up.
+        <p data-field="display.forecast_note">A last-value naive forecast wins outright (MASE 0.5543 vs 1.1319 for SARIMAX and 0.5903 for ETS) on the 17-month holdout. Residual autocorrelation is only marginal (Ljung-Box at lag 10, p = 0.066), consistent with a series that is close to a random walk. This is reported as a limitation, not dressed up.</p>
       </div>
 
-      <h3>Behavioural segmentation</h3>
+      <h3>Behavioral segmentation</h3>
       <div class="table-scroll">
         <table id="cluster-table">
           <caption>k-means segments (k = <span data-field="display.cluster_k">2</span>) — descriptive only</caption>
           <thead>
             <tr><th scope="col">Segment</th><th scope="col">Loans</th><th scope="col">Share</th><th scope="col">Default rate</th></tr>
           </thead>
-          <tbody><!-- filled from data.json --></tbody>
+          <tbody><tr><td>k-means 0</td><td>741,055</td><td>55.1%</td><td>20.2%</td></tr><tr><td>k-means 1</td><td>604,295</td><td>44.9%</td><td>19.7%</td></tr></tbody>
         </table>
       </div>
-      <p style="color:var(--fg-muted);font-size:0.92rem">
-        Silhouette <span data-field="display.cluster_silhouette">—</span>, stability ARI
-        <span data-field="display.cluster_stability_ari">—</span>. k-means separates default rate by
-        only <span data-field="display.cluster_spread_pp">—</span>; a Gaussian mixture separates
-        more (<span data-field="display.cluster_gmm_spread_pp">—</span>) but is less stable. Neither
-        is used as a model feature.
-      </p>
+      <p style="color:var(--fg-muted);font-size:0.92rem" data-field="display.segments_note">Silhouette 0.1840, stability ARI 0.9566. k-means separates the default rate by only 0.54 pp; a Gaussian mixture separates more (6.28 pp) and is at least as stable (bootstrap ARI 0.9785 vs 0.9566). Neither is used as a model feature.</p>
 
       <figure>
         <img src="assets/segments.png" loading="lazy"
@@ -424,8 +406,8 @@
       <p style="font-size:0.94rem">
         The data only contains approved loans. An exploratory reject-inference pass suggests
         the rejected applicants would default more often (illustrative PD gap
-        <span data-field="display.reject_gap">—</span>), but rejected applicants have no observed
-        outcome, so the gap cannot be validated. It is labelled exploratory and feeds no
+        <span data-field="display.reject_gap">0.0576</span>), but rejected applicants have no observed
+        outcome, so the gap cannot be validated. It is labeled exploratory and feeds no
         headline number.
       </p>
     </div>
@@ -437,7 +419,7 @@
       <h2 id="reproduce-title"><span class="num">07</span>How to reproduce</h2>
       <p class="section-lead">
         Everything is deterministic (seed 42). The pipeline runs from raw CSV to the figures
-        and this page's <code>data.json</code>; the <span data-field="display.test_count">—</span>-test
+        and this page's <code>data.json</code>; the <span data-field="display.test_count">133</span>-test
         suite checks that no number drifts.
       </p>
 <pre><code>git clone https://github.com/pablohuidobrogarcia/credit-risk-modeling.git
@@ -487,10 +469,12 @@ python -m src.report_tables --check # verify README numbers against summary.json
   </div>
 </footer>
 
-<!-- Plotly, pinned to an exact version. The page works without it (noscript PNGs). -->
+<!-- Plotly, pinned to an exact version. If it fails to load (CDN blocked,
+     ad-blocker, in-app browser), site.js swaps in the static PNG for every chart. -->
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"
         integrity="sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7"
-        crossorigin="anonymous" defer></script>
+        crossorigin="anonymous" defer
+        onerror="window.__plotlyLoadFailed = true"></script>
 <script src="assets/site.js" defer></script>
 </body>
 </html>

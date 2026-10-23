@@ -103,10 +103,17 @@ def apply_style() -> None:
     )
 
 
-def takeaway(ax: plt.Axes, title: str, subtitle: str | None = None) -> None:
+def takeaway(
+    ax: plt.Axes,
+    title: str,
+    subtitle: str | None = None,
+    fontsize: float = 13,
+    subtitle_size: float = 9.5,
+    pad: float = 12,
+) -> None:
     """Set a takeaway title with an optional lighter subtitle line."""
     if subtitle:
-        ax.set_title(f"{title}\n", fontsize=13, fontweight="bold", loc="left")
+        ax.set_title(f"{title}\n", fontsize=fontsize, fontweight="bold", loc="left", pad=pad)
         ax.text(
             0.0,
             1.015,
@@ -114,11 +121,11 @@ def takeaway(ax: plt.Axes, title: str, subtitle: str | None = None) -> None:
             transform=ax.transAxes,
             ha="left",
             va="bottom",
-            fontsize=9.5,
+            fontsize=subtitle_size,
             color="#555555",
         )
     else:
-        ax.set_title(title, fontsize=13, fontweight="bold", loc="left")
+        ax.set_title(title, fontsize=fontsize, fontweight="bold", loc="left", pad=pad)
 
 
 def annotate_source(target, text: str) -> None:

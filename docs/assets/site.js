@@ -59,11 +59,24 @@
   function plot(id, traces, layout) {
     const el = document.getElementById(id);
     if (!el) return;
-    if (typeof window.Plotly === "undefined") {
+    if (window.__plotlyLoadFailed ||
+        typeof window.Plotly === "undefined" ||
+        typeof window.Plotly.newPlot !== "function") {
       showStaticFallback(el);
       return;
     }
-    window.Plotly.newPlot(el, traces, Object.assign(themed(), layout), PLOTLY_CONFIG);
+    try {
+      const drawn = window.Plotly.newPlot(el, traces, Object.assign(themed(), layout), PLOTLY_CONFIG);
+      if (drawn && typeof drawn.catch === "function") {
+        drawn.catch((err) => {
+          console.error("Plotly failed for #" + id + ":", err);
+          showStaticFallback(el);
+        });
+      }
+    } catch (err) {
+      console.error("Plotly threw for #" + id + ":", err);
+      showStaticFallback(el);
+    }
   }
 
   function showStaticFallback(el) {
@@ -71,6 +84,7 @@
     const src = el.getAttribute("data-fallback-src");
     if (!src) return;
     el.dataset.fallbackShown = "1";
+    el.innerHTML = "";
     const img = document.createElement("img");
     img.src = src;
     img.alt = el.getAttribute("aria-label") || "static chart";
@@ -95,48 +109,65 @@
       name: t + "-month term",
       marker: { color: i === 0 ? "#0072B2" : "#E69F00" },
     }));
+    traces.push({
+      x: [years[0] - 0.5, years[years.length - 1] + 0.5],
+      y: [90, 90],
+      type: "scatter",
+      mode: "lines",
+      name: "90% threshold (primary split)",
+      line: { color: "#CC79A7", width: 2, dash: "dash" },
+      hoverinfo: "skip",
+    });
     plot("chart-censoring", traces, {
       barmode: "group",
       xaxis: { title: "Issue year", dtick: 1 },
       yaxis: { title: "Resolved share (%)", range: [0, 105] },
-      shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, y0: 90, y1: 90,
-        line: { color: "#D55E00", width: 1.5, dash: "dash" } }],
-      annotations: [{ xref: "paper", x: 1, y: 92, xanchor: "right", yanchor: "bottom",
-        text: "90% resolved bar for the primary split", showarrow: false,
-        font: { size: 11, color: "#D55E00" } }],
     });
+  }
+
+  function chanceMarker(x0, x1, label) {
+    return {
+      type: "line", xref: "x", yref: "paper", x0: 0.5, x1: 0.5, y0: 0, y1: 1,
+      line: { color: "#14202e", width: 1.3, dash: "dot" },
+      name: label,
+    };
   }
 
   function chartAucWindow(d) {
     const wc = d.pd.window_comparison || [];
-    const ly = wc.map((r) => r.test_years);
     const aucs = wc.map((r) => num(r.auc));
     plot("chart-auc-window", [{
-      x: wc.map((r, i) => (r.window || "window " + i) + " (" + (r.test_years || "") + ")"),
-      y: aucs, type: "bar",
-      marker: { color: ["#0072B2", "#D55E00"] },
-      text: aucs.map((v) => fmtNum(v)), textposition: "outside",
-    }], {
-      yaxis: { title: "Out-of-time AUC", range: [0.5, 0.78] },
+      x: aucs,
+      y: wc.map((r) => (r.window || "window") + " (" + (r.test_years || "") + ")"),
+      type: "scatter",
+      mode: "markers+text",
+      marker: { size: 12, color: ["#0072B2", "#D55E00"] },
+      text: aucs.map((v) => fmtNum(v)), textposition: "middle right",
       showlegend: false,
-      margin: { l: 60, r: 20, t: 30, b: 60 },
+    }], {
+      xaxis: { title: "Out-of-time AUC (axis 0.50–0.78; chance = 0.50)", range: [0.5, 0.78] },
+      yaxis: { automargin: true },
+      shapes: [chanceMarker(0.5, 0.5, "Chance")],
+      margin: { l: 150, r: 60, t: 20, b: 55 },
     });
-    void ly;
   }
 
   function chartModels(d) {
     const models = (d.pd.models || []).filter((m) => (m.sample || "oot") === "oot");
+    const aucs = models.map((m) => num(m.auc));
+    const hi = Math.max(0.7, Math.max(...aucs) + 0.05);
     plot("chart-models", [{
-      x: models.map((m) => m.auc), y: models.map((m) => m.model),
-      type: "bar", orientation: "h",
-      marker: { color: models.map((m) => (m.model === d.pd.champion ? "#009E73" : "#999999")) },
-      text: models.map((m) => fmtNum(m.auc)), textposition: "outside",
-    }], {
-      xaxis: { title: "Out-of-time AUC (mature window)",
-        range: [0.5, Math.max(0.62, ...models.map((m) => m.auc)) + 0.02] },
-      yaxis: { automargin: true },
+      x: aucs, y: models.map((m) => m.model),
+      type: "scatter", mode: "markers+text",
+      marker: { size: 11, color: models.map((m) => (m.model === d.pd.champion ? "#009E73" : "#999999")) },
+      text: aucs.map((v) => fmtNum(v)), textposition: "middle right",
       showlegend: false,
-      margin: { l: 130, r: 50, t: 20, b: 50 },
+    }], {
+      xaxis: { title: "Out-of-time AUC (axis 0.50–" + hi.toFixed(2) + "; chance = 0.50)",
+        range: [0.5, hi] },
+      yaxis: { automargin: true },
+      shapes: [chanceMarker(0.5, hi, "Chance")],
+      margin: { l: 130, r: 60, t: 20, b: 50 },
     });
   }
 
@@ -244,6 +275,8 @@
     plot("chart-rho", [
       { x: sens.map((r) => r.label), y: sens.map((r) => num(r["expected_loss_pct_ead"]) * 100),
         type: "bar", name: "Expected loss", marker: { color: "#0072B2" } },
+      { x: sens.map((r) => r.label), y: sens.map((r) => num(r["var_0.999_pct_ead"]) * 100),
+        type: "bar", name: "VaR 99.9%", marker: { color: "#56B4E9" } },
       { x: sens.map((r) => r.label), y: sens.map((r) => num(r["es_0.99_pct_ead"]) * 100),
         type: "bar", name: "ES 99%", marker: { color: "#E69F00" } },
       { x: sens.map((r) => r.label), y: sens.map((r) => num(r["es_0.999_pct_ead"]) * 100),
@@ -251,8 +284,8 @@
     ], {
       barmode: "group",
       xaxis: { title: "Asset correlation scenario", tickangle: -20 },
-      yaxis: { title: "Loss (% of EAD)" },
-      margin: { l: 60, r: 20, t: 40, b: 80 },
+      yaxis: { title: "Loss (% of EAD)", range: [0, null] },
+      margin: { l: 60, r: 20, t: 40, b: 90 },
     });
   }
 

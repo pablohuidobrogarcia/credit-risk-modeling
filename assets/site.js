@@ -492,9 +492,9 @@
         for (let i=0; i<hist.length && i<bins.length-1; i++) {
           x.push((bins[i]+bins[i+1])/2.0);
         }
-        Plotly.newPlot(pel, [{x:x, y:hist, type:'bar', marker:{color:'#2f5d62'}}], Object.assign(themed(), {xaxis:{title:'Score'}, yaxis:{title:'Count'}}), {displayModeBar:false});
-      } catch(e) { if (typeof showStaticFallback==='function') showStaticFallback(pel); }
-    } else if (pel && typeof showStaticFallback==='function') { showStaticFallback(pel); }
+        Plotly.newPlot(pel, [{x:x, y:hist, type:'bar', marker:{color:'#2f5d62'}}], Object.assign(themed(), {xaxis:{title:'Score'}, yaxis:{title:'Count'}}), PLOTLY_CONFIG);
+      } catch(e) { showStaticFallback(pel); }
+    } else if (pel) { showStaticFallback(pel); }
     // Redraw charts with the right palette if the OS theme flips.
     if (window.matchMedia) {
       const mq = window.matchMedia("(prefers-color-scheme: dark)");

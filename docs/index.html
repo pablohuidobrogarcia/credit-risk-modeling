@@ -449,25 +449,6 @@
         <figcaption>Computed from precomputed score histograms of goods and bads on the primary test window.</figcaption>
       </figure>
 
-      <h3>5) 3D loan map</h3>
-      <p style="font-size:0.92rem;color:var(--fg-muted)">Stratified sample of ~5,000 loans in first three PCA components of clustering features. Toggle color by predicted PD or observed default. Descriptive projection; separation is weak.</p>
-      <div class="control-row">
-        <label for="loanmap-color">Color by</label>
-        <select id="loanmap-color">
-          <option value="default">Observed default</option>
-          <option value="pd">Predicted PD</option>
-        </select>
-        <button id="loanmap-toggle" class="btn btn-secondary" style="padding:0.4rem 0.8rem">Pause rotation</button>
-        <span class="rho-readout">Reduced motion respected</span>
-      </div>
-      <figure>
-        <div class="chart-host" id="chart-loanmap" style="min-height:420px" role="img"
-             data-fallback-src="assets/loan_map_static.png"
-             aria-label="3D scatter of PCA projection of loans"></div>
-        <noscript><img src="assets/loan_map_static.png" alt="Static loan map"></noscript>
-        <figcaption>Data rounded to 3 decimals, kept under ~250 KB. On narrow viewports/WebGL unavailable, falls back to 2D.</figcaption>
-      </figure>
-
       <h3>6) Validation timeline</h3>
       <p style="font-size:0.92rem;color:var(--fg-muted)">Train and test windows with toggle between primary (mature) and secondary (censored) split, showing resolved share per window.</p>
       <div class="control-row">

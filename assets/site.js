@@ -57,6 +57,9 @@ const state = {
   surfaceMetric: "var_0.999",
   cutoff: null,
   sim: {},
+  term: null,
+  glossaryQuery: "",
+  glossaryCategory: "All",
 };
 
 let D = null;
@@ -69,7 +72,7 @@ let lastFocus = null;
 function readHash() {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const read = (key, fallback) => (params.has(key) ? params.get(key) : fallback);
-  state.view = ["explorer", "risk", "evidence"].includes(read("view", "explorer")) ? read("view", "explorer") : "explorer";
+  state.view = ["explorer", "risk", "evidence", "learn"].includes(read("view", "explorer")) ? read("view", "explorer") : "explorer";
   state.dim = read("dim", "state");
   state.metric = read("metric", "default_rate");
   state.sel = read("sel", null);
@@ -82,6 +85,9 @@ function readHash() {
   state.risk = { rho: Number.isFinite(rho) ? rho : null, pd: Number.isFinite(pd) ? pd : null, lgd: Number.isFinite(lgd) ? lgd : null };
   const cut = Number(read("cut", ""));
   state.cutoff = Number.isFinite(cut) ? cut : null;
+  state.term = read("term", null);
+  state.glossaryQuery = "";
+  state.glossaryCategory = "All";
 }
 
 function writeHash(push) {
@@ -97,6 +103,7 @@ function writeHash(push) {
   if (state.risk.lgd != null) params.set("lgd", String(state.risk.lgd));
   if (state.surfaceMetric !== "var_0.999") params.set("sm", state.surfaceMetric);
   if (state.cutoff != null) params.set("cut", String(state.cutoff));
+  if (state.term) params.set("term", state.term);
   const url = `#${params.toString()}`;
   if (push) window.history.pushState(null, "", url);
   else window.history.replaceState(null, "", url);
@@ -110,11 +117,12 @@ function commit({ push = true, render = true } = {}) {
 function applyHashState() {
   if (!D) return;
   const dims = D.portfolio_explorer.dimensions;
-  if (!dims[state.dim]) state.dim = "state";
+  if (!dims[state.dim] || (state.dim !== "total" && dims[state.dim].length < 2)) state.dim = dims.state?.length >= 2 ? "state" : "total";
   if (!METRICS.some((m) => m.id === state.metric)) state.metric = "default_rate";
   if (state.dim === "total") state.sel = null;
   else if (state.sel && !dims[state.dim].some((item) => item.id === state.sel)) state.sel = null;
   if (state.search && !D.portfolio_explorer.dimensions[state.dim]) state.search = "";
+  if (state.term && !(LEARN.terms || []).some((entry) => entry.id === state.term)) state.term = null;
   const sc = D.interactive && D.interactive.scenario_explorer;
   if (sc) {
     const rhos = unique(sc.scenarios.map((s) => s.rho));
@@ -127,8 +135,11 @@ function applyHashState() {
   }
   const app = D.interactive && D.interactive.applicant_simulator;
   if (app) {
+    const typical = (app.presets && app.presets.typical) || {};
     for (const variable of app.variables || []) {
-      if (!state.sim[variable]) state.sim[variable] = (app.var_info[variable] || {}).bins?.[0];
+      if (!state.sim[variable]) {
+        state.sim[variable] = typical[variable] || (app.var_meta && app.var_meta[variable] && app.var_meta[variable].default) || (app.var_info[variable] || {}).bins?.[0];
+      }
     }
   }
   const cut = D.interactive && D.interactive.cutoff_explorer;
@@ -175,6 +186,201 @@ function metricText(value, metric = state.metric, nd = 2) {
 }
 function dimMeta(id) {
   return DIMENSIONS.find((d) => d.id === id) || { id, label: id };
+}
+
+/* ------------------------------------------------------------ info popovers */
+let INFO = {};
+let LEARN = { guide: [], terms: [] };
+let infoReturnFocus = null;
+let infoAnchor = null;
+
+function infoButton(id, label, extraClass = "") {
+  return `<button type="button" class="info-btn ${extraClass}" data-info="${esc(id)}" aria-label="About: ${esc(label)}" aria-expanded="false" aria-controls="info-popover">i</button>`;
+}
+
+function infoContext() {
+  const meta = pe() ? pe().meta : {};
+  const stats = (D && D.simulation && D.simulation.statistics) || {};
+  return {
+    primary_window: meta.years ? `${meta.years.join("-")} ${meta.term}-month` : "the primary test window",
+    n_oot: fmtInt(meta.n_total),
+    default_rate_oot: fmtPct(meta.default_rate_total, 2),
+    el_rate: fmtPct(meta.el_pct_ead, 2),
+    min_n: fmtInt(meta.min_n),
+    n_rows: fmtInt(D && D.data ? D.data.n_rows : null),
+    champion_auc: fmtNum(D && D.pd ? D.pd.champion_auc : null, 4),
+    var999: fmtPct(stats["var_0.999_pct_ead"], 2),
+    mean_pd: fmtPct(meta.mean_pd, 2),
+    portfolio_ead: fmtMoney(meta.ead_total),
+    realized_lgd: fmtNum(D && D.lgd ? D.lgd.realised_lgd_oot : null, 4),
+    auc_gap: (D && D.display && D.display.auc_gap_vs_benchmark) || "—",
+    el_amount: fmtMoney(meta.el_amount),
+  };
+}
+
+function resolveInfoText(text) {
+  const context = infoContext();
+  return String(text || "").replace(/\{([a-z0-9_]+)\}/g, (match, key) => (context[key] == null ? match : context[key]));
+}
+
+function ensureInfoPopover() {
+  let pop = $("#info-popover");
+  if (pop) return pop;
+  pop = document.createElement("div");
+  pop.id = "info-popover";
+  pop.className = "info-popover";
+  pop.setAttribute("role", "dialog");
+  pop.setAttribute("aria-modal", "false");
+  pop.setAttribute("aria-labelledby", "info-popover-title");
+  pop.hidden = true;
+  document.body.appendChild(pop);
+  pop.addEventListener("click", (event) => {
+    const learn = event.target.closest("[data-learn-term]");
+    if (learn) {
+      const term = learn.getAttribute("data-learn-term");
+      closeInfo(false);
+      openLearnTerm(term);
+    }
+  });
+  return pop;
+}
+
+function closeInfo(returnFocus = true) {
+  const pop = $("#info-popover");
+  if (!pop || pop.hidden) return;
+  pop.hidden = true;
+  if (infoAnchor) infoAnchor.setAttribute("aria-expanded", "false");
+  if (returnFocus && infoReturnFocus && typeof infoReturnFocus.focus === "function") infoReturnFocus.focus();
+  infoAnchor = null;
+  infoReturnFocus = null;
+}
+
+function positionInfoPopover(pop, button) {
+  if (window.innerWidth <= 700) {
+    pop.classList.add("sheet");
+    pop.style.left = "";
+    pop.style.top = "";
+    return;
+  }
+  pop.classList.remove("sheet");
+  const rect = button.getBoundingClientRect();
+  const width = Math.min(340, window.innerWidth - 24);
+  pop.style.width = `${width}px`;
+  const left = clamp(rect.left + rect.width / 2 - width / 2, 10, window.innerWidth - width - 10);
+  pop.style.left = `${left}px`;
+  pop.style.top = "0px";
+  const height = pop.offsetHeight || 240;
+  let top = rect.bottom + 9;
+  if (top + height > window.innerHeight - 10) top = Math.max(10, rect.top - height - 9);
+  pop.style.top = `${top}px`;
+}
+
+function openInfo(id, button) {
+  const entry = INFO[id];
+  if (!entry) return;
+  closeInfo(false);
+  const pop = ensureInfoPopover();
+  infoAnchor = button;
+  infoReturnFocus = button;
+  $$(".info-btn[aria-expanded='true']").forEach((b) => b.setAttribute("aria-expanded", "false"));
+  button.setAttribute("aria-expanded", "true");
+  pop.innerHTML = `
+    <div class="info-popover-head">
+      <h3 id="info-popover-title">${esc(resolveInfoText(entry.title))}</h3>
+      <button type="button" class="icon-btn info-close" aria-label="Close explanation">Close</button>
+    </div>
+    <p>${esc(resolveInfoText(entry.text))}</p>
+    <p class="info-try"><strong>Try this:</strong> ${esc(resolveInfoText(entry.try))}</p>
+    <button type="button" class="text-btn info-learn" data-learn-term="${esc(entry.term || "dashboard")}">Learn more: ${esc(entry.term || "dashboard").replace(/-/g, " ")}</button>`;
+  pop.hidden = false;
+  positionInfoPopover(pop, button);
+  pop.querySelector(".info-close").addEventListener("click", () => closeInfo());
+  pop.querySelector(".info-learn").addEventListener("click", () => {
+    closeInfo(false);
+    openLearnTerm(entry.term || "dashboard");
+  });
+  pop.querySelector(".info-close").focus();
+}
+
+function bindInfoDelegation() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest(".info-btn[data-info]");
+    if (button) {
+      event.preventDefault();
+      if (button.getAttribute("aria-expanded") === "true") closeInfo();
+      else openInfo(button.getAttribute("data-info"), button);
+      return;
+    }
+    const pop = $("#info-popover");
+    if (pop && !pop.hidden && !event.target.closest("#info-popover")) closeInfo();
+  });
+  document.addEventListener("keydown", (event) => {
+    const pop = $("#info-popover");
+    if (!pop || pop.hidden) return;
+    if (event.key === "Escape") { event.preventDefault(); closeInfo(); return; }
+    if (event.key !== "Tab") return;
+    const focusable = $$("button, a, input, select, [tabindex]:not([tabindex='-1'])", pop);
+    if (!focusable.length) return;
+    const first = focusable[0]; const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  });
+  window.addEventListener("resize", () => { if (infoAnchor && infoAnchor.getAttribute("aria-expanded") === "true") positionInfoPopover(ensureInfoPopover(), infoAnchor); });
+}
+
+const STATIC_INFO = [
+  ["#dimension-tabs", "dimension-tabs", "Dimension tabs", "after"],
+  ["#metric-tabs", "metric-tabs", "Color metric", "after"],
+  ["#segment-search", "filter", "Filter segments", "after"],
+  ["#map-title", "map", "Segment map", "after"],
+  ["#rank-title", "ranked-list", "Ranked segments", "after"],
+  ["#score-hist-caption", "score-distribution", "Score distribution", "after"],
+  ["#scenario-title", "risk-rho", "Scenario controls", "after"],
+  ["#play-rho", "play-rho", "Play rho sweep", "after"],
+  ["#risk-gauge", "gauge", "VaR gauge", "after"],
+  ["#loss-title", "loss-histogram", "Loss distribution", "after"],
+  ["#surface-title", "surface", "VaR surface", "after"],
+  ["#surface-metrics", "surface-metric", "Surface metric", "before"],
+  ["#sim-title", "sim-presets", "Applicant simulator", "after"],
+  ["#sim-score", "sim-score", "Score", "after"],
+  ["#sim-pd", "sim-pd", "Implied PD", "after"],
+  ["#sim-pct", "sim-percentile", "Percentile", "after"],
+  ["#sim-breakdown-details", "sim-breakdown", "Why this score?", "before"],
+  ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
+  ["#theme-toggle", "theme-toggle", "Theme", "after"],
+  ["#provenance-btn", "provenance", "How do we know?", "after"],
+];
+
+function injectStaticInfo() {
+  STATIC_INFO.forEach(([selector, id, label, where]) => {
+    const anchor = $(selector);
+    if (!anchor || anchor.dataset.infoInjected === "1") return;
+    const target = anchor.closest("label") || anchor;
+    const heading = /^H[1-6]$/.test(target.tagName);
+    if (target.tagName === "FIGCAPTION") {
+      target.insertAdjacentHTML(where === "after" ? "afterend" : "beforebegin", infoButton(id, label));
+    } else {
+      const wrapper = document.createElement(heading ? "div" : "span");
+      wrapper.className = `control-with-info${heading ? " heading-with-info" : ""}`;
+      target.parentNode.insertBefore(wrapper, target);
+      wrapper.appendChild(target);
+      wrapper.insertAdjacentHTML(where === "before" ? "afterbegin" : "beforeend", infoButton(id, label));
+    }
+    anchor.dataset.infoInjected = "1";
+  });
+  $$(".slider-field").forEach((field) => {
+    const input = field.querySelector("input[type=range]");
+    if (!input || field.dataset.infoInjected === "1") return;
+    const map = { "risk-rho": "risk-rho", "risk-pd": "risk-pd", "risk-lgd": "risk-lgd", "cutoff-slider": "cutoff-slider" };
+    const id = map[input.id];
+    if (!id) return;
+    const wrapper = document.createElement("div");
+    wrapper.className = "slider-with-info";
+    field.parentNode.insertBefore(wrapper, field);
+    wrapper.appendChild(field);
+    wrapper.insertAdjacentHTML("beforeend", infoButton(id, field.querySelector("span")?.innerText.trim() || id));
+    field.dataset.infoInjected = "1";
+  });
 }
 
 const countCache = new Map();
@@ -344,13 +550,13 @@ function renderShell() {
   const years = meta.years ? meta.years.join("–") : "2014–2015";
   const windowText = `Primary mature test window · ${years} · ${meta.term}-month`;
   $("#window-pill").textContent = windowText;
-  $("#hero-window").textContent = windowText;
+  $("#hero-window").textContent = `${years} · ${meta.term}-month`;
   $("#hero-note-copy").textContent = `${fmtInt(meta.n_total)} resolved loans · ${fmtPct(meta.default_rate_total, 2)} observed default · ${fmtPct(meta.el_pct_ead, 2)} expected loss. Small segments (n < ${fmtInt(meta.min_n)}) are masked.`;
   $("#hero-explore").onclick = () => setView("explorer");
   $("#hero-risk").onclick = () => setView("risk");
 
   countUp($("#kpi-loans"), D.data.n_rows, fmtInt);
-  $("#kpi-loans-sub").textContent = `Lending Club, ${disp.data_years || "2007–2018"}`;
+  $("#kpi-loans-sub").textContent = `All resolved loans in the ${disp.data_years || "2007–2018"} snapshot`;
   countUp($("#kpi-auc"), D.pd.champion_auc, (v) => fmtNum(v, 4));
   $("#kpi-auc-sub").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)} · ${disp.oot_years || "2014–2015"} OOT`;
   countUp($("#kpi-el"), D.lgd.el_rate_oot, (v) => fmtPct(v, 2));
@@ -384,7 +590,8 @@ function renderShell() {
 }
 
 function setView(view) {
-  if (!["explorer", "risk", "evidence"].includes(view)) return;
+  if (!["explorer", "risk", "evidence", "learn"].includes(view)) return;
+  if (view !== "learn") state.term = null;
   state.view = view;
   commit({ push: true });
   const panel = $(`#view-${view}`);
@@ -399,7 +606,7 @@ function setView(view) {
 /* ---------------------------------------------------------------- explorer */
 function renderDimensionTabs() {
   const host = $("#dimension-tabs");
-  const available = ["total", ...DIMENSIONS.map((d) => d.id).filter((id) => dims()[id])];
+  const available = ["total", ...DIMENSIONS.map((d) => d.id).filter((id) => dims()[id] && dims()[id].length >= 2)];
   host.innerHTML = available.map((id) => {
     const label = id === "total" ? "Total" : dimMeta(id).label;
     return `<button type="button" role="tab" data-dim="${esc(id)}" aria-selected="${state.dim === id}">${esc(label)}</button>`;
@@ -510,7 +717,7 @@ function renderMap() {
 
   const legend = $("#map-legend");
   legend.innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
-  const mobileHint = window.matchMedia && window.matchMedia("(max-width: 700px)").matches ? " Swipe the map sideways to reach every state." : "";
+  const mobileHint = window.matchMedia && window.matchMedia("(max-width: 700px)").matches ? " On phones, the ranked list is the main touch interface; the map is a compact overview." : "";
   $("#map-note").textContent = (eligible.length < items.length ? `${items.length - eligible.length} segment${items.length - eligible.length === 1 ? "" : "s"} masked for small n. Click a tile to link the list and summary.` : "Click a tile to link the list and summary. Small segments are masked automatically.") + mobileHint;
   if (state.sel) {
     const selected = host.querySelector(`[data-id="${CSS.escape(state.sel)}"]`);
@@ -607,14 +814,14 @@ function renderSummary() {
     : "All segments in the primary mature test window.";
 
   const kpis = [
-    { label: "Loans", value: item.n, format: fmtInt, testid: "summary-loans" },
-    { label: "Observed default", value: item.default_rate, format: (v) => fmtPct(v, 2), testid: "summary-default-rate", sub: `95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)}` },
-    { label: "Predicted PD", value: item.pred_pd, format: (v) => fmtPct(v, 2), testid: "summary-pred-pd" },
-    { label: "EL % of EAD", value: item.el_pct_ead, format: (v) => fmtPct(v, 2), testid: "summary-el" },
-    { label: "EAD share", value: item.ead_share, format: (v) => fmtPct(v, 1), testid: "summary-ead-share" },
+    { label: "Loans", value: item.n, format: fmtInt, testid: "summary-loans", info: "kpi-loans" },
+    { label: "Observed default", value: item.default_rate, format: (v) => fmtPct(v, 2), testid: "summary-default-rate", info: "kpi-observed", sub: `95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)}` },
+    { label: "Predicted PD", value: item.pred_pd, format: (v) => fmtPct(v, 2), testid: "summary-pred-pd", info: "kpi-pd" },
+    { label: "EL % of EAD", value: item.el_pct_ead, format: (v) => fmtPct(v, 2), testid: "summary-el", info: "kpi-el" },
+    { label: "EAD share", value: item.ead_share, format: (v) => fmtPct(v, 1), testid: "summary-ead-share", info: "kpi-ead" },
   ];
   const host = $("#summary-kpis");
-  host.innerHTML = kpis.map((kpi) => `<div class="summary-kpi"><p class="mini-label">${esc(kpi.label)}</p><p class="value" data-testid="${kpi.testid}">—</p>${kpi.sub ? `<p class="sub">${esc(kpi.sub)}</p>` : ""}</div>`).join("");
+  host.innerHTML = kpis.map((kpi) => `<div class="summary-kpi"><p class="mini-label">${esc(kpi.label)} ${infoButton(kpi.info, kpi.label)}</p><p class="value" data-testid="${kpi.testid}">—</p>${kpi.sub ? `<p class="sub">${esc(kpi.sub)} ${infoButton("kpi-ci", "95% confidence interval")}</p>` : ""}</div>`).join("");
   kpis.forEach((kpi) => {
     const el = host.querySelector(`[data-testid="${kpi.testid}"]`);
     countUp(el, kpi.value, kpi.format);
@@ -823,7 +1030,16 @@ function renderRisk() {
       ["ES 99%", ex["es_0.99_pct_ead"], "es-99"],
       ["ES 99.9%", ex["es_0.999_pct_ead"], "es-999"],
     ];
-    kpis.innerHTML = defs.map(([label, value, key]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="risk-${key}">—</p></div>`).join("");
+    const meanings = {
+      "expected-loss": "Average loss across simulated paths.",
+      "unexpected-loss": "Typical variation around expected loss.",
+      "var-99": `Loss stays below this in 99 of 100 simulated years.`,
+      "var-999": `Loss stays below this in 999 of 1,000 simulated years.`,
+      "es-99": "Average loss in the worst 1% of simulated years.",
+      "es-999": "Average loss in the worst 0.1% of simulated years.",
+    };
+    const infoIds = { "expected-loss": "risk-el", "unexpected-loss": "risk-ul", "var-99": "risk-var99", "var-999": "risk-var999", "es-99": "risk-es99", "es-999": "risk-es999" };
+    kpis.innerHTML = defs.map(([label, value, key]) => `<div class="summary-kpi"><p class="mini-label">${label} ${infoButton(infoIds[key], label)}</p><p class="value" data-testid="risk-${key}">—</p><p class="sub">${esc(meanings[key])}</p></div>`).join("");
     defs.forEach(([label, value, key]) => countUp(kpis.querySelector(`[data-testid="risk-${key}"]`), value, (v) => fmtPct(v, 2)));
     $("#loss-sub").textContent = `${scenario.key.replace(/_/g, " ")} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
     $("#tail-pill").textContent = `ES 99.9% ${fmtPct(ex["es_0.999_pct_ead"], 1)}`;
@@ -872,20 +1088,26 @@ function drawLossChart(hist, scenario) {
     ["VaR 99.9%", ex["var_0.999_pct_ead"], "#b91c1c", "dash"],
     ["ES 99%", ex["es_0.99_pct_ead"], "#0f766e", "dot"],
   ];
-  const shapes = []; const annotations = [];
+  const shapes = [];
   markers.forEach(([label, value, color, dash]) => {
     if (num(value) == null) return;
     const x = value * 100;
     shapes.push({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.6, dash } });
-    annotations.push({ x, yref: "paper", y: 1.02, text: label, showarrow: false, font: { size: 10, color }, textangle: -90, yanchor: "bottom" });
   });
   const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: "rgba(37,99,235,0.72)", line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
     bargap: 0.02,
     xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02] },
     yaxis: { title: "Simulated paths" },
-    showlegend: false, shapes, annotations,
-    margin: { l: 64, r: 20, t: 36, b: 52 },
+    showlegend: false, shapes,
+    margin: { l: 64, r: 20, t: 24, b: 52 },
   });
+  const legend = $("#loss-legend");
+  if (legend) {
+    legend.innerHTML = markers.filter(([, value]) => num(value) != null).map(([label, value, color, dash]) => {
+      const style = dash === "dot" ? "dotted" : dash;
+      return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong> ${fmtPct(value, 1)} of EAD</span>`;
+    }).join("");
+  }
   if (!ok) showFallback(host, "assets/loss_distribution.png", "The interactive histogram could not be drawn; a static figure is shown.");
 }
 
@@ -918,12 +1140,18 @@ function drawSurface() {
   const markerRho = nearestValue(rhos, state.risk.rho);
   const markerPd = nearestValue(pds, state.risk.pd);
   const markerZ = z[pds.indexOf(markerPd)]?.[rhos.indexOf(markerRho)] || 0;
+  const baseRho = nearestValue(rhos, surf.base_case?.rho ?? 0.12);
+  const basePd = nearestValue(pds, surf.base_case?.pd_mult ?? 1);
+  const baseZ = z[pds.indexOf(basePd)]?.[rhos.indexOf(baseRho)] || 0;
+  const height = window.innerWidth < 700 ? 340 : 540;
   let ok = false;
   if (!hasWebGL() || window.innerWidth < 700) {
     ok = plot(host, [
       { z, x: rhos, y: pds, type: "heatmap", colorscale: "YlOrRd", hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
       { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: "#111827", line: { width: 2, color: "#fff" } }, hoverinfo: "skip", showlegend: false },
+      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle-open", size: 13, color: "#0f172a", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
     ], {
+      height,
       title: { text: "2D heatmap fallback (no WebGL)", font: { size: 11 } },
       xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, margin: { l: 55, r: 15, t: 40, b: 45 },
     });
@@ -931,8 +1159,10 @@ function drawSurface() {
   } else {
     ok = plot(host, [
       { type: "surface", z, x: rhos, y: pds, colorscale: "YlOrRd", showscale: true, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
-      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 5, color: "#111827", symbol: "x" }, hoverinfo: "skip", showlegend: false },
+      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: "#111827", symbol: "x" }, hoverinfo: "skip", showlegend: false },
+      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: "#0f172a" }, marker: { size: 5, color: "#0f172a", symbol: "circle-open", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
     ], {
+      height,
       scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
       margin: { l: 0, r: 0, t: 8, b: 0 },
     });
@@ -1007,55 +1237,254 @@ function toggleSweep() {
 }
 
 /* ------------------------------------------------------------- simulator */
+const BIN_CATEGORY_LABELS = {
+  MORTGAGE: "Mortgage", OWN: "Own home", RENT: "Rent", ANY: "Any", NONE: "None",
+  __missing__: "Not reported", __other__: "Other / rare categories",
+  credit_card: "Credit card", debt_consolidation: "Debt consolidation",
+  home_improvement: "Home improvement", major_purchase: "Major purchase",
+  other: "Other", medical: "Medical", car: "Car", small_business: "Small business",
+  house: "House", moving: "Moving", vacation: "Vacation", renewable_energy: "Renewable energy",
+  educational: "Educational", wedding: "Wedding",
+};
+function parseBinParts(binKey) {
+  return String(binKey).split("&").map((raw) => {
+    const text = raw.trim();
+    const m = text.match(/^[\(\[]\s*(-inf|[-+.\dEe]+)\s*,\s*(inf|[-+.\dEe]+)\s*[\)\]]$/);
+    if (m) return [m[1] === "-inf" ? null : Number(m[1]), m[2] === "inf" ? null : Number(m[2])];
+    return text;
+  }).filter((p) => p !== "");
+}
+function fmtBinNumber(value, nd = 1) {
+  if (!Number.isFinite(value)) return "";
+  if (Math.abs(value - Math.round(value)) < 1e-9) return String(Math.round(value));
+  return value.toFixed(nd).replace(/\.?0+$/, "");
+}
+function fmtBinMoney(value) {
+  return `$${Math.round(value).toLocaleString("en-US")}`;
+}
+function formatBinValue(variable, lo, hi) {
+  if (variable === "inq_last_6mths") {
+    if (lo == null && hi != null) return hi <= 1 ? "0 or 1" : `0 to ${Math.round(hi)}`;
+    if (lo != null && hi == null) return `${Math.round(lo) + 1} or more`;
+    if (lo != null && hi != null) return hi - lo <= 1 ? String(Math.round(lo) + 1) : `${Math.round(lo) + 1} to ${Math.round(hi)}`;
+  }
+  if (variable === "annual_inc") {
+    if (lo == null && hi != null) return `Up to ${fmtBinMoney(hi)}`;
+    if (lo != null && hi == null) return `More than ${fmtBinMoney(lo)}`;
+    if (lo != null && hi != null) return `${fmtBinMoney(lo)} - ${fmtBinMoney(hi)}`;
+  }
+  if (["dti", "revol_util", "installment_to_income"].includes(variable)) {
+    const scale = variable === "installment_to_income" ? 100 : 1;
+    if (lo == null && hi != null) return `Up to ${fmtBinNumber(hi * scale)}%`;
+    if (lo != null && hi == null) return `More than ${fmtBinNumber(lo * scale)}%`;
+    if (lo != null && hi != null) return `${fmtBinNumber(lo * scale)}% - ${fmtBinNumber(hi * scale)}%`;
+  }
+  if (lo == null && hi == null) return "Any value";
+  if (lo == null) return `Up to ${fmtBinNumber(hi)}`;
+  if (hi == null) return `More than ${fmtBinNumber(lo)}`;
+  return `${fmtBinNumber(lo)} - ${fmtBinNumber(hi)}`;
+}
+function formatBinJS(variable, binKey) {
+  const parts = parseBinParts(binKey);
+  if (!parts.length) return "Any value";
+  if (parts.every((p) => typeof p === "string")) {
+    return parts.map((p) => BIN_CATEGORY_LABELS[p] || p.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())).join(", or ");
+  }
+  if (parts.some((p) => typeof p === "string")) {
+    return parts.map((p) => (typeof p === "string" ? (BIN_CATEGORY_LABELS[p] || p.replace(/_/g, " ")) : formatBinValue(variable, p[0], p[1]))).join(", or ");
+  }
+  const sorted = parts.slice().sort((a, b) => (a[0] == null ? -1e18 : a[0]) - (b[0] == null ? -1e18 : b[0]));
+  const merged = [];
+  sorted.forEach(([lo, hi]) => {
+    const last = merged[merged.length - 1];
+    if (last && last[1] != null && lo != null && Math.abs(last[1] - lo) < 1e-9) last[1] = hi;
+    else merged.push([lo, hi]);
+  });
+  return merged.map(([lo, hi]) => formatBinValue(variable, lo, hi)).join(", or ");
+}
+window.__formatBin = formatBinJS;
+
+function simMeta(app, variable) {
+  return app.var_meta && app.var_meta[variable] ? app.var_meta[variable] : null;
+}
+function simOption(app, variable, key) {
+  const meta = simMeta(app, variable);
+  if (meta) return meta.options.find((opt) => opt.key === key) || meta.options[0];
+  const row = (app.points_table || []).find((r) => r.variable === variable && r.bin === key);
+  return { key, label: formatBinJS(variable, key), points: row ? Number(row.points) : 0, share: 0 };
+}
+function simVariables(app) {
+  return (app.variables || []).slice().sort((a, b) => {
+    const order = ["annual_inc", "dti", "revol_util", "inq_last_6mths", "installment_to_income", "home_ownership", "purpose"];
+    return order.indexOf(a) - order.indexOf(b);
+  });
+}
+function signedPoints(value) {
+  return `${value >= 0 ? "+" : ""}${Number(value).toFixed(2)} pts`;
+}
+function simSelectedKey(variable) {
+  return state.sim[variable];
+}
+function simScore(app) {
+  let points = 0;
+  simVariables(app).forEach((variable) => {
+    const opt = simOption(app, variable, simSelectedKey(variable));
+    points += Number(opt.points) || 0;
+  });
+  return points;
+}
+
+let simRefs = {};
+const SIM_NUMERIC = new Set(["annual_inc", "dti", "revol_util", "inq_last_6mths", "installment_to_income"]);
+
+function simOptions(app, variable) {
+  const meta = simMeta(app, variable);
+  if (meta) return meta.options;
+  return ((app.var_info && app.var_info[variable] && app.var_info[variable].bins) || []).map((key) => ({
+    key, label: formatBinJS(variable, key), points: 0, share: 0,
+  }));
+}
+function simLabel(app, variable) {
+  return (simMeta(app, variable) || {}).label || variable.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function setupSimulator() {
   const app = D.interactive && D.interactive.applicant_simulator;
   if (!app) return;
   const host = $("#sim-controls");
   host.innerHTML = "";
-  (app.variables || []).forEach((variable) => {
+  simRefs = {};
+  simVariables(app).forEach((variable) => {
+    const options = simOptions(app, variable);
+    const key = state.sim[variable] || options[0]?.key;
+    state.sim[variable] = key;
     const wrap = document.createElement("div");
     wrap.className = "sim-ctrl";
     const id = `sim-${variable}`;
-    wrap.innerHTML = `<label for="${id}">${esc(variable.replace(/_/g, " "))}</label><select id="${id}">${(app.var_info[variable]?.bins || []).map((bin) => `<option value="${esc(bin)}">${esc(bin)}</option>`).join("")}</select>`;
+    const label = simLabel(app, variable);
+    const numeric = SIM_NUMERIC.has(variable);
+    const optionHtml = options.map((opt) => `<option value="${esc(opt.key)}">${esc(opt.label)}${opt.share ? ` — ${(opt.share * 100).toFixed(1)}% of test window` : ""}</option>`).join("");
+    wrap.innerHTML = `
+      <div class="sim-ctrl-head">
+        <label for="${id}">${esc(label)} ${infoButton(`sim-${variable}`, label)}</label>
+        <output class="sim-contrib" id="sim-contrib-${variable}">—</output>
+      </div>
+      ${numeric
+        ? `<input id="${id}" type="range" min="0" max="${Math.max(0, options.length - 1)}" step="1" value="${Math.max(0, options.findIndex((o) => o.key === key))}" aria-valuetext="${esc((options.find((o) => o.key === key) || options[0]).label)}">
+           <output class="sim-range-label" id="sim-label-${variable}">—</output>`
+        : `<select id="${id}">${optionHtml}</select>`}
+      <p class="sim-share" id="sim-share-${variable}"></p>`;
     host.appendChild(wrap);
-    const select = wrap.querySelector("select");
-    select.value = state.sim[variable] || (app.var_info[variable]?.bins || [])[0];
-    state.sim[variable] = select.value;
-    select.onchange = () => { state.sim[variable] = select.value; renderSimulator(); };
+    const input = wrap.querySelector(numeric ? "input" : "select");
+    input.value = key;
+    const update = () => {
+      const currentOptions = simOptions(app, variable);
+      const nextKey = numeric ? currentOptions[Number(input.value)]?.key : input.value;
+      if (!nextKey) return;
+      state.sim[variable] = nextKey;
+      if (numeric) input.setAttribute("aria-valuetext", (currentOptions[Number(input.value)] || {}).label || "");
+      renderSimulator();
+    };
+    input.addEventListener(numeric ? "input" : "change", update);
+    simRefs[variable] = { input, numeric };
+  });
+
+  $$("#sim-presets [data-preset]").forEach((button) => {
+    button.onclick = () => applySimPreset(button.dataset.preset);
+  });
+  const presetInfo = document.createElement("span");
+  presetInfo.innerHTML = infoButton("sim-presets", "Applicant presets");
+  $("#sim-presets").appendChild(presetInfo.firstChild);
+  renderSimulator();
+}
+
+function applySimPreset(name) {
+  const app = D.interactive && D.interactive.applicant_simulator;
+  if (!app) return;
+  const preset = app.presets && app.presets[name === "reset" ? "typical" : name];
+  if (!preset) return;
+  Object.assign(state.sim, preset);
+  Object.entries(simRefs).forEach(([variable, ref]) => {
+    const options = simOptions(app, variable);
+    const key = state.sim[variable];
+    if (ref.numeric) {
+      const idx = Math.max(0, options.findIndex((o) => o.key === key));
+      ref.input.value = String(idx);
+      ref.input.setAttribute("aria-valuetext", (options[idx] || {}).label || "");
+    } else {
+      ref.input.value = key;
+    }
   });
   renderSimulator();
 }
+
+function syncSimControls() {
+  const app = D.interactive && D.interactive.applicant_simulator;
+  if (!app) return;
+  Object.entries(simRefs).forEach(([variable, ref]) => {
+    const options = simOptions(app, variable);
+    const key = state.sim[variable];
+    if (ref.numeric) {
+      const idx = Math.max(0, options.findIndex((o) => o.key === key));
+      ref.input.value = String(idx);
+    } else {
+      ref.input.value = key;
+    }
+  });
+}
+
 function renderSimulator() {
   const app = D.interactive && D.interactive.applicant_simulator;
   if (!app) return;
-  const helper = (body) => body;
-  let points = 0;
-  (app.variables || []).forEach((variable) => {
-    const chosen = state.sim[variable];
-    const row = (app.points_table || []).find((r) => r.variable === variable && r.bin === chosen);
-    if (row) points += Number(row.points) || 0;
-  });
   const factor = Number(app.scaler.factor) || (Number(app.scaler.pdo) / Math.log(2));
   const offset = Number(app.scaler.offset) || (Number(app.scaler.base_score) - factor * Math.log(Number(app.scaler.base_odds)));
+  const basePoints = Number(app.base_points != null ? app.base_points : offset);
+  const points = simScore(app);
   const score = offset + points;
   const logOddsGood = points / factor;
   const pd = 1 / (1 + Math.exp(logOddsGood));
-  countUp($("#sim-score"), score, (v) => String(Math.round(v)));
-  countUp($("#sim-pd"), pd, (v) => fmtPct(v, 2));
   const bins = app.test_score_bins || [];
   const hist = app.test_score_hist || [];
-  let total = hist.reduce((a, b) => a + b, 0);
+  const total = hist.reduce((a, b) => a + b, 0);
   let below = 0;
   for (let i = 0; i < hist.length; i += 1) {
     const center = (bins[i] + bins[i + 1]) / 2;
     if (center <= score) below += hist[i];
   }
   const pct = total ? (below / total) * 100 : 0;
-  countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}th`);
+  const portfolioRate = pe() ? pe().meta.default_rate_total : null;
+  const typicalScore = Number(app.test_score_bins?.[0] || 0);
+
+  simVariables(app).forEach((variable) => {
+    const opt = simOption(app, variable, state.sim[variable]);
+    const contribution = Number(opt.points) || 0;
+    const contrib = $(`#sim-contrib-${variable}`);
+    if (contrib) contrib.textContent = signedPoints(contribution);
+    const label = $(`#sim-label-${variable}`);
+    if (label) label.textContent = opt.label;
+    const share = $(`#sim-share-${variable}`);
+    if (share) share.textContent = opt.share ? `${(opt.share * 100).toFixed(1)}% of loans in the 2014-2015 test window have this value.` : "";
+  });
+
+  countUp($("#sim-score"), score, (v) => String(Math.round(v)));
+  countUp($("#sim-pd"), pd, (v) => fmtPct(v, 2));
+  countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}%`);
+  $("#sim-score-note").textContent = "Higher score = lower implied risk.";
+  $("#sim-pd-note").textContent = `About ${Math.round(pd * 100)} out of 100 similar applicants default; the portfolio average is ${fmtPct(portfolioRate, 2)}.`;
+  $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the 2014-2015 test window.`;
   $("#sim-gini").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)}`;
   $("#sim-gini-foot").textContent = fmtNum(D.pd.champion_gini, 4);
   renderScoreHist($("#sim-hist"), hist, bins, "Test-window score distribution", score);
-  void helper;
+  const minScore = Number(bins[0] || typicalScore);
+  const maxScore = Number(bins[bins.length - 1] || minScore + 1);
+  const pos = clamp((score - minScore) / (maxScore - minScore || 1), 0, 1);
+  $("#sim-scale").innerHTML = `<div class="sim-scale-labels"><span>Lower risk / higher score</span><span>Higher risk / lower score</span></div><div class="sim-scale-track"><span class="sim-scale-fill" style="width:${(pos * 100).toFixed(1)}%"></span><span class="sim-scale-marker" style="left:${(pos * 100).toFixed(1)}%" aria-hidden="true"></span></div><div class="sim-scale-labels"><span>${Math.round(minScore)}</span><span>Score ${Math.round(score)}</span><span>${Math.round(maxScore)}</span></div>`;
+  const rows = simVariables(app).map((variable) => {
+    const opt = simOption(app, variable, state.sim[variable]);
+    return `<tr><td>${esc(simLabel(app, variable))}<span class="breakdown-choice">${esc(opt.label)}</span></td><td>${signedPoints(Number(opt.points) || 0)}</td></tr>`;
+  }).join("");
+  $("#sim-breakdown").innerHTML = `<table class="breakdown-table"><caption>Base points plus each selected bin equals the score.</caption><tbody><tr><td>Base points</td><td>${Number(basePoints).toFixed(2)}</td></tr>${rows}<tr class="breakdown-total"><td>Score</td><td>${Math.round(score)}</td></tr></tbody></table>`;
+  $("#sim-breakdown-details").open = false;
 }
 
 /* ---------------------------------------------------------------- cutoff */
@@ -1080,8 +1509,7 @@ function renderCutoff() {
   const bads = cut.histograms.bads;
   const cutoff = state.cutoff == null ? cut.cutoff_score : state.cutoff;
   $("#cutoff-output").textContent = String(Math.round(cutoff));
-  $("#cutoff-sub").textContent = `Approve applications scoring at or above the cutoff. Published KS cutoff: ${Math.round(cut.cutoff_score)}.`;
-  $("#cutoff-badge").textContent = `PD cutoff ${fmtPct(cut.cutoff_pd, 2)}`;
+  $("#cutoff-badge").textContent = `Published KS cutoff: ${Math.round(cut.cutoff_score)}`;
   let goodAbove = 0; let badAbove = 0; let goodBelow = 0; let badBelow = 0;
   for (let i = 0; i < goods.length; i += 1) {
     const center = (bins[i] + bins[i + 1]) / 2;
@@ -1093,16 +1521,16 @@ function renderCutoff() {
   const approval = total ? approved / total : 0;
   const badApproved = approved ? badAbove / approved : 0;
   const overall = total ? (badAbove + badBelow) / total : 0;
+  $("#cutoff-sub").textContent = `At cutoff ${Math.round(cutoff)}, ${fmtPct(approval, 1)} of applicants are approved; ${fmtPct(badApproved, 1)} of approved loans default, versus ${fmtPct(overall, 2)} overall. Approve everyone: ${fmtPct(overall, 2)} bad rate.`;
   const defs = [
-    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1)],
-    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1)],
-    ["Approved good", goodAbove, "cut-good", fmtInt],
-    ["Approved bad", badAbove, "cut-bad-n", fmtInt],
+    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1), "cutoff-approval", "Share of applicants accepted."],
+    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1), "cutoff-bad", "Defaults among approved loans."],
+    ["Approved good", goodAbove, "cut-good", fmtInt, "cutoff-approved-good", "Good loans kept by the cutoff."],
+    ["Approved bad", badAbove, "cut-bad-n", fmtInt, "cutoff-approved-bad", "Bad loans kept by the cutoff."],
   ];
   const host = $("#cutoff-kpis");
-  host.innerHTML = defs.map(([label, , key]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="${key}">—</p></div>`).join("");
+  host.innerHTML = defs.map(([label, , key, , info, meaning]) => `<div class="summary-kpi"><p class="mini-label">${label} ${infoButton(info, label)}</p><p class="value" data-testid="${key}">—</p><p class="sub">${esc(meaning)}</p></div>`).join("");
   defs.forEach(([, value, key, formatter]) => countUp(host.querySelector(`[data-testid="${key}"]`), value, formatter));
-  $("#cutoff-badge").textContent = `Overall default ${fmtPct(overall, 2)}`;
   if (!PLOTLY) { showFallback($("#cutoff-chart"), null, "Plotly is blocked; the cutoff chart is unavailable."); return; }
   const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
   const ok = plot($("#cutoff-chart"), [
@@ -1111,10 +1539,112 @@ function renderCutoff() {
   ], {
     barmode: "overlay", bargap: 0.03,
     xaxis: { title: "Scorecard score" }, yaxis: { title: "Loans" },
-    shapes: [{ type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: "#111827", width: 2, dash: "dash" } }],
-    margin: { l: 52, r: 16, t: 30, b: 44 }, showlegend: true,
+    shapes: [
+      { type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: "#111827", width: 2, dash: "dash" } },
+      { type: "line", x0: cut.cutoff_score, x1: cut.cutoff_score, yref: "paper", y0: 0, y1: 1, line: { color: "#b45309", width: 1.6, dash: "dot" } },
+    ],
+    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 1.02, text: "Published KS cutoff", showarrow: false, font: { size: 9, color: "#b45309" }, xanchor: "right" }],
+    margin: { l: 52, r: 16, t: 36, b: 44 }, showlegend: true,
   }, { small: true });
   if (!ok) showFallback($("#cutoff-chart"), null, "The cutoff chart could not be drawn.");
+}
+
+/* ---------------------------------------------------------------- learn */
+function openLearnTerm(term) {
+  closeInfo(false);
+  state.term = term;
+  state.view = "learn";
+  state.glossaryQuery = term || "";
+  state.glossaryCategory = "All";
+  commit({ push: true });
+}
+
+function runGuideAction(action) {
+  closeInfo(false);
+  const go = (view, target) => {
+    setView(view);
+    if (target) window.setTimeout(() => $(target)?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
+  };
+  if (action === "default") { state.dim = "state"; state.metric = "default_rate"; state.sel = null; go("explorer", "#view-explorer"); }
+  else if (action === "scorecard") { go("risk", "#sim-title"); }
+  else if (action === "el") { state.dim = "state"; state.metric = "el_pct_ead"; state.sel = null; go("explorer", "#summary-card"); }
+  else if (action === "tail") { go("risk", "#risk-kpis"); }
+  else if (action === "validation") { go("evidence", "#view-evidence"); }
+}
+
+function seeTerm(term) {
+  const entry = (LEARN.terms || []).find((item) => item.id === term);
+  if (!entry || !entry.see) return;
+  const see = entry.see;
+  if (see.view === "explorer") {
+    state.dim = see.dim || "state";
+    state.metric = see.metric || "default_rate";
+    state.sel = null;
+    setView("explorer");
+  } else if (see.view === "risk") {
+    setView("risk");
+    const target = see.sim ? "#sim-title" : see.panel === "cutoff" ? "#cutoff-title" : "#risk-kpis";
+    window.setTimeout(() => $(target)?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
+  } else if (see.view === "evidence") {
+    setView("evidence");
+  } else {
+    setView("explorer");
+  }
+}
+
+function renderLearn() {
+  const guideHost = $("#learn-guide");
+  if (guideHost) {
+    guideHost.innerHTML = (LEARN.guide || []).map((step) => `<article class="guide-card"><h3>${esc(step.title)}</h3><p>${esc(resolveInfoText(step.text))}</p><button type="button" class="btn btn-ghost" data-guide-action="${esc(step.action)}">${esc(step.label)}</button></article>`).join("");
+    $$("[data-guide-action]", guideHost).forEach((button) => { button.onclick = () => runGuideAction(button.dataset.guideAction); });
+  }
+  const categories = ["All", ...Array.from(new Set((LEARN.terms || []).map((entry) => entry.category)))];
+  const catHost = $("#glossary-categories");
+  if (catHost) {
+    catHost.innerHTML = categories.map((cat) => `<button type="button" data-category="${esc(cat)}" aria-pressed="${state.glossaryCategory === cat}">${esc(cat)}</button>`).join("");
+    $$("[data-category]", catHost).forEach((button) => {
+      button.onclick = () => { state.glossaryCategory = button.dataset.category; renderLearn(); };
+    });
+  }
+  const search = $("#glossary-search");
+  if (search && !search.__bound) {
+    search.__bound = true;
+    search.addEventListener("input", () => { state.glossaryQuery = search.value; renderLearn(); });
+  }
+  if (search && search.value !== state.glossaryQuery) search.value = state.glossaryQuery;
+  const query = state.glossaryQuery.trim().toLowerCase();
+  const entries = (LEARN.terms || []).filter((entry) => {
+    const inCategory = state.glossaryCategory === "All" || entry.category === state.glossaryCategory;
+    const haystack = `${entry.id} ${entry.term} ${entry.definition} ${entry.why} ${entry.example}`.toLowerCase();
+    return inCategory && (!query || haystack.includes(query));
+  });
+  const count = $("#glossary-count");
+  if (count) count.textContent = `${entries.length} of ${(LEARN.terms || []).length} entries${query ? ` matching “${state.glossaryQuery}”` : ""}`;
+  const list = $("#glossary-list");
+  if (list) {
+    list.innerHTML = entries.map((entry) => {
+      const open = state.term === entry.id ? " open" : "";
+      return `<details class="glossary-entry" id="term-${esc(entry.id)}" data-term="${esc(entry.id)}"${open}>
+        <summary><strong>${esc(entry.term)}</strong><span>${esc(entry.category)}</span></summary>
+        <p>${esc(resolveInfoText(entry.definition))}</p>
+        <p class="glossary-why"><strong>Why it matters here:</strong> ${esc(resolveInfoText(entry.why))}</p>
+        <p class="glossary-example">${esc(resolveInfoText(entry.example))}</p>
+        ${entry.formula ? `<details class="formula-details"><summary>Formula</summary><div class="formula">${esc(entry.formula)}</div></details>` : ""}
+        <div class="glossary-actions"><button type="button" data-see-term="${esc(entry.id)}">See it in the dashboard</button></div>
+      </details>`;
+    }).join("");
+    $$("[data-see-term]", list).forEach((button) => { button.onclick = () => seeTerm(button.dataset.seeTerm); });
+  }
+  $("#glossary-empty").hidden = entries.length > 0;
+  if (state.term && state.view === "learn") {
+    window.setTimeout(() => {
+      const entry = document.getElementById(`term-${state.term}`);
+      if (entry) {
+        entry.open = true;
+        entry.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "center" });
+      }
+    }, 100);
+  }
 }
 
 /* --------------------------------------------------------------- evidence */
@@ -1203,6 +1733,7 @@ function paint() {
   renderCutoff();
   renderSimulator();
   renderEvidence();
+  renderLearn();
 }
 
 function bindThemeMedia() {
@@ -1214,23 +1745,36 @@ function bindThemeMedia() {
 
 async function boot() {
   try {
-    const response = await fetch(DATA_URL, { cache: "no-cache" });
+    const [response, infoResponse, learnResponse] = await Promise.all([
+      fetch(DATA_URL, { cache: "no-cache" }),
+      fetch("content/info.json", { cache: "no-cache" }).catch(() => null),
+      fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
+    ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();
     if (!D.portfolio_explorer) throw new Error("data.json has no portfolio_explorer block");
+    if (infoResponse && infoResponse.ok) {
+      try { INFO = await infoResponse.json(); } catch (err) { INFO = {}; }
+    }
+    if (learnResponse && learnResponse.ok) {
+      try { LEARN = await learnResponse.json(); } catch (err) { LEARN = { guide: [], terms: [] }; }
+    }
     readHash();
     applyHashState();
     $("#app-skeleton").hidden = true;
     $("#app-content").hidden = false;
     bindDrawer();
+    bindInfoDelegation();
     $("#theme-toggle").onclick = cycleTheme;
     applyTheme();
     setupRiskControls();
     setupSimulator();
     setupCutoff();
     paint();
+    injectStaticInfo();
     bindThemeMedia();
-    window.addEventListener("popstate", () => { readHash(); applyHashState(); paint(); });
+    window.addEventListener("popstate", () => { readHash(); applyHashState(); writeHash(false); paint(); });
+    window.addEventListener("hashchange", () => { readHash(); applyHashState(); writeHash(false); paint(); });
     writeHash(false);
     loadPlotly().then(() => { paint(); }).catch((err) => {
       console.warn("Plotly unavailable:", err.message);

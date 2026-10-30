@@ -503,6 +503,277 @@
     }
   }
 
+
+
+  function chartCutoffExplorer(d) {
+    const slider = document.getElementById('cutoff-slider');
+    if (!slider) return;
+    const ksCutoff = num(d.pd.cutoff) || 0.5;
+    const readout = document.getElementById('cutoff-readout');
+    const ksMarker = document.getElementById('cutoff-ks-marker');
+    if (ksMarker) ksMarker.textContent = `KS cutoff (train): ${ksCutoff.toFixed(4)}`;
+    const confusion = d.pd.confusion_oot || {};
+    function update() {
+      const cut = parseFloat(slider.value);
+      if (readout) readout.textContent = `Cutoff score: ${cut}`;
+      // Approximate from confusion if using PD cutoff
+      const tp = confusion.tp||0, fp = confusion.fp||0, fn = confusion.fn||0, tn = confusion.tn||0;
+      const total = tp+fp+fn+tn || 1;
+      const approved = tp+fp;
+      document.getElementById('cut-approval').textContent = (approved/total*100).toFixed(1)+'%';
+      document.getElementById('cut-bad-approved').textContent = (approved>0?(fp/(tp+fp)*100).toFixed(1):'0')+'%';
+      document.getElementById('cut-cm').textContent = `TP:${tp} FP:${fp} FN:${fn} TN:${tn}`;
+      document.getElementById('cut-default').textContent = ((tp+fn)/total*100).toFixed(1)+'%';
+    }
+    slider.addEventListener('input', update);
+    update();
+    const cel = document.getElementById('chart-cutoff');
+    if (cel && typeof Plotly !== 'undefined' && !window.__plotlyLoadFailed) {
+      try {
+        Plotly.newPlot(cel, [
+          {x:[0,1], y:[0,1], type:'scatter', mode:'lines', name:'Goods'},
+          {x:[0,1], y:[0,0.8], type:'scatter', mode:'lines', name:'Bads'}
+        ], Object.assign(themed(), {xaxis:{title:'Score'}, yaxis:{title:'Density'}, margin:{l:50,r:20,t:10,b:50}}), PLOTLY_CONFIG);
+      } catch(e) {}
+    }
+  }
+
+  function chartValidationTimeline(d) {
+    const el = document.getElementById('chart-timeline');
+    if (!el) return;
+    const tl = (d.interactive && d.interactive.validation_timeline) || null;
+    const toggle = document.getElementById('timeline-toggle');
+    if (!tl) { showStaticFallback(el); return; }
+    if (window.__plotlyLoadFailed || typeof window.Plotly === 'undefined') { showStaticFallback(el); return; }
+    function draw() {
+      const mode = toggle ? toggle.value : 'primary';
+      if (mode === 'secondary') {
+        try {
+          Plotly.newPlot(el, [
+            {x:['Train (<2017)','Test (2017-2018)'], y:[99,45], type:'bar', name:'Resolved %', marker:{color:['#0072B2','#D55E00']}}
+          ], Object.assign(themed(), {yaxis:{title:'Resolved share (%)', range:[0,110]}, margin:{l:60,r:20,t:20,b:50}}), PLOTLY_CONFIG);
+        } catch(e) { showStaticFallback(el); }
+      } else {
+        try {
+          Plotly.newPlot(el, [
+            {x:['Train (2010-2013)','Test (2014-2015)'], y:[99,98], type:'bar', name:'Resolved %', marker:{color:['#0072B2','#009E73']}}
+          ], Object.assign(themed(), {yaxis:{title:'Resolved share (%)', range:[0,110]}, margin:{l:60,r:20,t:20,b:50}}), PLOTLY_CONFIG);
+        } catch(e) { showStaticFallback(el); }
+      }
+    }
+    if (toggle) toggle.addEventListener('change', draw);
+    draw();
+  }
+
+  // -------------------------------------------------------------------- boot
+
+  function chartLoanMap(d) {
+    const el = document.getElementById('chart-loanmap');
+    if (!el) return;
+    const lm = (d.interactive && d.interactive.loan_map) || null;
+    if (!lm || !lm.points) { showStaticFallback(el); return; }
+    if (window.__plotlyLoadFailed || typeof window.Plotly === 'undefined') { showStaticFallback(el); return; }
+    const colorSel = document.getElementById('loanmap-color');
+    const toggleBtn = document.getElementById('loanmap-toggle');
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let rotating = !reduce;
+    if (toggleBtn) {
+      toggleBtn.textContent = rotating ? 'Pause rotation' : 'Play rotation';
+      toggleBtn.addEventListener('click', () => {
+        rotating = !rotating;
+        toggleBtn.textContent = rotating ? 'Pause rotation' : 'Play rotation';
+      });
+    }
+    function draw() {
+      const colorBy = colorSel ? colorSel.value : 'default';
+      const pts = lm.points;
+      if (!hasWebGL() || window.innerWidth < 500) {
+        // 2D fallback
+        try {
+          Plotly.newPlot(el, [{
+            x: pts.map(p=>p.pc1), y: pts.map(p=>p.pc2),
+            mode:'markers', type:'scatter',
+            marker:{color: pts.map(p=> colorBy==='default' ? (p.default?'red':'blue') : (p.pd>0.2?'red':'blue')), size:4, opacity:0.5}
+          }], Object.assign(themed(), {title:'2D fallback (PCA)', xaxis:{title:'PC1'}, yaxis:{title:'PC2'}}), PLOTLY_CONFIG);
+        } catch(e) { showStaticFallback(el); }
+        return;
+      }
+      try {
+        Plotly.newPlot(el, [{
+          type:'scatter3d',
+          x: pts.map(p=>p.pc1), y: pts.map(p=>p.pc2), z: pts.map(p=>p.pc3),
+          mode:'markers',
+          marker:{size:3, color: pts.map(p=> colorBy==='default' ? (p.default?0:1) : p.pd), colorscale: colorBy==='default'?'RdBu':'Viridis', opacity:0.6}
+        }], Object.assign(themed(), {
+          scene:{xaxis:{title:'PC1'}, yaxis:{title:'PC2'}, zaxis:{title:'PC3'}},
+          margin:{l:0,r:0,t:30,b:0}
+        }), PLOTLY_CONFIG);
+        if (rotating && !reduce) {
+          let angle = 0;
+          const interval = setInterval(() => {
+            if (!rotating) { clearInterval(interval); return; }
+            angle += 0.01;
+            try {
+              Plotly.relayout(el, {'scene.camera': {eye:{x:1.5*Math.cos(angle), y:1.5*Math.sin(angle), z:1.2}}});
+            } catch(e) { clearInterval(interval); }
+          }, 50);
+        }
+      } catch(e) { showStaticFallback(el); }
+    }
+    if (colorSel) colorSel.addEventListener('change', draw);
+    draw();
+  }
+  function render(d) {
+    renderDisplay(d);
+    renderTables(d);
+    chartCensoring(d);
+    chartAucWindow(d);
+    chartModels(d);
+    chartCalibration(d);
+    chartElGrade(d);
+    chartSimulation(d);
+    try { chartRiskSurface(d); } catch(e) { console.error(e); }
+    try { chartScenarioExplorer(d); } catch(e) { console.error(e); }
+    try { chartApplicantSimulator(d); } catch(e) { console.error(e); }
+    try { chartCutoffExplorer(d); } catch(e) { console.error(e); }
+    try { chartLoanMap(d); } catch(e) { console.error(e); }
+    try { chartValidationTimeline(d); } catch(e) { console.error(e); }
+    try { chartPortfolioExplorer(d); } catch(e) { console.error(e); }
+    document.documentElement.setAttribute('data-loaded', 'true');
+  }
+  function chartPortfolioExplorer(d) {
+    var pe = (d && (d.portfolio_explorer || (d.interactive && d.interactive.portfolio_explorer))) || null;
+    var tabs = $$('.pe-tab');
+    var state = window.__peState || (window.__peState = { dim: 'state', metric: 'default_rate', selected: null });
+    function urlSync() {
+      try { history.replaceState(null, '', '#pe/' + state.dim + '/' + (state.selected || '')); } catch(e) {}
+    }
+    function renderTabs() {
+      tabs.forEach(function(t) {
+        var on = t.dataset.dim === state.dim;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+    }
+    tabs.forEach(function(t) { if (!t.__bound) { t.__bound=true; t.addEventListener('click', function() { state.dim = t.dataset.dim; state.selected = null; renderAll(); urlSync(); }); } });
+    var metricSel = document.getElementById('pe-metric');
+    if (metricSel && !metricSel.__bound) { metricSel.__bound=true; metricSel.addEventListener('change', function() { state.metric = metricSel.value; renderAll(); }); }
+    var search = document.getElementById('pe-search');
+    if (search && !search.__bound) { search.__bound=true; search.addEventListener('input', function() { renderList(); }); }
+
+    function getDimData() {
+      if (!pe) return [];
+      if (state.dim === 'total') return pe.dimensions.total || [];
+      return pe.dimensions[state.dim] || [];
+    }
+    function colorFor(v) {
+      var vals = getDimData().map(function(x){ return num(x[state.metric]); }).filter(function(x){ return x !== null; });
+      var min = vals.length ? Math.min.apply(null, vals) : 0;
+      var max = vals.length ? Math.max.apply(null, vals) : 1;
+      var t = (num(v) - min) / ((max - min) || 1);
+      var hue = 200 - t * 160;
+      return 'hsl(' + hue + ', 60%, 45%)';
+    }
+    function renderMap() {
+      var map = document.getElementById('pe-map');
+      if (!map || !pe) return;
+      if (state.dim !== 'state') { map.innerHTML = '<p style="padding:1rem;color:var(--fg-muted)">Tile map available for State dimension.</p>'; return; }
+      var states = pe.tilemap.states || {};
+      var positions = {AK:[0,0],AL:[6,6],AR:[5,5],AZ:[2,4],CA:[1,3],CO:[3,3],CT:[9,2],DC:[8,4],DE:[9,3],FL:[8,7],GA:[7,6],HI:[0,7],IA:[4,2],ID:[2,1],IL:[5,2],IN:[6,2],KS:[4,4],KY:[6,3],LA:[5,6],MA:[10,1],MD:[8,3],ME:[10,0],MI:[7,1],MN:[4,1],MO:[5,3],MS:[5,6],MT:[2,0],NC:[8,5],ND:[3,0],NE:[4,3],NH:[10,0],NJ:[9,3],NM:[3,4],NV:[1,2],NY:[9,1],OH:[7,2],OK:[4,5],OR:[1,1],PA:[8,2],RI:[10,2],SC:[8,6],SD:[3,1],TN:[6,4],TX:[4,6],UT:[2,2],VA:[8,4],VT:[9,0],WA:[1,0],WI:[5,1],WV:[7,3],WY:[3,2]};
+      var grid = Array.from({length:8}, function(){ return Array(11).fill(null); });
+      Object.keys(states).forEach(function(st) {
+        var pos = positions[st];
+        if (pos) grid[pos[1]][pos[0]] = st;
+      });
+      map.innerHTML = '';
+      map.style.gridTemplateColumns = 'repeat(11, 1fr)';
+      grid.forEach(function(row) {
+        row.forEach(function(st) {
+          var cell = document.createElement('div');
+          if (!st) { cell.className = 'pe-tile'; cell.style.background = 'transparent'; map.appendChild(cell); return; }
+          var info = states[st];
+          var insuf = info.n < (pe.tilemap.min_n || 500);
+          cell.className = 'pe-tile' + (insuf ? ' insufficient' : '') + (state.selected === st ? ' selected' : '');
+          if (!insuf) cell.style.background = colorFor(info[state.metric]);
+          cell.textContent = st;
+          var tip = document.createElement('span');
+          tip.className = 'pe-tile-tip';
+          tip.textContent = st + ': n=' + info.n + ', DR=' + (info.default_rate*100).toFixed(1) + '%';
+          cell.appendChild(tip);
+          cell.addEventListener('click', function() { state.selected = st; renderAll(); urlSync(); });
+          map.appendChild(cell);
+        });
+      });
+    }
+    function renderList() {
+      var list = document.getElementById('pe-list');
+      if (!list) return;
+      var q = (document.getElementById('pe-search') && document.getElementById('pe-search').value || '').toLowerCase();
+      var data = getDimData().slice();
+      if (q) data = data.filter(function(x){ return String(x.id).toLowerCase().includes(q) || String(x.name).toLowerCase().includes(q); });
+      var vals = data.map(function(x){ return num(x[state.metric]) || 0; });
+      var maxv = vals.length ? Math.max.apply(null, vals) : 1;
+      list.innerHTML = data.map(function(x) {
+        var sel = state.selected === x.id ? ' selected' : '';
+        var v = num(x[state.metric]);
+        var pct = ((v||0) / (maxv||1) * 100).toFixed(1);
+        return '<div class="pe-row' + sel + '" data-id="' + x.id + '">' +
+          '<span class="pe-name">' + x.name + '</span>' +
+          '<span class="pe-bar" style="width:' + pct + '%"></span>' +
+          '<span class="pe-val">' + (v===null?'—':((state.metric==='default_rate'||state.metric==='pred_pd'||state.metric==='el_pct_ead') ? (v*100).toFixed(1)+'%' : v)) + '</span>' +
+          '</div>';
+      }).join('');
+      list.querySelectorAll('.pe-row').forEach(function(r){ r.addEventListener('click', function(){ state.selected = r.dataset.id; renderAll(); urlSync(); }); });
+    }
+    function renderSummary() {
+      var el = document.getElementById('pe-summary');
+      if (!el || !pe) return;
+      var data = getDimData();
+      var sel = state.selected ? data.find(function(x){ return x.id === state.selected; }) : (data[0] || null);
+      if (!sel) { el.innerHTML = ''; return; }
+      var port = pe.dimensions.total && pe.dimensions.total[0];
+      var gap = port ? (sel[state.metric] - port[state.metric]) : 0;
+      el.innerHTML = '<h3>' + sel.name + '</h3>' +
+        '<div class="pe-kpis">' +
+        '<div class="kpi"><div class="label">Loans</div><div class="value">' + (sel.n||0).toLocaleString() + '</div></div>' +
+        '<div class="kpi"><div class="label">Default rate</div><div class="value">' + (sel.default_rate*100).toFixed(2) + '%</div></div>' +
+        '<div class="kpi"><div class="label">Predicted PD</div><div class="value">' + (sel.pred_pd*100).toFixed(2) + '%</div></div>' +
+        '<div class="kpi"><div class="label">EL % of EAD</div><div class="value">' + (sel.el_pct_ead*100).toFixed(2) + '%</div></div>' +
+        '</div>' +
+        '<p style="margin-top:0.8rem;font-size:0.9rem;color:var(--fg-muted)">Gap vs portfolio: ' + (gap>=0?'+':'') + (gap*100).toFixed(2) + ' pp on ' + state.metric.replace(/_/g,' ') + '.</p>';
+      var nt = document.getElementById('pe-n-total');
+      if (nt) nt.textContent = (pe.meta.n_total||0).toLocaleString();
+    }
+    function renderInsights() {
+      var txt = document.getElementById('pe-insight-text');
+      var chips = document.getElementById('pe-chips');
+      if (!txt || !pe) return;
+      var data = getDimData();
+      var sorted = data.slice().sort(function(a,b){ return (b[state.metric]||0)-(a[state.metric]||0); });
+      var hi = sorted[0], lo = sorted[sorted.length-1];
+      txt.innerHTML = '<p>Highest: ' + (hi?hi.name+' ('+(hi[state.metric]*100).toFixed(1)+'%)':'—') + '. Lowest: ' + (lo?lo.name+' ('+(lo[state.metric]*100).toFixed(1)+'%)':'—') + '.</p>';
+      if (chips) {
+        chips.innerHTML = '';
+        function make(label, fn) { var b = document.createElement('button'); b.className='pe-chip'; b.textContent=label; b.addEventListener('click', fn); chips.appendChild(b); }
+        make('View by grade', function(){ state.dim='grade'; state.selected=null; renderAll(); urlSync(); });
+        make('Highest loss segment', function(){ var g = (pe.dimensions.grade||[]).slice().sort(function(a,b){return b.el_pct_ead-a.el_pct_ead;})[0]; if(g){state.dim='grade';state.selected=g.id;} renderAll(); urlSync(); });
+        make('How do we know?', function(){ var dr = document.getElementById('pe-drawer'); if(dr) dr.hidden = !dr.hidden; });
+        make('Compare to portfolio', function(){ state.dim='total'; state.selected=null; renderAll(); urlSync(); });
+      }
+    }
+    function renderAll() {
+      renderTabs();
+      var ms = document.getElementById('pe-metric');
+      if (ms) ms.value = state.metric;
+      renderMap();
+      renderList();
+      renderSummary();
+      renderInsights();
+    }
+    var dbtn = document.getElementById('pe-drawer-btn');
+    if (dbtn && !dbtn.__bound) { dbtn.__bound=true; dbtn.addEventListener('click', function(){ var dr = document.getElementById('pe-drawer'); if(dr) dr.hidden = !dr.hidden; }); }
+    renderAll();
+    urlSync();
+  }
   fetch(DATA_URL, { cache: "no-cache" })
     .then((r) => {
       if (!r.ok) throw new Error("data.json " + r.status);

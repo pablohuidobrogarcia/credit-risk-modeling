@@ -792,6 +792,19 @@ def _run_pd_window(
         "pd_oot_calibrated": np.asarray(pd_oot_cal, dtype=float),
         "pd_train_calibrated": np.asarray(pd_tr_cal, dtype=float),
     }
+    # Persist out-of-time predictions for downstream portfolio-explorer aggregates.
+    try:
+        from pathlib import Path
+        _out = oot.copy()
+        _out["pd_raw"] = np.asarray(pd_oot, dtype=float)
+        _out["pd_calibrated"] = np.asarray(pd_oot_cal, dtype=float)
+        _keep = [c for c in ["addr_state", "grade", "purpose", "issue_d", "term",
+                             "home_ownership", "loan_amnt", "default_flag",
+                             "pd_raw", "pd_calibrated"] if c in _out.columns]
+        _p = Path(__file__).resolve().parents[1] / "reports" / "results" / "oot_predictions.parquet"
+        _out[_keep].to_parquet(_p, index=False)
+    except Exception:
+        pass
 
 
 def _window_comparison(primary: Dict[str, Any], secondary: Dict[str, Any]) -> pd.DataFrame:

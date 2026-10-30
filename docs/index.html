@@ -357,6 +357,63 @@
     </div>
   </section>
 
+  <!-- ====================================================== 6b. PORTFOLIO EXPLORER -->
+  <section id="portfolio-explorer" aria-labelledby="pe-title">
+    <div class="wrap">
+      <h2 id="pe-title"><span class="num">06</span>Portfolio explorer</h2>
+      <p class="section-lead">
+        A linked view of the primary test window (2014-2015, 36-month). Pick a dimension;
+        the map, the ranked list and the summary card move together. Every number is read
+        from <code>data.json</code>.
+      </p>
+
+      <div class="pe-tabs" role="tablist" aria-label="Dimension">
+        <button class="pe-tab" data-dim="total" role="tab">Total</button>
+        <button class="pe-tab" data-dim="state" role="tab">State</button>
+        <button class="pe-tab" data-dim="grade" role="tab">Grade</button>
+        <button class="pe-tab" data-dim="purpose" role="tab">Purpose</button>
+        <button class="pe-tab" data-dim="vintage" role="tab">Vintage</button>
+        <button class="pe-tab" data-dim="term" role="tab">Term</button>
+        <button class="pe-tab" data-dim="home_ownership" role="tab">Home ownership</button>
+      </div>
+
+      <div class="pe-metric-row">
+        <label for="pe-metric">Color by</label>
+        <select id="pe-metric">
+          <option value="default_rate">Observed default rate</option>
+          <option value="pred_pd">Predicted PD</option>
+          <option value="el_pct_ead">Expected loss % of EAD</option>
+        </select>
+        <input type="search" id="pe-search" placeholder="Filter states/purposes..." aria-label="Filter">
+      </div>
+
+      <div class="pe-grid">
+        <div class="pe-map-card">
+          <div id="pe-map" class="pe-map" role="img" aria-label="US tile grid map"></div>
+          <div class="pe-legend" id="pe-legend"></div>
+        </div>
+        <div class="pe-list-card">
+          <div id="pe-list" class="pe-list"></div>
+        </div>
+      </div>
+
+      <div class="pe-summary" id="pe-summary"></div>
+
+      <div class="pe-insights">
+        <div id="pe-insight-text"></div>
+        <div class="pe-chips" id="pe-chips"></div>
+      </div>
+
+      <button class="btn btn-secondary" id="pe-drawer-btn">How do we know?</button>
+      <div class="pe-drawer" id="pe-drawer" hidden>
+        <h3>Data and method</h3>
+        <p>Primary mature test window: 2014-2015, 36-month terms. Sample size: <span id="pe-n-total"></span> loans.</p>
+        <p>Observed default rate is defaults / loans. Wilson 95% confidence interval shown on hover. Predicted PD is the mean calibrated champion prediction for the segment. Expected loss % of EAD = predicted PD x LGD x EAD / EAD.</p>
+        <p>Segments with fewer than 500 loans are marked insufficient data. Segments are correlated with grade and term; descriptive, not causal.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- ========================================================= 7. INTERACTIVE -->
   <section id="interactive" aria-labelledby="interactive-title">
     <div class="wrap">
@@ -550,7 +607,7 @@
       <h2 id="reproduce-title"><span class="num">07</span>How to reproduce</h2>
       <p class="section-lead">
         Everything is deterministic (seed 42). The pipeline runs from raw CSV to the figures
-        and this page's <code>data.json</code>; the <span data-field="display.test_count">133</span>-test
+        and this page's <code>data.json</code>; the <span data-field="display.test_count">134</span>-test
         suite checks that no number drifts.
       </p>
 <pre><code>git clone https://github.com/pablohuidobrogarcia/credit-risk-modeling.git

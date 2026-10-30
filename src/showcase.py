@@ -787,6 +787,95 @@ def build_interactive_data(summary: Dict[str, Any]) -> Dict[str, Path]:
     except Exception as e:
         print(f"Failed to build validation timeline: {e}")
     
+
+    # Portfolio explorer aggregates from primary test window predictions
+    try:
+        import pandas as pd
+        pred_path = results / "oot_predictions.parquet"
+        if pred_path.exists():
+            pdf = pd.read_parquet(pred_path)
+        else:
+            pdf = None
+        if pdf is not None:
+            pdf = pdf.copy()
+            pdf["issue_year"] = pd.to_datetime(pdf["issue_d"], errors="coerce").dt.year
+            pdf["term_clean"] = pdf["term"].astype(str).str.extract(r"(\d+)")[0].astype(float)
+            mask = (pdf["issue_year"].between(2014, 2015)) & (pdf["term_clean"] == 36)
+            test = pdf[mask].copy()
+            total_n = len(test)
+            total_dr = float(test["default_flag"].mean()) if total_n else 0.0
+            total_ead = float(test["loan_amnt"].sum()) if "loan_amnt" in test.columns else summary["simulation"]["total_ead"]
+
+            def wilson(p, n, z=1.95996):
+                if n == 0:
+                    return [0.0, 0.0]
+                denom = 1 + z*z/n
+                center = (p + z*z/(2*n)) / denom
+                half = z/denom * (p*(1-p)/n + z*z/(4*n*n))**0.5
+                return [max(0.0, center-half), min(1.0, center+half)]
+
+            def agg(col):
+                if col not in test.columns and col != "vintage":
+                    return []
+                if col == "vintage":
+                    g = test.groupby("issue_year")
+                else:
+                    g = test.groupby(col)
+                items = []
+                for name, grp in g:
+                    n = len(grp)
+                    if n == 0:
+                        continue
+                    dr = float(grp["default_flag"].mean())
+                    ci = wilson(dr, n)
+                    ead = float(grp["loan_amnt"].sum()) if "loan_amnt" in grp.columns else 0.0
+                    pred_pd = float(grp["pd_calibrated"].mean()) if "pd_calibrated" in grp.columns else dr
+                    mean_lgd = 0.8678
+                    el_rate = pred_pd * 0.8678
+                    items.append({
+                        "id": str(name), "name": str(name), "n": int(n),
+                        "default_rate": dr, "ci_low": ci[0], "ci_high": ci[1],
+                        "pred_pd": pred_pd, "mean_lgd": mean_lgd,
+                        "ead": ead, "ead_share": ead/total_ead if total_ead else n/total_n,
+                        "el_pct_ead": el_rate,
+                    })
+                items.sort(key=lambda x: x["el_pct_ead"], reverse=True)
+                return items
+
+            pe = {
+                "meta": {"window": "primary_mature_test", "years": [2014, 2015], "term": "36",
+                         "n_total": int(total_n), "default_rate_total": total_dr, "ead_total": total_ead,
+                         "min_n": 500},
+                "dimensions": {
+                    "total": [{"id": "total", "name": "Total", "n": int(total_n), "default_rate": total_dr,
+                               "ci_low": wilson(total_dr, total_n)[0], "ci_high": wilson(total_dr, total_n)[1],
+                               "pred_pd": float(test["pd_calibrated"].mean()) if "pd_calibrated" in test.columns else total_dr,
+                               "mean_lgd": 0.8678, "ead": total_ead, "ead_share": 1.0,
+                               "el_pct_ead": (float(test["pd_calibrated"].mean()) if "pd_calibrated" in test.columns else total_dr) * 0.8678}],
+                    "state": agg("addr_state"),
+                    "grade": agg("grade"),
+                    "purpose": agg("purpose"),
+                    "vintage": agg("vintage"),
+                    "term": agg("term"),
+                    "home_ownership": agg("home_ownership"),
+                },
+                "tilemap": {"metric_options": ["default_rate", "pred_pd", "el_pct_ead"],
+                            "default_metric": "default_rate", "min_n": 500,
+                            "states": {}},
+            }
+            for item in pe["dimensions"]["state"]:
+                if item["n"] < 500:
+                    item["insufficient"] = True
+                else:
+                    item["insufficient"] = False
+                pe["tilemap"]["states"][item["id"]] = item
+            p = results / "portfolio_explorer.json"
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(pe, f)
+            out["portfolio_explorer"] = p
+    except Exception as e:
+        print("Failed to build portfolio explorer: " + str(e))
+
     return out
 
 
@@ -812,6 +901,10 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
             interactive[name.replace("showcase_", "").replace(".json", "")] = _load_json(name)
         except Exception:
             pass
+    try:
+        interactive["portfolio_explorer"] = _load_json("portfolio_explorer.json")
+    except Exception:
+        pass
 
     # ------------------------------------------------------------------
     # display: every string the page renders, preformatted here in Python.

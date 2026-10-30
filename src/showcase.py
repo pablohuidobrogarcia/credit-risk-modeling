@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import FuncFormatter
 
+from . import bin_labels
 from . import scorecard as sc
 from . import simulation as sim
 from . import viz_style as vs
@@ -890,14 +891,23 @@ def build_interactive_data(summary: Dict[str, Any]) -> Dict[str, Path]:
             v: {"bins": points[points["variable"] == v]["bin"].tolist()}
             for v in variables
         }
+        points_rows = points.to_dict(orient="records")
+        test_counts = None
+        if (results / "pd_woe_oot.csv").exists():
+            woe_rows = _pd.read_csv(results / "pd_woe_oot.csv").to_dict(orient="records")
+            test_counts = bin_labels.test_counts_from_woe(woe_rows, points_rows)
+        var_meta = bin_labels.build_var_meta(points_rows, test_counts, scaler["offset"])
         sim_data = {
-            "points_table": points.to_dict(orient="records"),
+            "points_table": points_rows,
             "scaler": scaler,
             "variables": variables,
             "base_score": scaler["base_score"],
             "base_odds": scaler["base_odds"],
             "pdo": scaler["pdo"],
             "var_info": var_info,
+            "var_meta": var_meta["variables"],
+            "presets": var_meta["presets"],
+            "base_points": var_meta["base_points"],
         }
         p = results / "showcase_applicant_simulator.json"
         with open(p, "w", encoding="utf-8") as f:
@@ -1477,8 +1487,11 @@ def copy_assets_to_docs() -> List[Path]:
     """Copy the showcase PNGs into ``docs/assets`` with web-friendly names."""
     DOCS_ASSETS.mkdir(parents=True, exist_ok=True)
     copied: List[Path] = []
+    # Only copy assets the dashboard actually references. The rest stay in
+    # reports/figures for the written report but must not leak into the site.
+    wanted = {"loss_distribution.png", "risk_surface_static.png"}
     for src in sorted(SHOWCASE.glob("*.png")):
-        if src.name == "og-card.png":
+        if src.name not in wanted:
             continue
         dst = DOCS_ASSETS / src.name
         shutil.copy2(src, dst)

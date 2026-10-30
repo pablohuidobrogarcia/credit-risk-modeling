@@ -577,6 +577,13 @@ thead th { color: var(--fg-soft); font-size: 0.7rem; text-transform: uppercase; 
   .segmented::-webkit-scrollbar { display: none; }
   .search-wrap { width: 100%; }
   .search-wrap input { width: 100%; min-width: 0; }
+  .explorer-controls .control-with-info,
+  .explorer-tools .control-with-info { width: 100%; min-width: 0; }
+  .explorer-controls .control-with-info > .segmented,
+  .explorer-controls .control-with-info > .search-wrap { flex: 1 1 auto; width: auto; min-width: 0; }
+  .explorer-controls .control-with-info > .info-btn { flex: 0 0 auto; }
+  .topbar-actions { min-width: 0; }
+  .topbar-actions .control-with-info { min-width: 0; }
   .summary-kpis { grid-template-columns: repeat(2, 1fr); }
   .risk-kpis { grid-template-columns: repeat(2, 1fr); }
   .slider-grid { grid-template-columns: 1fr; }

@@ -88,12 +88,16 @@ def main() -> int:
         problems.append(f"data-field '{f}' does not resolve in data.json")
     print(f"data-field placeholders: {len(fields)} (missing: {len(missing_fields)})")
 
-    # 4. Size limits.
+    # 4. Size limits. The data payload has a tighter budget than code and images.
     for p in sorted(DOCS.rglob("*")):
         if not p.is_file():
             continue
         kb = p.stat().st_size / 1024
         limit = MAX_IMAGE_KB if p.suffix.lower() in IMAGE_SUFFIXES else MAX_FILE_KB
+        if p.name == "data.json":
+            limit = 400
+        if p.name == "dashboard.gif":
+            limit = 2048
         if kb > limit:
             problems.append(f"{p.relative_to(DOCS)} is {kb:.0f} KB (limit {limit} KB)")
 

@@ -10,6 +10,14 @@ visual case study of this project (built from `reports/results/summary.json`, se
 
 [![Credit-risk case study: champion AUC, expected loss, VaR 99.9% and the censoring gap](docs/assets/og-card.png)](https://pablohuidobrogarcia.github.io/credit-risk-modeling/)
 
+**Interactive dashboard:** the live site is now one linked application — a portfolio explorer
+(state / grade / purpose / vintage tile maps, ranked bars, summary and provenance drawer) and a
+Monte Carlo risk lab (loss histogram, linked 3D VaR surface, applicant simulator and cutoff
+explorer). Every view shares one state store, the URL hash is shareable, and the back button
+restores the previous selection.
+
+![Linked portfolio explorer and risk lab](docs/assets/dashboard.gif)
+
 An end-to-end, reproducible credit-risk pipeline built on the public Lending Club
 loan book (2007–2018):
 
@@ -65,7 +73,7 @@ is reported separately as the censoring-exposed secondary analysis.
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
 | **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.14 %**, UL **5.88 %**, VaR 99 % **28.52 %**, VaR 99.9 % **37.39 %**, ES 99 % **32.40 %**, ES 99.9 % **40.67 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
-| **Test suite** | **134** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
+| **Test suite** | **139** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 

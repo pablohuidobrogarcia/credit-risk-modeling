@@ -12,7 +12,7 @@ def test_applicant_simulator_js_python_parity():
     points = pd.read_csv(RESULTS_DIR / 'pd_scorecard_points.csv')
     scaler = json.load(open(RESULTS_DIR / 'pd_scorecard_scaler.json'))
     sc = scorecard.ScorecardScaler(scaler['base_score'], scaler['base_odds'], scaler['pdo'])
-    variables = sorted(list(points['variable'].unique()))
+    variables = sorted(points['variable'].unique())
     random.seed(12345)
     for _ in range(200):
         pts_total = 0.0

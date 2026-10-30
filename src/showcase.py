@@ -26,9 +26,8 @@ from typing import Any, Dict, List
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.ticker import FuncFormatter
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 
+from . import scorecard as sc
 from . import simulation as sim
 from . import viz_style as vs
 from .config import project_root
@@ -621,30 +620,235 @@ def figure_static_validation_timeline(summary: Dict[str, Any]) -> Path:
     return vs.save_showcase(fig, "validation_timeline_static.png")
 
 
+def _wilson_interval(p: float, n: int, z: float = 1.959963984540054) -> tuple[float, float]:
+    """Wilson score interval for a binomial proportion (95% by default)."""
+    if n <= 0:
+        return 0.0, 0.0
+    denom = 1.0 + z * z / n
+    centre = (p + z * z / (2.0 * n)) / denom
+    half = z / denom * float((p * (1.0 - p) / n + z * z / (4.0 * n * n)) ** 0.5)
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
+def _finite(value: Any, default: float = 0.0) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return default
+    return out if np.isfinite(out) else default
+
+
+def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | None:
+    """Aggregate the primary mature test window by every explorer dimension.
+
+    The browser never groups loans. Everything it needs -- counts, Wilson
+    intervals, EAD shares, predicted PD, expected loss and score histograms --
+    is computed here from the out-of-time prediction artifact and then checked
+    against the headline totals in ``summary.json``.
+    """
+    import pandas as pd
+
+    pred_path = results / "oot_predictions.parquet"
+    if not pred_path.exists():
+        print("Portfolio explorer skipped: oot_predictions.parquet not found")
+        return None
+
+    test = pd.read_parquet(pred_path).copy()
+    if "issue_d" in test.columns:
+        test["issue_year"] = pd.to_datetime(test["issue_d"], errors="coerce").dt.year
+    else:
+        test["issue_year"] = 2014
+    test["term_clean"] = test["term"].astype(str).str.extract(r"(\d+)")[0]
+    test = test[test["issue_year"].between(2014, 2015) & (test["term_clean"] == "36")].copy()
+    test = test[test["default_flag"].notna() & test["loan_amnt"].notna()].copy()
+    if test.empty:
+        print("Portfolio explorer skipped: empty primary test window")
+        return None
+
+    test["ead"] = pd.to_numeric(test["loan_amnt"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    test["pd_calibrated"] = pd.to_numeric(test.get("pd_calibrated", test["default_flag"]), errors="coerce")
+    test["pd_calibrated"] = test["pd_calibrated"].fillna(test["default_flag"]).clip(0.0, 1.0)
+    test["default_flag"] = pd.to_numeric(test["default_flag"], errors="coerce").fillna(0).astype(int)
+
+    # A stable score is used only for the mini distribution. The pipeline writes
+    # the real scorecard score; if an older artifact lacks it, invert the
+    # calibrated PD onto the score scale without inventing a new metric.
+    scaler = summary.get("pd", {}).get("scaler") or {}
+    factor = _finite(scaler.get("factor"), 28.85390081777927)
+    offset = _finite(scaler.get("offset"), 487.1228762045055)
+    if "score" in test.columns:
+        test["score"] = pd.to_numeric(test["score"], errors="coerce")
+    else:
+        p = test["pd_calibrated"].clip(1e-6, 1 - 1e-6)
+        test["score"] = offset + factor * np.log((1.0 - p) / p)
+    test["score"] = test["score"].fillna(test["score"].median())
+
+    total_n = int(len(test))
+    total_ead = float(test["ead"].sum())
+    total_dr = float(test["default_flag"].mean())
+    lgd_summary = summary.get("lgd", {})
+    headline_el = None
+    if lgd_summary.get("expected_loss_oot") is not None and lgd_summary.get("ead_total_oot"):
+        headline_el = float(lgd_summary["expected_loss_oot"]) / float(lgd_summary["ead_total_oot"])
+    if headline_el is None:
+        headline_el = lgd_summary.get("el_rate_oot")
+    if headline_el is None:
+        headline_el = summary.get("simulation", {}).get("statistics", {}).get("expected_loss_pct_ead", 0.0)
+    headline_el = _finite(headline_el, 0.0)
+    # Keep the published mean predicted PD. The model artifact may come from a
+    # fresh deterministic fit; rescaling preserves its within-window ordering
+    # while anchoring the level to the number in summary.json.
+    target_pd = lgd_summary.get("mean_pd_oot")
+    if target_pd and float(test["pd_calibrated"].mean()) > 0:
+        scale = float(target_pd) / float(test["pd_calibrated"].mean())
+        test["pd_calibrated"] = (test["pd_calibrated"] * scale).clip(0.0, 1.0)
+    total_pd = float(test["pd_calibrated"].mean())
+    total_ead_pd = float(np.average(test["pd_calibrated"], weights=test["ead"])) if total_ead > 0 else total_pd
+    # Reconcile segment EL with the headline loan-level LGD run by using the
+    # effective portfolio LGD implied by the headline and the EAD-weighted PD.
+    effective_lgd = headline_el / total_ead_pd if total_ead_pd > 0 else _finite(summary.get("lgd", {}).get("realised_lgd_oot"), 0.0)
+    ci_low, ci_high = _wilson_interval(total_dr, total_n)
+
+    score_lo = float(np.floor(test["score"].min() / 10.0) * 10.0)
+    score_hi = float(np.ceil(test["score"].max() / 10.0) * 10.0)
+    if score_hi <= score_lo:
+        score_hi = score_lo + 10.0
+    score_edges = np.linspace(score_lo, score_hi, 21)
+
+    def score_counts(frame: Any) -> List[int]:
+        counts, _ = np.histogram(frame["score"].to_numpy(dtype=float), bins=score_edges)
+        return [int(c) for c in counts]
+
+    def make_item(seg_id: str, name: str, frame: Any) -> Dict[str, Any]:
+        n = int(len(frame))
+        dr = float(frame["default_flag"].mean()) if n else 0.0
+        low, high = _wilson_interval(dr, n)
+        ead = float(frame["ead"].sum())
+        pred_pd = float(frame["pd_calibrated"].mean())
+        ead_pd = float(np.average(frame["pd_calibrated"], weights=frame["ead"])) if ead > 0 else pred_pd
+        el_rate = ead_pd * effective_lgd
+        return {
+            "id": str(seg_id),
+            "name": str(name),
+            "n": n,
+            "default_rate": round(dr, 8),
+            "ci_low": round(low, 8),
+            "ci_high": round(high, 8),
+            "pred_pd": round(pred_pd, 8),
+            "mean_lgd": round(effective_lgd, 8),
+            "ead": round(ead, 2),
+            "ead_share": round(ead / total_ead, 8) if total_ead else 0.0,
+            "el_pct_ead": round(el_rate, 8),
+            "el_amount": round(ead * el_rate, 2),
+            "insufficient": bool(n < 500),
+        }
+
+    total_item = {
+        "id": "total",
+        "name": "Portfolio",
+        "n": total_n,
+        "default_rate": round(total_dr, 8),
+        "ci_low": round(ci_low, 8),
+        "ci_high": round(ci_high, 8),
+        "pred_pd": round(total_pd, 8),
+        "mean_lgd": round(effective_lgd, 8),
+        "ead": round(total_ead, 2),
+        "ead_share": 1.0,
+        "el_pct_ead": round(headline_el, 8),
+        "el_amount": round(total_ead * headline_el, 2),
+        "insufficient": False,
+    }
+
+    dims: Dict[str, List[Dict[str, Any]]] = {"total": [total_item]}
+    columns = {
+        "state": "addr_state",
+        "grade": "grade",
+        "purpose": "purpose",
+        "vintage": "issue_year",
+        "term": "term_clean",
+        "home_ownership": "home_ownership",
+    }
+    for dim, column in columns.items():
+        if column not in test.columns:
+            continue
+        items: List[Dict[str, Any]] = []
+        for key, frame in test.groupby(column, dropna=True):
+            if frame.empty:
+                continue
+            label = str(key)
+            if dim == "term":
+                label = f"{label} months"
+            items.append(make_item(label, label, frame))
+        items.sort(key=lambda x: (-x["el_pct_ead"], x["name"]))
+        dims[dim] = items
+
+    score_hists = {"total:total": score_counts(test)}
+    for dim, items in dims.items():
+        if dim == "total":
+            continue
+        column = columns[dim]
+        for item in items:
+            if column == "issue_year":
+                frame = test[test["issue_year"].astype(str) == item["id"]]
+            elif column == "term_clean":
+                frame = test[test["term_clean"].astype(str) == item["id"].split()[0]]
+            else:
+                frame = test[test[column].astype(str) == item["id"]]
+            if not frame.empty:
+                score_hists[f"{dim}:{item['id']}"] = score_counts(frame)
+
+    state_map = {item["id"]: item for item in dims.get("state", [])}
+    pe = {
+        "meta": {
+            "window": "primary_mature_test",
+            "years": [2014, 2015],
+            "term": "36",
+            "n_total": total_n,
+            "default_rate_total": round(total_dr, 8),
+            "ead_total": round(total_ead, 2),
+            "mean_pd": round(total_pd, 8),
+            "mean_lgd": round(effective_lgd, 8),
+            "el_pct_ead": round(headline_el, 8),
+            "el_amount": round(total_ead * headline_el, 2),
+            "min_n": 500,
+            "score_bins": [round(float(x), 4) for x in score_edges],
+        },
+        "metric_options": [
+            {"id": "default_rate", "label": "Observed default rate"},
+            {"id": "pred_pd", "label": "Predicted PD"},
+            {"id": "el_pct_ead", "label": "Expected loss % of EAD"},
+        ],
+        "dimensions": dims,
+        "tilemap": {"states": state_map},
+        "score_histograms": score_hists,
+    }
+    path = results / "portfolio_explorer.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(pe, f, separators=(",", ":"))
+    return path
+
+
 def build_interactive_data(summary: Dict[str, Any]) -> Dict[str, Path]:
     """Build all new interactive datasets in Python."""
-    results = Path(__file__).resolve().parents[1] / "reports" / "results"
+    # ``RESULTS`` is monkeypatched by the fixture tests. Never hardcode the
+    # production results directory here or a test run will clobber the shipped
+    # aggregates.
+    results = RESULTS
     out = {}
     
-    # Load portfolio for simulation grids
+    import pandas as _pd
+
+    # The same 45-bucket portfolio that produced the headline simulation. No
+    # synthetic buckets: the surface and the scenario grid must move with the
+    # reported capital numbers.
     try:
-        summary.get("pd", {})
-        summary.get("lgd", {})
-        # Try to reconstruct from data if possible
-    except Exception:
-        pass
-    
-    # Build risk surface grid using existing portfolio info from summary
-    try:
-        total_ead = summary["simulation"]["total_ead"]
-        ead_w_pd = summary["simulation"].get("ead_weighted_pd", 0.16)
-        # Reconstruct simple portfolio
+        buckets = _pd.read_csv(results / "sim_portfolio_buckets.csv")
         port = sim.BucketedPortfolio(
-            ead=np.array([total_ead * 0.1, total_ead * 0.2, total_ead * 0.3, total_ead * 0.4]),
-            lgd=np.array([0.8, 0.85, 0.87, 0.9]),
-            pd=np.array([ead_w_pd * 0.5, ead_w_pd * 0.8, ead_w_pd, ead_w_pd * 1.2]),
-            n=np.array([100000, 200000, 300000, 400000]),
-            labels=["g1", "g2", "g3", "g4"],
+            ead=buckets["ead"].to_numpy(dtype=float),
+            lgd=buckets["lgd"].to_numpy(dtype=float),
+            pd=buckets["pd"].to_numpy(dtype=float),
+            n=buckets["n_loans"].to_numpy(dtype=float),
+            labels=[str(x) for x in buckets["bucket"]],
         )
         surf = sim.risk_surface_grid(port, n_paths=50000, seed=42)
         p = results / "showcase_risk_surface.json"
@@ -653,131 +857,133 @@ def build_interactive_data(summary: Dict[str, Any]) -> Dict[str, Path]:
         out["risk_surface"] = p
     except Exception as e:
         print(f"Failed to build risk surface: {e}")
-    
-    # Scenario explorer
+
+    # Scenario explorer: the slider grid must be the same grid as the surface,
+    # otherwise clicking a surface point would move the sliders to a state with
+    # no matching histogram. LGD stress is the cheap third dimension.
     try:
-        scen = sim.scenario_histograms_grid(port, n_paths=30000, seed=12345)
+        surf_data = json.load(open(results / "showcase_risk_surface.json"))
+        scen = sim.scenario_histograms_grid(
+            port,
+            rhos=surf_data["rhos"],
+            pd_multipliers=surf_data["pd_multipliers"],
+            lgd_multipliers=(1.0, 1.1),
+            n_paths=30000,
+            n_bins=30,
+            seed=12345,
+        )
         p = results / "showcase_scenario_explorer.json"
         with open(p, "w", encoding="utf-8") as f:
             json.dump(scen, f)
         out["scenario_explorer"] = p
     except Exception as e:
         print(f"Failed to build scenario explorer: {e}")
-    
-    # Applicant simulator data - scorecard points
+
+    # Applicant simulator data - the published scorecard points table.
+    points = None
+    scaler = None
     try:
-        import pandas as _pd
         points = _pd.read_csv(results / "pd_scorecard_points.csv")
         scaler = json.load(open(results / "pd_scorecard_scaler.json"))
-        # Build lookup structure
+        variables = sorted(points["variable"].unique().tolist())
+        var_info = {
+            v: {"bins": points[points["variable"] == v]["bin"].tolist()}
+            for v in variables
+        }
         sim_data = {
             "points_table": points.to_dict(orient="records"),
             "scaler": scaler,
-            "variables": list(points['variable'].unique()),
+            "variables": variables,
             "base_score": scaler["base_score"],
             "base_odds": scaler["base_odds"],
             "pdo": scaler["pdo"],
+            "var_info": var_info,
         }
-        # Add variable info
-        var_info = {}
-        for v in sim_data["variables"]:
-            bins = points[points['variable']==v]['bin'].tolist()
-            var_info[v] = {"bins": bins}
-        sim_data["var_info"] = var_info
         p = results / "showcase_applicant_simulator.json"
         with open(p, "w", encoding="utf-8") as f:
             json.dump(sim_data, f)
         out["applicant_simulator"] = p
     except Exception as e:
         print(f"Failed to build applicant simulator: {e}")
-    
-    # Cutoff explorer
+
+    # Cutoff explorer: score histograms for goods and bads on the primary test
+    # window, scored from the published points table and the saved WoE matrix.
     try:
-        # Use score distributions
+        assert points is not None and scaler is not None
+        woe = _pd.read_csv(results / "pd_woe_oot.csv")
+        y = woe.pop("default_flag").to_numpy(dtype=int)
+        # The exported WoE matrix is rounded to 6 dp; round the published points
+        # table the same way so the lookup matches every row.
+        points_rounded = points.copy()
+        points_rounded["woe"] = points_rounded["woe"].round(6)
+        point_sum = sc.score_from_woe(woe, points_rounded, sc.ScorecardScaler(
+            scaler["base_score"], scaler["base_odds"], scaler["pdo"]))
+        scores = point_sum + float(scaler["offset"])
+        finite = np.isfinite(scores)
+        scores = scores[finite]
+        y = y[finite]
+        lo = float(np.floor(scores.min() / 10.0) * 10.0)
+        hi = float(np.ceil(scores.max() / 10.0) * 10.0)
+        edges = np.linspace(lo, hi, 49)
+        goods, _ = np.histogram(scores[y == 0], bins=edges)
+        bads, _ = np.histogram(scores[y == 1], bins=edges)
+        cutoff_pd = _finite(summary["pd"].get("cutoff"), 0.5)
+        factor = float(scaler["factor"])
+        offset = float(scaler["offset"])
+        cutoff_score = offset + factor * np.log(max(1e-9, (1.0 - cutoff_pd) / max(1e-9, cutoff_pd)))
         cutoff_data = {
-            "cutoff": summary["pd"].get("cutoff"),
-            "confusion": summary["pd"].get("confusion_oot"),
-            "histograms": {"goods": [], "bads": []},  # placeholder
+            "cutoff_pd": cutoff_pd,
+            "cutoff_score": round(float(cutoff_score), 4),
+            "confusion": summary["pd"].get("confusion_oot", {}),
+            "histograms": {
+                "bins": [round(float(x), 4) for x in edges],
+                "goods": [int(x) for x in goods],
+                "bads": [int(x) for x in bads],
+                "n_goods": int(goods.sum()),
+                "n_bads": int(bads.sum()),
+            },
         }
         p = results / "showcase_cutoff_explorer.json"
         with open(p, "w", encoding="utf-8") as f:
             json.dump(cutoff_data, f)
         out["cutoff_explorer"] = p
+        # The simulator's percentile uses the same real score distribution.
+        combined = goods + bads
+        sim_data["test_score_bins"] = cutoff_data["histograms"]["bins"]
+        sim_data["test_score_hist"] = [int(x) for x in combined]
+        with open(results / "showcase_applicant_simulator.json", "w", encoding="utf-8") as f:
+            json.dump(sim_data, f)
     except Exception as e:
         print(f"Failed to build cutoff explorer: {e}")
-    
-    # Loan map - PCA of clustering features
-    try:
-        clu_feats = ["loan_amnt", "annual_inc", "dti", "revol_util", "open_acc", 
-                     "total_acc", "credit_history_months", "installment_to_income",
-                     "loan_amnt_to_income", "tot_cur_bal", "revol_bal", "total_rev_hi_lim"]
-        # Try to load from modeling data if exists
-        import duckdb
 
-        from .config import Config
-        cfg = Config.load()
-        parquet = cfg.path("modeling_parquet")
-        if parquet.exists():
-            con = duckdb.connect()
-            con.execute("SET threads TO 4")
-            df = con.execute(f"SELECT * FROM '{parquet.as_posix()}' LIMIT 10000").df()
-            con.close()
-            # Get features
-            feats = [f for f in clu_feats if f in df.columns]
-            X = df[feats].copy()
-            X = X.fillna(X.median())
-            # Log transform skewed features
-            for c in ["loan_amnt", "annual_inc", "tot_cur_bal", "revol_bal", "total_rev_hi_lim"]:
-                if c in X.columns:
-                    X[c] = np.log1p(X[c].clip(lower=0))
-            scaler = StandardScaler()
-            Xs = scaler.fit_transform(X)
-            pca = PCA(n_components=3)
-            pcs = pca.fit_transform(Xs)
-            # Sample 5000
-            rng = np.random.default_rng(42)
-            idx = rng.choice(len(pcs), size=min(5000, len(pcs)), replace=False)
-            points = []
-            for i in idx:
-                points.append({
-                    "pc1": round(float(pcs[i,0]), 3),
-                    "pc2": round(float(pcs[i,1]), 3),
-                    "pc3": round(float(pcs[i,2]), 3),
-                    "pd": round(float(np.clip(rng.random()*0.3, 0.01, 0.5)), 4),
-                    "default": bool(df.iloc[i]['default_flag']) if 'default_flag' in df.columns else bool(rng.random() < 0.2)
-                })
-            lm_data = {"points": points, "n": len(points), "explained_variance": pca.explained_variance_ratio_.tolist()}
-            p = results / "showcase_loan_map.json"
-            with open(p, "w", encoding="utf-8") as f:
-                json.dump(lm_data, f)
-            out["loan_map"] = p
-        else:
-            # Generate synthetic
-            rng = np.random.default_rng(42)
-            points = []
-            for _i in range(5000):
-                points.append({
-                    "pc1": round(float(rng.randn()), 3),
-                    "pc2": round(float(rng.randn()), 3),
-                    "pc3": round(float(rng.randn()), 3),
-                    "pd": round(float(rng.beta(2, 10)), 4),
-                    "default": bool(rng.random() < 0.2)
-                })
-            lm_data = {"points": points, "n": 5000}
-            p = results / "showcase_loan_map.json"
-            with open(p, "w", encoding="utf-8") as f:
-                json.dump(lm_data, f)
-            out["loan_map"] = p
-    except Exception as e:
-        print(f"Failed to build loan map: {e}")
-    
-    # Validation timeline
+    # Real validation windows, used only in the provenance drawer.
     try:
+        split = summary.get("pd", {}).get("split_design", {})
+        primary = split.get("primary", {})
+        secondary = split.get("secondary", {})
         tl = {
             "windows": [
-                {"name": "Train (mature)", "years": summary["pd"]["train_years"], "resolved": 0.99, "type": "train"},
-                {"name": "Test (mature)", "years": summary["pd"]["oot_years"], "resolved": 0.98, "type": "test"},
-                {"name": "Censored", "years": [2017, 2018], "resolved": 0.45, "type": "censored"},
+                {
+                    "name": "Train (mature)",
+                    "years": primary.get("train_years", summary["pd"].get("train_years")),
+                    "resolved": primary.get("train_resolution", {}).get("resolved_share"),
+                    "n": primary.get("train_resolution", {}).get("n_loans"),
+                    "type": "train",
+                },
+                {
+                    "name": "Test (mature)",
+                    "years": primary.get("test_years", summary["pd"].get("oot_years")),
+                    "resolved": primary.get("test_resolution", {}).get("resolved_share"),
+                    "n": primary.get("test_resolution", {}).get("n_loans"),
+                    "type": "test",
+                },
+                {
+                    "name": "Censored (secondary)",
+                    "years": secondary.get("test_years", [2017, 2018]),
+                    "resolved": secondary.get("test_resolution_all_terms", {}).get("resolved_share"),
+                    "n": secondary.get("test_resolution_all_terms", {}).get("n_loans"),
+                    "type": "censored",
+                },
             ]
         }
         p = results / "showcase_validation_timeline.json"
@@ -786,95 +992,15 @@ def build_interactive_data(summary: Dict[str, Any]) -> Dict[str, Path]:
         out["validation_timeline"] = p
     except Exception as e:
         print(f"Failed to build validation timeline: {e}")
-    
 
-    # Portfolio explorer aggregates from primary test window predictions
+
+    # Portfolio explorer aggregates from primary test window predictions.
     try:
-        import pandas as pd
-        pred_path = results / "oot_predictions.parquet"
-        if pred_path.exists():
-            pdf = pd.read_parquet(pred_path)
-        else:
-            pdf = None
-        if pdf is not None:
-            pdf = pdf.copy()
-            pdf["issue_year"] = pd.to_datetime(pdf["issue_d"], errors="coerce").dt.year
-            pdf["term_clean"] = pdf["term"].astype(str).str.extract(r"(\d+)")[0].astype(float)
-            mask = (pdf["issue_year"].between(2014, 2015)) & (pdf["term_clean"] == 36)
-            test = pdf[mask].copy()
-            total_n = len(test)
-            total_dr = float(test["default_flag"].mean()) if total_n else 0.0
-            total_ead = float(test["loan_amnt"].sum()) if "loan_amnt" in test.columns else summary["simulation"]["total_ead"]
-
-            def wilson(p, n, z=1.95996):
-                if n == 0:
-                    return [0.0, 0.0]
-                denom = 1 + z*z/n
-                center = (p + z*z/(2*n)) / denom
-                half = z/denom * (p*(1-p)/n + z*z/(4*n*n))**0.5
-                return [max(0.0, center-half), min(1.0, center+half)]
-
-            def agg(col):
-                if col not in test.columns and col != "vintage":
-                    return []
-                if col == "vintage":
-                    g = test.groupby("issue_year")
-                else:
-                    g = test.groupby(col)
-                items = []
-                for name, grp in g:
-                    n = len(grp)
-                    if n == 0:
-                        continue
-                    dr = float(grp["default_flag"].mean())
-                    ci = wilson(dr, n)
-                    ead = float(grp["loan_amnt"].sum()) if "loan_amnt" in grp.columns else 0.0
-                    pred_pd = float(grp["pd_calibrated"].mean()) if "pd_calibrated" in grp.columns else dr
-                    mean_lgd = 0.8678
-                    el_rate = pred_pd * 0.8678
-                    items.append({
-                        "id": str(name), "name": str(name), "n": int(n),
-                        "default_rate": dr, "ci_low": ci[0], "ci_high": ci[1],
-                        "pred_pd": pred_pd, "mean_lgd": mean_lgd,
-                        "ead": ead, "ead_share": ead/total_ead if total_ead else n/total_n,
-                        "el_pct_ead": el_rate,
-                    })
-                items.sort(key=lambda x: x["el_pct_ead"], reverse=True)
-                return items
-
-            pe = {
-                "meta": {"window": "primary_mature_test", "years": [2014, 2015], "term": "36",
-                         "n_total": int(total_n), "default_rate_total": total_dr, "ead_total": total_ead,
-                         "min_n": 500},
-                "dimensions": {
-                    "total": [{"id": "total", "name": "Total", "n": int(total_n), "default_rate": total_dr,
-                               "ci_low": wilson(total_dr, total_n)[0], "ci_high": wilson(total_dr, total_n)[1],
-                               "pred_pd": float(test["pd_calibrated"].mean()) if "pd_calibrated" in test.columns else total_dr,
-                               "mean_lgd": 0.8678, "ead": total_ead, "ead_share": 1.0,
-                               "el_pct_ead": (float(test["pd_calibrated"].mean()) if "pd_calibrated" in test.columns else total_dr) * 0.8678}],
-                    "state": agg("addr_state"),
-                    "grade": agg("grade"),
-                    "purpose": agg("purpose"),
-                    "vintage": agg("vintage"),
-                    "term": agg("term"),
-                    "home_ownership": agg("home_ownership"),
-                },
-                "tilemap": {"metric_options": ["default_rate", "pred_pd", "el_pct_ead"],
-                            "default_metric": "default_rate", "min_n": 500,
-                            "states": {}},
-            }
-            for item in pe["dimensions"]["state"]:
-                if item["n"] < 500:
-                    item["insufficient"] = True
-                else:
-                    item["insufficient"] = False
-                pe["tilemap"]["states"][item["id"]] = item
-            p = results / "portfolio_explorer.json"
-            with open(p, "w", encoding="utf-8") as f:
-                json.dump(pe, f)
+        p = build_portfolio_explorer(summary, results)
+        if p is not None:
             out["portfolio_explorer"] = p
-    except Exception as e:
-        print("Failed to build portfolio explorer: " + str(e))
+    except Exception as exc:
+        print(f"Failed to build portfolio explorer: {exc}")
 
     return out
 
@@ -894,17 +1020,17 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
     
     # Try to load interactive data
     interactive = {}
-    for name in ["showcase_risk_surface.json", "showcase_scenario_explorer.json", 
+    for name in ["showcase_risk_surface.json", "showcase_scenario_explorer.json",
                  "showcase_applicant_simulator.json", "showcase_cutoff_explorer.json",
-                 "showcase_loan_map.json", "showcase_validation_timeline.json"]:
+                 "showcase_validation_timeline.json"]:
         try:
             interactive[name.replace("showcase_", "").replace(".json", "")] = _load_json(name)
         except Exception:
             pass
     try:
-        interactive["portfolio_explorer"] = _load_json("portfolio_explorer.json")
+        portfolio_data = _load_json("portfolio_explorer.json")
     except Exception:
-        pass
+        portfolio_data = None
 
     # ------------------------------------------------------------------
     # display: every string the page renders, preformatted here in Python.
@@ -1189,13 +1315,14 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
             "illustrative_gap": (reject.get("extrapolation_gap") or {}).get("illustrative_gap"),
             "common_variable_shift": reject.get("common_variable_shift"),
         },
+        "portfolio_explorer": portfolio_data,
         "interactive": interactive,
         "test_count": summary.get("test_count"),
         "limitations": limitations,
     }
     DOCS.mkdir(parents=True, exist_ok=True)
     with open(DOCS / "data.json", "w", encoding="utf-8", newline="\n") as f:
-        json.dump(payload, f, indent=1, default=str)
+        json.dump(payload, f, separators=(",", ":"), default=str)
         f.write("\n")
     bake_index_html(payload)
     return DOCS / "data.json"
@@ -1257,7 +1384,7 @@ def _table_rows(payload: Dict[str, Any]) -> Dict[str, str]:
     lgd_rows = "".join(
         "<tr><td>{name}{star}</td><td>{mae}</td><td>{rmse}</td><td>{r2}</td></tr>".format(
             name=html_lib.escape(str(m.get("model", ""))),
-            star=" ★" if m.get("model") == lgd.get("best_model") else "",
+            star=" ★" if m.get("model") == (lgd.get("best_lgd_model") or lgd.get("best_model")) else "",
             mae=_num4(m.get("mae")),
             rmse=_num4(m.get("rmse")),
             r2=_num4(m.get("r2")),

@@ -614,8 +614,8 @@ def risk_surface_grid(
         "es_0.99": [],
         "es_0.999": [],
     }
-    for i, rho in enumerate(rhos):
-        for j, pm in enumerate(pds):
+    for _i, rho in enumerate(rhos):
+        for _j, pm in enumerate(pds):
             stressed = BucketedPortfolio(
                 ead=portfolio.ead,
                 lgd=portfolio.lgd,
@@ -686,7 +686,6 @@ def scenario_histograms_grid(
                     stratified=True,
                 )
                 losses = np.asarray(out["losses"], dtype=float)
-                stats = out["stats"]
                 key = f"rho{rho:.3f}_pd{pm:.2f}_lgd{lm:.2f}"
                 h = histogram_export(losses, portfolio.total_ead, n_bins=n_bins)
                 hist_map[key] = {

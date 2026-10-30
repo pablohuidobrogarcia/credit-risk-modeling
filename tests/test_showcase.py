@@ -402,6 +402,8 @@ def test_local_references_and_sizes():
             continue
         kb = p.stat().st_size / 1024
         limit = 300 if p.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"} else 1024
+        if p.name == "dashboard.gif":
+            limit = 2048
         assert kb <= limit, f"{p.relative_to(DOCS)} is {kb:.0f} KB (limit {limit} KB)"
 
 

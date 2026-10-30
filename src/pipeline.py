@@ -749,6 +749,25 @@ def _run_pd_window(
         except Exception as exc:  # pragma: no cover - defensive
             print(f"    SHAP summary skipped: {exc}")
 
+    # Persist out-of-time predictions for downstream portfolio-explorer aggregates.
+    # This must happen before the return below; otherwise the artifacts never exist.
+    # Only the primary (mature) window feeds the explorer.
+    try:
+        if kind != "mature":
+            raise RuntimeError("secondary window is not exported")
+        _out = oot.copy()
+        _out["pd_raw"] = np.asarray(pd_oot, dtype=float)
+        _out["pd_calibrated"] = np.asarray(pd_oot_cal, dtype=float)
+        _out["score"] = np.asarray(score_oot, dtype=float)
+        _keep = [c for c in ["addr_state", "grade", "purpose", "issue_d", "term",
+                             "home_ownership", "loan_amnt", "default_flag",
+                             "pd_raw", "pd_calibrated", "score"] if c in _out.columns]
+        from pathlib import Path
+        _p = Path(__file__).resolve().parents[1] / "reports" / "results" / "oot_predictions.parquet"
+        _out[_keep].to_parquet(_p, index=False)
+    except Exception as exc:
+        print(f"    prediction export skipped: {exc}")
+
     return {
         "window": kind,
         "n_train": int(len(train)),
@@ -792,21 +811,6 @@ def _run_pd_window(
         "pd_oot_calibrated": np.asarray(pd_oot_cal, dtype=float),
         "pd_train_calibrated": np.asarray(pd_tr_cal, dtype=float),
     }
-    # Persist out-of-time predictions for downstream portfolio-explorer aggregates.
-    try:
-        from pathlib import Path
-        _out = oot.copy()
-        _out["pd_raw"] = np.asarray(pd_oot, dtype=float)
-        _out["pd_calibrated"] = np.asarray(pd_oot_cal, dtype=float)
-        _keep = [c for c in ["addr_state", "grade", "purpose", "issue_d", "term",
-                             "home_ownership", "loan_amnt", "default_flag",
-                             "pd_raw", "pd_calibrated"] if c in _out.columns]
-        _p = Path(__file__).resolve().parents[1] / "reports" / "results" / "oot_predictions.parquet"
-        _out[_keep].to_parquet(_p, index=False)
-    except Exception:
-        pass
-
-
 def _window_comparison(primary: Dict[str, Any], secondary: Dict[str, Any]) -> pd.DataFrame:
     """Side-by-side headline metrics: mature (primary) vs immature (secondary)."""
 

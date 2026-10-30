@@ -285,6 +285,7 @@ button, input, select { font: inherit; color: inherit; }
 .search-wrap input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); outline: none; }
 
 .panel {
+  min-width: 0; max-width: 100%;
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--card); backdrop-filter: blur(16px);
   box-shadow: var(--shadow-soft); padding: 1.15rem;
@@ -436,13 +437,16 @@ button, input, select { font: inherit; color: inherit; }
 .gauge .hub { fill: var(--fg); }
 .gauge text { fill: var(--fg); font-family: var(--serif); font-weight: 650; }
 .gauge .scale { fill: var(--fg-soft); font-family: var(--sans); font-size: 9px; font-weight: 600; }
-.risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; }
+.risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; }
+.risk-grid > * { min-width: 0; }
+.summary-body > * { min-width: 0; }
 .risk-grid.lower { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin-top: 0.55rem; font-size: 0.74rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .chart-legend .legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
 .chart-legend .legend-swatch { width: 22px; height: 0; border-top-width: 2.5px; border-top-style: solid; border-radius: 2px; }
 .chart-legend strong { color: var(--fg); font-weight: 700; }
-.chart-host { height: 340px; min-height: 340px; width: 100%; }
+.chart-host { height: 340px; min-height: 340px; width: 100%; min-width: 0; max-width: 100%; }
+.chart-host .plot-container, .chart-host .svg-container { max-width: 100% !important; }
 .chart-host.small { height: 250px; min-height: 250px; }
 .chart-fallback { color: var(--fg-muted); font-size: 0.85rem; margin-top: 0.5rem; }
 .sim-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; align-items: center; }

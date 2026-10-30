@@ -491,6 +491,8 @@ function plot(el, traces, layout, { small = false } = {}) {
   clearFallback(el);
   const merged = Object.assign(plotTheme(), layout || {});
   if (merged.height == null) merged.height = small ? 250 : 340;
+  const hostWidth = el.clientWidth;
+  if (!merged.width && hostWidth > 0) merged.width = hostWidth;
   if (small) merged.margin = Object.assign({ l: 50, r: 14, t: 18, b: 40 }, merged.margin || {});
   try {
     if (el.__plotted) PLOTLY.react(el, traces, merged, plotlyConfig());

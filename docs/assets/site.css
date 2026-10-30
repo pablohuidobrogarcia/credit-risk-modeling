@@ -571,7 +571,8 @@ thead th { color: var(--fg-soft); font-size: 0.7rem; text-transform: uppercase; 
   .window-pill { display: none; }
   .brand span:last-child { font-size: 0.95rem; }
   .kpi-strip { grid-template-columns: repeat(2, 1fr); }
-  .view-tabs { width: 100%; }
+  .view-tabs { width: 100%; flex-wrap: wrap; overflow-x: visible; border-radius: 20px; }
+  .view-tab { flex: 0 1 auto; }
   .section-heading { align-items: flex-start; }
   .segmented { flex-wrap: nowrap; overflow-x: auto; width: 100%; max-width: 100%; scrollbar-width: none; }
   .segmented::-webkit-scrollbar { display: none; }

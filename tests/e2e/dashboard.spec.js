@@ -102,7 +102,7 @@ test("every ranked row selects the linked tile and summary", async ({ page }) =>
   await expectNoErrors(errors);
 });
 
-test("metric tabs recolour the map and re-sort the list", async ({ page }) => {
+test("metric tabs recolor the map and re-sort the list", async ({ page }) => {
   const errors = await open(page);
   const firstTile = page.locator("#tile-map .tile[data-id='CA']");
   const before = await firstTile.evaluate((el) => getComputedStyle(el).backgroundColor);
@@ -539,6 +539,7 @@ test("reduced motion keeps count-ups instant and turns the sweep into one step",
   expect(parseFloat(duration)).toBeLessThan(0.01);
   await expectNoErrors(errors);
 });
+
 
 
 

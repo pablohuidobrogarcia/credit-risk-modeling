@@ -8,7 +8,7 @@ const PE = DATA.portfolio_explorer;
 const PLOTLY_PATH = path.join(ROOT, "node_modules/plotly.js-dist-min/plotly.min.js");
 
 const pct = (v, nd = 2) => `${(v * 100).toFixed(nd)}%`;
-const dims = ["total", "state", "grade", "purpose", "vintage", "term", "home_ownership"];
+const dims = ["total", "state", "grade", "purpose", "vintage", "home_ownership"];
 
 async function open(page, { blockCdn = false } = {}) {
   const errors = [];
@@ -58,6 +58,16 @@ test("every dimension tab changes the whole explorer and the URL", async ({ page
       await expect(page.locator("#summary-title")).toHaveText("Portfolio");
     }
   }
+  await expectNoErrors(errors);
+});
+
+test("single-valued Term dimension is hidden and the hash falls back safely", async ({ page }) => {
+  const errors = await open(page);
+  await expect(page.locator('#dimension-tabs button[data-dim="term"]')).toHaveCount(0);
+  await page.goto("/#view=explorer&dim=term&metric=default_rate");
+  await page.waitForTimeout(500);
+  await expect(page.locator("#dimension-tabs button[data-dim='state']")).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(/dim=state/);
   await expectNoErrors(errors);
 });
 
@@ -215,12 +225,11 @@ test("clicking the surface point moves the linked sliders", async ({ page }) => 
 test("applicant simulator recomputes score, PD and percentile", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
-  const select = page.locator("#sim-controls select").first();
   const before = await page.locator("#sim-score").innerText();
-  await select.selectOption({ index: 1 });
+  await page.locator('#sim-presets [data-preset="higher"]').click();
   await expect(page.locator("#sim-score")).not.toHaveText(before);
   await expect(page.locator("#sim-pd")).toContainText("%");
-  await expect(page.locator("#sim-pct")).toContainText("th");
+  await expect(page.locator("#sim-pct")).toContainText("%");
   await expectNoErrors(errors);
 });
 
@@ -274,6 +283,8 @@ test("mobile 390px stacks panels without horizontal scrolling and falls back to 
   const errors = await open(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+  const mapOverflow = await page.locator("#tile-map").evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(mapOverflow).toBeLessThanOrEqual(1);
   await page.locator("#view-tab-risk").click();
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("#surface-chart")).toHaveAttribute("data-mode", "heatmap");
@@ -291,6 +302,192 @@ test("blocked CDN falls back to static charts without page errors", async ({ pag
   await expectNoErrors(errors);
 });
 
+test("every info button maps to content and opens one popover at a time", async ({ page }) => {
+  const INFO = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/info.json"), "utf8"));
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await page.waitForTimeout(600);
+  const LEARN = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/learn.json"), "utf8"));
+  const ids = await page.evaluate(() => Array.from(new Set(Array.from(document.querySelectorAll("[data-info]")).map((el) => el.dataset.info))));
+  for (const id of ids) {
+    expect(INFO[id], `missing info content for ${id}`).toBeTruthy();
+    expect(LEARN.terms.some((term) => term.id === INFO[id].term), `missing Learn term for ${id}`).toBeTruthy();
+  }
+  await page.locator("#view-tab-explorer").click();
+  await page.waitForTimeout(300);
+  const mapButton = page.locator('[data-info="map"]').first();
+  await mapButton.click();
+  await expect(page.locator("#info-popover")).toBeVisible();
+  await expect(mapButton).toHaveAttribute("aria-expanded", "true");
+  const popBox = await page.locator("#info-popover").boundingBox();
+  expect(popBox.x).toBeGreaterThanOrEqual(0);
+  expect(popBox.y).toBeGreaterThanOrEqual(0);
+  expect(popBox.x + popBox.width).toBeLessThanOrEqual(1360);
+  expect(popBox.y + popBox.height).toBeLessThanOrEqual(1000);
+  await expect(page.locator("#info-popover .info-close")).toBeFocused();
+  const second = page.locator('[data-info="metric-tabs"]').first();
+  await second.click();
+  await expect(second).toHaveAttribute("aria-expanded", "true");
+  await expect(mapButton).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#info-popover")).toBeHidden();
+  await expect(second).toBeFocused();
+  await mapButton.click();
+  await page.locator("#summary-title").click();
+  await expect(page.locator("#info-popover")).toBeHidden();
+  for (const view of ["explorer", "risk", "evidence", "learn"]) {
+    await page.locator(`#view-tab-${view}`).click();
+    await page.waitForTimeout(250);
+    const buttons = page.locator("[data-info]:visible");
+    const count = await buttons.count();
+    for (let i = 0; i < count; i += 1) {
+      const button = buttons.nth(i);
+      await button.click();
+      await expect(page.locator("#info-popover")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#info-popover")).toBeHidden();
+    }
+  }
+  await expectNoErrors(errors);
+});
+
+test("info popovers work on mobile and do not overflow 390px", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await open(page);
+  await page.locator('[data-info="map"]').first().click();
+  await expect(page.locator("#info-popover")).toBeVisible();
+  const box = await page.locator("#info-popover").boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(391);
+  expect(box.y + box.height).toBeLessThanOrEqual(845);
+  await page.keyboard.press("Escape");
+  await expectNoErrors(errors);
+});
+
+test("Learn guide, glossary, categories, search and hash round-trip", async ({ page }) => {
+  const errors = await open(page);
+  const LEARN = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/learn.json"), "utf8"));
+  await page.locator("#view-tab-learn").click();
+  await expect(page.locator("#learn-guide .guide-card")).toHaveCount(5);
+  const required = ["loan", "default", "resolved-loan", "grade", "dti", "revolving-utilization", "annual-income", "home-ownership", "loan-purpose", "term", "vintage", "pd", "lgd", "ead", "el", "ul", "approval-rate", "bad-rate", "cutoff", "percentile", "scorecard", "score", "points", "pdo", "woe", "iv", "logistic-regression", "lightgbm", "champion", "features", "leakage", "calibration", "brier", "citl", "auc", "gini", "ks", "psi", "roc", "confusion-matrix", "out-of-time", "primary-window", "right-censoring", "small-segment-masking", "wilson-ci", "selection-bias", "monte-carlo", "vasicek", "rho", "systematic-factor", "stress-test", "var", "es", "loss-distribution", "importance-sampling", "basel-correlation", "not-a-decision", "descriptive"];
+  for (const id of required) {
+    const entry = LEARN.terms.find((t) => t.id === id);
+    expect(entry, `missing glossary term ${id}`).toBeTruthy();
+    expect(entry.definition.length).toBeGreaterThan(10);
+  }
+  await page.locator("#glossary-search").fill("value at risk");
+  await expect(page.locator("#glossary-list .glossary-entry")).toHaveCount(1);
+  await expect(page.locator("#term-var")).toBeVisible();
+  await page.locator('#glossary-categories button[data-category="Portfolio risk"]').click();
+  await expect(page.locator("#glossary-list .glossary-entry")).not.toHaveCount(0);
+  await page.goto("/#view=learn&term=pd");
+  await page.waitForTimeout(900);
+  await expect(page.locator("#term-pd")).toHaveAttribute("open", "");
+  await page.reload();
+  await page.waitForTimeout(900);
+  await expect(page.locator("#term-pd")).toHaveAttribute("open", "");
+  await expectNoErrors(errors);
+});
+
+test("info Learn more and glossary See it links resolve", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('[data-info="map"]').first().click();
+  await expect(page.locator("#info-popover .info-learn")).toBeVisible();
+  await page.locator("#info-popover .info-learn").click();
+  await expect(page.locator("#view-learn")).toBeVisible();
+  await expect(page.locator("#term-small-segment-masking")).toHaveAttribute("open", "");
+  await page.locator("#glossary-search").fill("value at risk");
+  await page.locator("#term-var").click();
+  await page.locator('#term-var [data-see-term="var"]').click();
+  await expect(page.locator("#view-risk")).toBeVisible();
+  await expectNoErrors(errors);
+});
+
+test("simulator defaults to a typical applicant, uses readable bins and its breakdown sums", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await page.waitForTimeout(500);
+  const app = DATA.interactive.applicant_simulator;
+  let points = 0;
+  for (const [variable, key] of Object.entries(app.presets.typical)) {
+    const opt = app.var_meta[variable].options.find((o) => o.key === key);
+    points += Number(opt.points);
+  }
+  const expectedScore = app.base_points + points;
+  const displayed = Number(await page.locator("#sim-score").innerText());
+  expect(Math.abs(displayed - expectedScore)).toBeLessThan(1);
+  const factor = app.scaler.factor;
+  const expectedPd = 1 / (1 + Math.exp(points / factor));
+  const pdText = await page.locator("#sim-pd").innerText();
+  expect(Math.abs(parseFloat(pdText) - expectedPd * 100)).toBeLessThan(0.01);
+  const options = await page.locator("#sim-controls select option").allInnerTexts();
+  for (const text of options) {
+    expect(text).not.toMatch(/__|inf|e\+|\(|\)|\[|\]/i);
+  }
+  const labels = await page.locator("#sim-controls .sim-range-label").allInnerTexts();
+  expect(labels.every((x) => x.trim())).toBeTruthy();
+  for (const [variable, meta] of Object.entries(app.var_meta)) {
+    for (const option of meta.options) {
+      const jsLabel = await page.evaluate(({ variable, key }) => window.__formatBin(variable, key), { variable, key: option.key });
+      expect(jsLabel).toBe(option.label);
+    }
+  }
+  await page.locator("#sim-breakdown-details summary").click();
+  const rows = await page.locator("#sim-breakdown tbody tr").allInnerTexts();
+  const totalRow = rows[rows.length - 1];
+  expect(totalRow).toContain(String(Math.round(expectedScore)));
+  await page.locator("#sim-presets [data-preset='higher']").click();
+  await page.waitForTimeout(700);
+  const high = Number(await page.locator("#sim-score").innerText());
+  expect(high).toBeLessThan(displayed);
+  await page.locator("#sim-presets [data-preset='reset']").click();
+  await expect(page.locator("#sim-score")).toHaveText(String(Math.round(expectedScore)));
+  await expectNoErrors(errors);
+});
+
+test("loss markers use a readable legend and the surface card is large with a base-case label", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await page.waitForTimeout(2500);
+  await expect(page.locator("#loss-legend .legend-item")).toHaveCount(4);
+  const legend = await page.locator("#loss-legend").innerText();
+  for (const label of ["EL", "VaR 99%", "VaR 99.9%", "ES 99%"]) expect(legend).toContain(label);
+  for (const item of await page.locator("#loss-legend .legend-item").all()) {
+    const box = await item.boundingBox();
+    expect(box.width).toBeGreaterThan(20);
+  }
+  const surfaceHeight = await page.locator("#surface-chart").evaluate((el) => el.getBoundingClientRect().height);
+  expect(surfaceHeight).toBeGreaterThanOrEqual(520);
+  const surfaceData = await page.locator("#surface-chart").evaluate((el) => el.data);
+  expect(JSON.stringify(surfaceData)).toContain("Base case");
+  const toggle = page.locator("#surface-metrics");
+  for (const button of await toggle.locator("button").all()) {
+    const box = await button.boundingBox();
+    expect(box.width).toBeGreaterThan(20);
+  }
+  await expectNoErrors(errors);
+});
+
+test("no-JS fallback contains KPIs, model table and limitations", async ({ browser }) => {
+  const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1360, height: 1000 } });
+  const page = await context.newPage();
+  await page.goto("/");
+  await expect(page.locator("#app-content")).toBeVisible();
+  await expect(page.locator("#kpi-loans")).toHaveText(DATA.display.n_rows);
+  await expect(page.locator("#kpi-auc")).toHaveText(DATA.display.champion_auc);
+  await expect(page.locator("#model-table tbody tr")).toHaveCount(7);
+  await expect(page.locator("#limitations-list li")).toHaveCount(DATA.limitations.length);
+  await context.close();
+});
+
+test("every docs asset is referenced", async () => {
+  const assets = fs.readdirSync(path.join(ROOT, "docs/assets"));
+  const refs = ["docs/index.html", "docs/assets/site.js", "docs/assets/site.css", "README.md"]
+    .map((file) => fs.readFileSync(path.join(ROOT, file), "utf8"))
+    .join("\n");
+  for (const asset of assets) expect(refs, `unreferenced asset ${asset}`).toContain(asset);
+});
+
 test("reduced motion keeps count-ups instant and turns the sweep into one step", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const errors = await open(page);
@@ -302,6 +499,7 @@ test("reduced motion keeps count-ups instant and turns the sweep into one step",
   expect(parseFloat(duration)).toBeLessThan(0.01);
   await expectNoErrors(errors);
 });
+
 
 
 

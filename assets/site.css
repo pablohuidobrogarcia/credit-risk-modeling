@@ -190,7 +190,10 @@ button, input, select { font: inherit; color: inherit; }
 @media (max-width: 520px) {
   .label-long { display: none; }
   .label-short { display: inline; }
-  .topbar-actions .text-btn { white-space: nowrap; }
+  .topbar-actions { gap: 0.28rem; }
+  .topbar-actions .text-btn, .topbar-actions .icon-btn { white-space: nowrap; padding: 0.4rem 0.55rem; font-size: 0.76rem; }
+  .topbar-actions .info-btn { width: 20px; height: 20px; min-width: 20px; }
+  .brand span:last-child { max-width: 142px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 /* ------------------------------------------------------------------ hero */

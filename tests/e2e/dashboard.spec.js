@@ -335,6 +335,14 @@ test("every info button maps to content and opens one popover at a time", async 
   await mapButton.click();
   await page.locator("#summary-title").click();
   await expect(page.locator("#info-popover")).toBeHidden();
+  await mapButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#info-popover")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await mapButton.focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator("#info-popover")).toBeVisible();
+  await page.keyboard.press("Escape");
   for (const view of ["explorer", "risk", "evidence", "learn"]) {
     await page.locator(`#view-tab-${view}`).click();
     await page.waitForTimeout(250);
@@ -361,6 +369,20 @@ test("info popovers work on mobile and do not overflow 390px", async ({ page }) 
   expect(box.x + box.width).toBeLessThanOrEqual(391);
   expect(box.y + box.height).toBeLessThanOrEqual(845);
   await page.keyboard.press("Escape");
+  for (const view of ["explorer", "risk", "evidence", "learn"]) {
+    await page.locator(`#view-tab-${view}`).click();
+    await page.waitForTimeout(200);
+    const buttons = page.locator("[data-info]:visible");
+    const count = await buttons.count();
+    for (let i = 0; i < count; i += 1) {
+      await buttons.nth(i).click();
+      const box = await page.locator("#info-popover").boundingBox();
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(391);
+      expect(box.y + box.height).toBeLessThanOrEqual(845);
+      await page.keyboard.press("Escape");
+    }
+  }
   await expectNoErrors(errors);
 });
 
@@ -374,6 +396,13 @@ test("Learn guide, glossary, categories, search and hash round-trip", async ({ p
     const entry = LEARN.terms.find((t) => t.id === id);
     expect(entry, `missing glossary term ${id}`).toBeTruthy();
     expect(entry.definition.length).toBeGreaterThan(10);
+  }
+  for (const entry of LEARN.terms) {
+    expect(entry.term.length).toBeGreaterThan(1);
+    expect(entry.definition.length).toBeGreaterThan(10);
+    expect(["explorer", "risk", "evidence"]).toContain(entry.see.view);
+    if (entry.see.dim) expect(DATA.portfolio_explorer.dimensions[entry.see.dim]).toBeTruthy();
+    if (entry.see.sim && entry.see.sim !== "score") expect(DATA.interactive.applicant_simulator.var_meta[entry.see.sim]).toBeTruthy();
   }
   await page.locator("#glossary-search").fill("value at risk");
   await expect(page.locator("#glossary-list .glossary-entry")).toHaveCount(1);
@@ -455,15 +484,18 @@ test("loss markers use a readable legend and the surface card is large with a ba
   for (const item of await page.locator("#loss-legend .legend-item").all()) {
     const box = await item.boundingBox();
     expect(box.width).toBeGreaterThan(20);
+    expect(await item.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
   }
   const surfaceHeight = await page.locator("#surface-chart").evaluate((el) => el.getBoundingClientRect().height);
   expect(surfaceHeight).toBeGreaterThanOrEqual(520);
   const surfaceData = await page.locator("#surface-chart").evaluate((el) => el.data);
   expect(JSON.stringify(surfaceData)).toContain("Base case");
+  await expect(page.locator("#surface-sub")).toContainText("base case");
   const toggle = page.locator("#surface-metrics");
   for (const button of await toggle.locator("button").all()) {
     const box = await button.boundingBox();
     expect(box.width).toBeGreaterThan(20);
+    expect(await button.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
   }
   await expectNoErrors(errors);
 });

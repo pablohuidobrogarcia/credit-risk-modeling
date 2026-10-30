@@ -1132,7 +1132,9 @@ function drawSurface() {
   const host = $("#surface-chart");
   const surf = D.interactive && D.interactive.risk_surface;
   if (!host || !surf) return;
-  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point. Click a point to move the sliders.`;
+  const base = surf.base_case;
+  const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
+  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText} Click a point to move the sliders.`;
   if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
   const matrix = surfaceMatrix(state.surfaceMetric);
   if (!matrix) return;
@@ -1140,8 +1142,8 @@ function drawSurface() {
   const markerRho = nearestValue(rhos, state.risk.rho);
   const markerPd = nearestValue(pds, state.risk.pd);
   const markerZ = z[pds.indexOf(markerPd)]?.[rhos.indexOf(markerRho)] || 0;
-  const baseRho = nearestValue(rhos, surf.base_case?.rho ?? 0.12);
-  const basePd = nearestValue(pds, surf.base_case?.pd_mult ?? 1);
+  const baseRho = nearestValue(rhos, surf.base_case?.rho ?? rhos[0]);
+  const basePd = nearestValue(pds, surf.base_case?.pd_mult ?? pds[0]);
   const baseZ = z[pds.indexOf(basePd)]?.[rhos.indexOf(baseRho)] || 0;
   const height = window.innerWidth < 700 ? 340 : 540;
   let ok = false;
@@ -1453,6 +1455,7 @@ function renderSimulator() {
   }
   const pct = total ? (below / total) * 100 : 0;
   const portfolioRate = pe() ? pe().meta.default_rate_total : null;
+  const testYears = pe() ? pe().meta.years.join("-") : "the test window";
   const typicalScore = Number(app.test_score_bins?.[0] || 0);
 
   simVariables(app).forEach((variable) => {
@@ -1463,7 +1466,7 @@ function renderSimulator() {
     const label = $(`#sim-label-${variable}`);
     if (label) label.textContent = opt.label;
     const share = $(`#sim-share-${variable}`);
-    if (share) share.textContent = opt.share ? `${(opt.share * 100).toFixed(1)}% of loans in the 2014-2015 test window have this value.` : "";
+    if (share) share.textContent = opt.share ? `${(opt.share * 100).toFixed(1)}% of loans in the ${testYears} test window have this value.` : "";
   });
 
   countUp($("#sim-score"), score, (v) => String(Math.round(v)));
@@ -1471,7 +1474,7 @@ function renderSimulator() {
   countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}%`);
   $("#sim-score-note").textContent = "Higher score = lower implied risk.";
   $("#sim-pd-note").textContent = `About ${Math.round(pd * 100)} out of 100 similar applicants default; the portfolio average is ${fmtPct(portfolioRate, 2)}.`;
-  $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the 2014-2015 test window.`;
+  $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the ${testYears} test window.`;
   $("#sim-gini").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)}`;
   $("#sim-gini-foot").textContent = fmtNum(D.pd.champion_gini, 4);
   renderScoreHist($("#sim-hist"), hist, bins, "Test-window score distribution", score);

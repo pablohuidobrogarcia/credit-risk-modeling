@@ -345,7 +345,6 @@ const STATIC_INFO = [
   ["#sim-score", "sim-score", "Score", "after"],
   ["#sim-pd", "sim-pd", "Implied PD", "after"],
   ["#sim-pct", "sim-percentile", "Percentile", "after"],
-  ["#sim-breakdown-details", "sim-breakdown", "Why this score?", "before"],
   ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
   ["#theme-toggle", "theme-toggle", "Theme", "after"],
   ["#provenance-btn", "provenance", "How do we know?", "after"],

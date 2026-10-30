@@ -600,6 +600,9 @@ thead th { color: var(--fg-soft); font-size: 0.7rem; text-transform: uppercase; 
   .chart-host { height: 300px; min-height: 300px; }
   .chart-host.surface-host { height: 340px; min-height: 340px; }
   .rank-list { max-height: 440px; }
+  .panel-head .control-with-info { min-width: 0; max-width: 100%; }
+  .panel-head .control-with-info > .info-btn { flex: 0 0 auto; }
+  .segmented.surface-toggle { width: auto; max-width: calc(100% - 26px); min-width: 0; overflow-x: auto; }
 }
 @media (max-width: 420px) {
   body { font-size: 15px; }

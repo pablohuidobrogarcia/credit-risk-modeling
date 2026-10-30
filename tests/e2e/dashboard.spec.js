@@ -293,7 +293,11 @@ test("mobile 390px stacks panels without horizontal scrolling and falls back to 
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("#surface-chart")).toHaveAttribute("data-mode", "heatmap");
   const overflowRisk = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflowRisk).toBeLessThanOrEqual(1);
+  const riskOffenders = await page.evaluate(() => Array.from(document.querySelectorAll("*"))
+    .map((el) => ({ el, box: el.getBoundingClientRect() }))
+    .filter(({ box }) => box.right > window.innerWidth + 1 || box.left < -1)
+    .map(({ el, box }) => `${el.tagName}#${el.id}.${String(el.className).slice(0, 40)} right=${box.right.toFixed(1)} width=${box.width.toFixed(1)}`));
+  expect(overflowRisk, riskOffenders.join("\n")).toBeLessThanOrEqual(1);
   await expectNoErrors(errors);
 });
 

@@ -282,7 +282,11 @@ test("mobile 390px stacks panels without horizontal scrolling and falls back to 
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = await open(page);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+  const offenders = await page.evaluate(() => Array.from(document.querySelectorAll("*"))
+    .map((el) => ({ el, box: el.getBoundingClientRect() }))
+    .filter(({ box }) => box.right > window.innerWidth + 1 || box.left < -1)
+    .map(({ el, box }) => `${el.tagName}#${el.id}.${String(el.className).slice(0, 40)} right=${box.right.toFixed(1)} width=${box.width.toFixed(1)}`));
+  expect(overflow, offenders.join("\n")).toBeLessThanOrEqual(1);
   const mapOverflow = await page.locator("#tile-map").evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(mapOverflow).toBeLessThanOrEqual(1);
   await page.locator("#view-tab-risk").click();

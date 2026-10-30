@@ -609,7 +609,9 @@ thead th { color: var(--fg-soft); font-size: 0.7rem; text-transform: uppercase; 
   .summary-kpis { grid-template-columns: 1fr 1fr; }
   .summary-card { padding: 1rem; }
   .tilemap.matrix { grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); }
-  .topbar-actions .text-btn { padding: 0.42rem 0.65rem; font-size: 0.76rem; }
+  .topbar-actions .text-btn { padding: 0.36rem 0.48rem; font-size: 0.74rem; }
+  .topbar-actions { gap: 0.22rem; }
+  .brand span:last-child { max-width: 138px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
 @media (prefers-reduced-motion: reduce) {

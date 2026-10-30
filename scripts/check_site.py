@@ -88,7 +88,20 @@ def main() -> int:
         problems.append(f"data-field '{f}' does not resolve in data.json")
     print(f"data-field placeholders: {len(fields)} (missing: {len(missing_fields)})")
 
-    # 4. Size limits. The data payload has a tighter budget than code and images.
+    # 4. Every asset in docs/assets is referenced by the site or the README.
+    reference_text = "\n".join(
+        p.read_text(encoding="utf-8", errors="ignore")
+        for p in [INDEX, DOCS / "assets" / "site.js", DOCS / "assets" / "site.css",
+                  DOCS.parent / "README.md"]
+        if p.exists()
+    )
+    for asset in sorted((DOCS / "assets").iterdir()):
+        if not asset.is_file():
+            continue
+        if asset.name not in reference_text:
+            problems.append(f"unreferenced asset: assets/{asset.name}")
+
+    # 5. Size limits. The data payload has a tighter budget than code and images.
     for p in sorted(DOCS.rglob("*")):
         if not p.is_file():
             continue

@@ -309,7 +309,7 @@ def test_run_all_generates_everything_from_fixture(monkeypatch, fixture_results,
     for key in ("censoring", "loss_distribution", "rho_sensitivity", "scorecard_panel",
                 "calibration_lift", "segments", "hero", "og_card", "data_json"):
         assert Path(out[key]).exists(), key
-    assert len(out["assets"]) >= 7
+    assert {Path(p).name for p in out["assets"]} >= {"loss_distribution.png", "risk_surface_static.png"}
     assert (docs / "data.json").exists()
 
 

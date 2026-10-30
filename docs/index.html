@@ -16,6 +16,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Cpath d='M7 22l5-7 4 4 3-5 6 8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/site.css">
+<noscript><style>#app-skeleton{display:none!important}#app-content[hidden]{display:block!important}</style></noscript>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -28,12 +29,12 @@
       </span>
       <span>Credit Risk <em>Studio</em></span>
     </a>
-    <span class="window-pill" id="window-pill" aria-live="polite">Loading window…</span>
+    <span class="window-pill" id="window-pill" aria-live="polite">Primary mature test window · 2014–2015 · 36-month</span>
     <div class="topbar-actions">
       <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch theme" title="Switch theme">
         <span id="theme-label">Auto</span>
       </button>
-      <button class="text-btn" id="provenance-btn" type="button">How do we know?</button>
+      <button class="text-btn" id="provenance-btn" type="button"><span class="label-long">How do we know?</span><span class="label-short">Why?</span></button>
     </div>
   </div>
 </header>
@@ -65,8 +66,8 @@
         </div>
         <div class="hero-note card-tint">
           <p class="mini-label">Primary mature test window</p>
-          <p class="hero-window" id="hero-window">—</p>
-          <p class="hero-note-copy" id="hero-note-copy">—</p>
+          <p class="hero-window" id="hero-window"><span data-field="display.oot_years">2014–2015</span> · 36-month</p>
+          <p class="hero-note-copy" id="hero-note-copy"><span data-field="display.n_oot">445,596</span> resolved loans · <span data-field="display.default_rate_oot">14.5%</span> observed default · <span data-field="display.el_rate">10.14%</span> expected loss.</p>
         </div>
       </div>
     </section>
@@ -74,23 +75,23 @@
     <div class="wrap">
       <section class="kpi-strip" aria-label="Headline results">
         <article class="kpi-card">
-          <p class="mini-label">Resolved loans</p>
-          <p class="kpi-value" id="kpi-loans" data-countup>—</p>
-          <p class="kpi-sub" id="kpi-loans-sub">—</p>
+          <p class="mini-label">Resolved loans (2007–2018)</p>
+          <p class="kpi-value" id="kpi-loans" data-countup data-field="display.n_rows">1,345,350</p>
+          <p class="kpi-sub" id="kpi-loans-sub">All resolved loans in the snapshot</p>
         </article>
         <article class="kpi-card">
           <p class="mini-label">Champion AUC</p>
-          <p class="kpi-value" id="kpi-auc" data-countup>—</p>
+          <p class="kpi-value" id="kpi-auc" data-countup data-field="display.champion_auc">0.6572</p>
           <p class="kpi-sub" id="kpi-auc-sub">—</p>
         </article>
         <article class="kpi-card">
           <p class="mini-label">Expected loss</p>
-          <p class="kpi-value" id="kpi-el" data-countup>—</p>
+          <p class="kpi-value" id="kpi-el" data-countup data-field="display.el_rate">10.14%</p>
           <p class="kpi-sub" id="kpi-el-sub">—</p>
         </article>
         <article class="kpi-card risk">
           <p class="mini-label">VaR 99.9%</p>
-          <p class="kpi-value" id="kpi-var" data-countup>—</p>
+          <p class="kpi-value" id="kpi-var" data-countup data-field="display.sim_var999">37.39%</p>
           <p class="kpi-sub" id="kpi-var-sub">—</p>
         </article>
       </section>
@@ -99,6 +100,7 @@
         <button class="view-tab" id="view-tab-explorer" role="tab" aria-controls="view-explorer" data-view="explorer" type="button">Portfolio Explorer</button>
         <button class="view-tab" id="view-tab-risk" role="tab" aria-controls="view-risk" data-view="risk" type="button">Risk Lab</button>
         <button class="view-tab" id="view-tab-evidence" role="tab" aria-controls="view-evidence" data-view="evidence" type="button">Evidence &amp; limits</button>
+        <button class="view-tab" id="view-tab-learn" role="tab" aria-controls="view-learn" data-view="learn" type="button">Learn</button>
       </nav>
     </div>
 
@@ -237,6 +239,7 @@
               <span class="warning-pill" id="tail-pill">Tail risk</span>
             </div>
             <div class="chart-host" id="loss-chart" role="img" aria-label="Simulated portfolio loss histogram with expected loss and tail markers"></div>
+            <div class="chart-legend" id="loss-legend" aria-label="Loss marker legend"></div>
             <p class="chart-fallback" id="loss-fallback" hidden></p>
           </section>
 
@@ -246,13 +249,13 @@
                 <h3 id="surface-title">VaR surface</h3>
                 <p class="panel-sub" id="surface-sub">—</p>
               </div>
-              <div class="segmented compact" id="surface-metrics" role="tablist" aria-label="Surface metric">
+              <div class="segmented surface-toggle compact" id="surface-metrics" role="tablist" aria-label="Surface metric">
                 <button type="button" data-metric="var_0.999" aria-selected="true">VaR 99.9%</button>
                 <button type="button" data-metric="es_0.999">ES 99.9%</button>
                 <button type="button" data-metric="el">EL</button>
               </div>
             </div>
-            <div class="chart-host" id="surface-chart" role="img" aria-label="Three-dimensional surface of portfolio risk across correlation and PD stress"></div>
+            <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional surface of portfolio risk across correlation and PD stress"></div>
             <p class="chart-fallback" id="surface-fallback" hidden></p>
           </section>
         </div>
@@ -266,13 +269,24 @@
               </div>
               <span class="panel-badge" id="sim-gini">—</span>
             </div>
+            <div class="sim-presets" id="sim-presets" aria-label="Applicant presets">
+              <button type="button" class="chip" data-preset="typical">Typical applicant</button>
+              <button type="button" class="chip" data-preset="lower">Lower-risk example</button>
+              <button type="button" class="chip" data-preset="higher">Higher-risk example</button>
+              <button type="button" class="chip" data-preset="reset">Reset</button>
+            </div>
             <div class="sim-controls" id="sim-controls"></div>
             <div class="sim-outputs">
-              <div><p class="mini-label">Score</p><p class="sim-value" id="sim-score">—</p></div>
-              <div><p class="mini-label">Implied PD</p><p class="sim-value" id="sim-pd">—</p></div>
-              <div><p class="mini-label">Percentile</p><p class="sim-value" id="sim-pct">—</p></div>
+              <div><p class="mini-label">Score</p><p class="sim-value" id="sim-score">—</p><p class="sub" id="sim-score-note">Higher score = lower risk</p></div>
+              <div><p class="mini-label">Implied PD</p><p class="sim-value" id="sim-pd">—</p><p class="sub" id="sim-pd-note">—</p></div>
+              <div><p class="mini-label">Percentile</p><p class="sim-value" id="sim-pct">—</p><p class="sub" id="sim-pct-note">—</p></div>
             </div>
+            <div id="sim-scale" class="sim-scale" role="img" aria-label="Score scale from lower to higher risk"></div>
             <div id="sim-hist" class="score-hist" role="img" aria-label="Test-window score distribution and the applicant marker"></div>
+            <details class="sim-breakdown" id="sim-breakdown-details">
+              <summary>Why this score?</summary>
+              <div id="sim-breakdown"></div>
+            </details>
             <p class="panel-foot">Gini <span id="sim-gini-foot">—</span>. A higher score means lower implied risk.</p>
           </section>
 
@@ -370,6 +384,36 @@
           <h3>What did not work, and limitations</h3>
           <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
           <p class="note-copy" id="segments-note"></p>
+        </section>
+      </div>
+    </section>
+
+    <!-- ================================================================ LEARN -->
+    <section class="view" id="view-learn" role="tabpanel" aria-labelledby="view-tab-learn" tabindex="0" hidden>
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Learn</p>
+            <h2>Start here: a 5-minute guide</h2>
+            <p class="section-lead">Plain-English definitions, the project's own examples and a link from every term back to the widget that uses it.</p>
+          </div>
+        </div>
+        <div class="guide-grid" id="learn-guide"></div>
+
+        <section class="panel glossary-panel" aria-labelledby="glossary-title">
+          <div class="panel-head">
+            <div>
+              <h3 id="glossary-title">Glossary</h3>
+              <p class="panel-sub" id="glossary-count">—</p>
+            </div>
+            <label class="search-wrap glossary-search">
+              <span class="sr-only">Search the glossary</span>
+              <input id="glossary-search" type="search" placeholder="Search a term or definition…" autocomplete="off">
+            </label>
+          </div>
+          <div class="glossary-categories" id="glossary-categories" role="group" aria-label="Glossary categories"></div>
+          <div class="glossary-list" id="glossary-list"></div>
+          <p class="empty-state" id="glossary-empty" hidden>No glossary entry matches that search.</p>
         </section>
       </div>
     </section>

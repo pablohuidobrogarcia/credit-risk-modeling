@@ -540,11 +540,6 @@ function renderShell() {
   if (!D) return;
   const meta = pe().meta;
   const disp = D.display || {};
-  const years = meta.years ? meta.years.join("–") : "2014–2015";
-  const windowText = `Primary mature test window · ${years} · ${meta.term}-month`;
-  $("#window-pill").textContent = windowText;
-  $("#hero-window").textContent = `${years} · ${meta.term}-month`;
-  $("#hero-note-copy").textContent = `${fmtInt(meta.n_total)} resolved loans · ${fmtPct(meta.default_rate_total, 2)} observed default · ${fmtPct(meta.el_pct_ead, 2)} expected loss. Small segments (n < ${fmtInt(meta.min_n)}) are masked.`;
   $("#hero-explore").onclick = () => setView("explorer");
   $("#hero-risk").onclick = () => setView("risk");
 
@@ -573,7 +568,7 @@ function renderShell() {
       if (event.key === "ArrowLeft") next = (idx - 1 + tabs.length) % tabs.length;
       if (event.key === "Home") next = 0;
       if (event.key === "End") next = tabs.length - 1;
-      tabs[next].focus(); setView(tabs[next].dataset.view);
+      setView(tabs[next].dataset.view); tabs[next].focus();
     };
   });
   $$(".view").forEach((panel) => { panel.hidden = panel.id !== `view-${state.view}`; });
@@ -844,7 +839,6 @@ function renderInsight() {
   const selected = state.dim === "total" ? null : selectedItem();
   const kicker = $("#insight-kicker");
   const copy = $("#insight-text");
-  const chips = $("#insight-chips");
   if (selected) {
     const diff = (num(item[state.metric]) || 0) - (num(total[state.metric]) || 0);
     const direction = diff >= 0 ? "above" : "below";
@@ -857,32 +851,6 @@ function renderInsight() {
     copy.innerHTML = `<span class="big">${fmtPct(total.default_rate, 2)}</span>
       observed default across <strong>${fmtInt(total.n)}</strong> resolved loans. Predicted PD is <strong>${fmtPct(total.pred_pd, 2)}</strong> and expected loss is <strong>${fmtPct(total.el_pct_ead, 2)}</strong> of EAD. Pick a dimension, then a tile or a ranked row, to compare one segment with the portfolio. ${masked ? `<strong>${masked} states</strong> are masked for small n.` : ""}`;
   }
-  const buttons = [
-    { label: "View by grade", run: () => { state.dim = "grade"; state.sel = null; commit({ push: true }); } },
-    { label: "Highest loss segment", run: () => {
-      let best = null; let bestDim = null;
-      Object.keys(dims()).forEach((dim) => {
-        if (dim === "total") return;
-        dims()[dim].forEach((candidate) => {
-          if (candidate.insufficient) return;
-          if (!best || candidate.el_pct_ead > best.el_pct_ead) { best = candidate; bestDim = dim; }
-        });
-      });
-      if (best) { state.dim = bestDim; state.sel = best.id; commit({ push: true }); }
-    } },
-    { label: "How do we know?", run: () => openDrawer() },
-    { label: "Compare to portfolio", run: () => { state.dim = "total"; state.sel = null; state.search = ""; commit({ push: true }); } },
-    { label: "Open risk lab", run: () => setView("risk") },
-  ];
-  chips.innerHTML = "";
-  buttons.forEach((b) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "chip";
-    btn.textContent = b.label;
-    btn.onclick = b.run;
-    chips.appendChild(btn);
-  });
 }
 
 function renderExplorer() {
@@ -1667,11 +1635,6 @@ function setWelcomeDismissed(dismissed) {
 function renderWelcome() {
   const overlay = $("#welcome-overlay");
   if (!overlay || !WELCOME.title) return false;
-  const cards = (WELCOME.cards || []).map((card) => `
-    <button type="button" class="welcome-card-link" data-welcome-target="${esc(card.target)}">
-      <span class="welcome-card-title">${esc(card.title)}</span>
-      <span class="welcome-card-text">${esc(card.text)}</span>
-    </button>`).join("");
   const items = ((WELCOME.what && WELCOME.what.items) || []).map((item) => `<li>${esc(resolveInfoText(item))}</li>`).join("");
   overlay.innerHTML = `
     <section class="welcome-card" id="welcome-dialog" role="dialog" aria-modal="true" aria-labelledby="welcome-title" aria-describedby="welcome-problem" tabindex="-1">
@@ -1680,7 +1643,6 @@ function renderWelcome() {
           <p class="eyebrow">Welcome</p>
           <h2 id="welcome-title">${esc(WELCOME.title)}</h2>
         </div>
-        <p class="welcome-data">${esc(resolveInfoText(WELCOME.data))}</p>
       </div>
       <div class="welcome-body">
         <div class="welcome-copy">
@@ -1698,7 +1660,6 @@ function renderWelcome() {
           </section>
         </div>
         <div class="welcome-side">
-          <div class="welcome-cards">${cards}</div>
           <div class="welcome-actions">
             <button type="button" class="btn btn-primary" id="welcome-start">${esc(WELCOME.primary)}</button>
             <button type="button" class="welcome-link" id="welcome-provenance">${esc(WELCOME.provenance)}</button>
@@ -1716,22 +1677,7 @@ function renderWelcome() {
     openDrawer();
   };
   $("#welcome-dismiss").addEventListener("change", (event) => setWelcomeDismissed(event.target.checked));
-  $$("[data-welcome-target]", overlay).forEach((button) => {
-    button.onclick = () => followWelcomeTarget(button.dataset.welcomeTarget);
-  });
   return true;
-}
-
-function followWelcomeTarget(target) {
-  closeWelcome(true);
-  if (target === "simulator") {
-    runGuideAction("scorecard");
-    return;
-  }
-  if (["explorer", "risk", "learn"].includes(target)) {
-    closeInfo(false);
-    setView(target);
-  }
 }
 
 function openWelcome() {
@@ -1908,8 +1854,6 @@ async function boot() {
     if (content) content.hidden = false;
     const banner = $("#data-error");
     if (banner) banner.hidden = false;
-    const hero = $("#hero-note-copy");
-    if (hero) hero.textContent = "The dashboard data could not be loaded. Check that docs/data.json was generated by the pipeline.";
   }
 }
 

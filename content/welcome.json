@@ -16,29 +16,6 @@
       "Can we trust it? Everything is tested on later loans the model never saw (2014-2015), not on the data it learned from."
     ]
   },
-  "data": "Built on real resolved loans from 2007-2018. In the test window, {default_rate_oot} of loans defaulted.",
-  "cards": [
-    {
-      "target": "explorer",
-      "title": "Explorer",
-      "text": "See where risk concentrates"
-    },
-    {
-      "target": "risk",
-      "title": "Risk lab",
-      "text": "Change assumptions and watch the loss tail move"
-    },
-    {
-      "target": "simulator",
-      "title": "Applicant simulator",
-      "text": "Score a hypothetical borrower"
-    },
-    {
-      "target": "learn",
-      "title": "Learn",
-      "text": "Plain-English glossary"
-    }
-  ],
   "primary": "Start exploring",
   "provenance": "How do we know?",
   "dismiss": "Don't show again"

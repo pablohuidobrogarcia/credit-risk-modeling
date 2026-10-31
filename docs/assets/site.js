@@ -1000,7 +1000,8 @@ function renderGauge(value) {
     <text class="scale" x="18" y="119">0%</text>
     <text class="scale" x="212" y="119" text-anchor="end">${Math.round(max * 100)}%</text>
   </svg>`;
-  $("#gauge-caption").textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale. The gauge is descriptive; it does not imply a limit.`;
+  const caption = $("#gauge-caption");
+  if (caption) caption.textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale. The gauge is descriptive; it does not imply a limit.`;
 }
 
 function drawLossChart(hist, scenario) {

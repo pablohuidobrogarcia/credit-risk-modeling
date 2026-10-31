@@ -319,6 +319,79 @@ test("Risk Lab side-by-side panels keep independent heights", async ({ page }) =
   await expectNoErrors(errors);
 });
 
+test("VaR gauge moves above the loss distribution and tracks every slider", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+  const scenario = page.locator(".scenario-panel");
+  const gaugePanel = page.locator(".gauge-panel");
+  await expect(scenario.locator("#risk-gauge")).toHaveCount(0);
+  await expect(scenario.locator("#gauge-caption")).toHaveCount(0);
+  await expect(scenario.locator(".slider-field")).toHaveCount(3);
+  await expect(scenario.locator("#risk-kpis .summary-kpi")).toHaveCount(6);
+  await expect(gaugePanel).toContainText("VaR 99.9% gauge");
+  await expect(gaugePanel.locator("#risk-gauge")).toBeVisible();
+  await expect(gaugePanel.locator('[data-info="gauge"]')).toBeVisible();
+  await expect(gaugePanel.locator("#gauge-caption")).toContainText("VaR 99.9% on a 60% loss scale");
+  const gaugeBeforeLoss = await page.evaluate(() => {
+    const gauge = document.querySelector(".gauge-panel").getBoundingClientRect();
+    const loss = document.querySelector(".risk-stack > .panel:nth-child(2)").getBoundingClientRect();
+    return gauge.top < loss.top;
+  });
+  expect(gaugeBeforeLoss).toBe(true);
+
+  const gaugeValue = page.locator("#risk-gauge text:not(.scale)");
+  let before = await gaugeValue.textContent();
+  await page.locator("#risk-rho").fill("5");
+  await expect.poll(() => gaugeValue.textContent()).not.toBe(before);
+  before = await gaugeValue.textContent();
+  await page.locator("#risk-pd").fill("2");
+  await expect.poll(() => gaugeValue.textContent()).not.toBe(before);
+  before = await gaugeValue.textContent();
+  await page.locator("#risk-lgd").fill("1");
+  await expect.poll(() => gaugeValue.textContent()).not.toBe(before);
+  await expectNoErrors(errors);
+});
+
+test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", async ({ page }) => {
+  const errors = await open(page);
+  for (const [width, height] of [[1360, 900], [1000, 900], [390, 844]]) {
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto("/#view=risk");
+      await expect(page.locator("#app-content")).toBeVisible();
+      await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+      await expect(page.locator("#risk-gauge")).toBeVisible();
+      const layout = await page.evaluate(() => {
+        const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+        const gauge = box(".gauge-panel");
+        const loss = box(".risk-stack > .panel:nth-child(2)");
+        const stack = box(".risk-stack");
+        const surface = box(".risk-grid > .panel");
+        const scenario = box(".scenario-panel");
+        return {
+          gauge: { top: gauge.top + window.scrollY, height: gauge.height },
+          loss: { top: loss.top + window.scrollY, height: loss.height },
+          stack: { top: stack.top + window.scrollY, height: stack.height },
+          surface: { top: surface.top + window.scrollY, height: surface.height },
+          scenario: { top: scenario.top + window.scrollY },
+          overflow: document.documentElement.scrollWidth - window.innerWidth,
+        };
+      });
+      expect(layout.overflow, `${width}px ${scheme}`).toBeLessThanOrEqual(1);
+      if (width === 390) {
+        expect(layout.scenario.top).toBeLessThan(layout.gauge.top);
+        expect(layout.gauge.top).toBeLessThan(layout.loss.top);
+        expect(layout.loss.top).toBeLessThan(layout.surface.top);
+      } else {
+        expect(Math.abs(layout.stack.height - layout.surface.height), `${width}px ${scheme}`).toBeLessThan(40);
+      }
+    }
+  }
+  await expectNoErrors(errors);
+});
+
 test("theme follows the operating system and old theme links are ignored", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
   const errors = await open(page, { url: "/#theme=dark" });

@@ -152,20 +152,18 @@ test("search filters the ranked list and clears safely", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("every quick-action chip changes global state", async ({ page }) => {
+test("removed header pill, hero note and insight chips stay out of the DOM", async ({ page }) => {
   const errors = await open(page);
-  await page.getByRole("button", { name: "View by grade" }).click();
-  await expect(page).toHaveURL(/dim=grade/);
-  await expect(page.locator("#summary-title")).toHaveText("Portfolio");
-  await page.getByRole("button", { name: "Highest loss segment" }).click();
-  await expect(page).not.toHaveURL(/sel=(?:&|$)/);
-  await expect(page.locator("#summary-title")).not.toHaveText("Portfolio");
-  await page.getByRole("button", { name: "Compare to portfolio" }).click();
-  await expect(page).toHaveURL(/dim=total/);
-  await page.getByRole("button", { name: "How do we know?" }).first().click();
-  await expect(page.locator("#provenance-drawer")).toBeVisible();
-  await page.locator("#drawer-close").click();
-  await expect(page.locator("#provenance-drawer")).toBeHidden();
+  await expect(page.locator("#window-pill")).toHaveCount(0);
+  await expect(page.locator(".window-pill")).toHaveCount(0);
+  await expect(page.locator("#hero-window")).toHaveCount(0);
+  await expect(page.locator("#hero-note-copy")).toHaveCount(0);
+  await expect(page.locator(".hero-note")).toHaveCount(0);
+  await expect(page.locator("#insight-chips")).toHaveCount(0);
+  await expect(page.locator(".chip-row")).toHaveCount(0);
+  await expect(page.locator("#insight-text")).toContainText("observed default");
+  await page.locator("#tile-map .tile[data-id='CA']").click();
+  await expect(page.locator("#summary-title")).toHaveText("CA");
   await expectNoErrors(errors);
 });
 
@@ -183,15 +181,28 @@ test("back and forward restore explorer state", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("view tabs switch panels and support keyboard arrows", async ({ page }) => {
+test("view tabs are Learn first, default to Explorer and support keyboard arrows", async ({ page }) => {
   const errors = await open(page);
+  await expect(page.locator(".view-tab")).toHaveText(["Learn", "Portfolio Explorer", "Risk Lab", "Evidence & limits"]);
+  await expect(page.locator("#view-explorer")).toBeVisible();
+  await expect(page.locator("#view-tab-explorer")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#view-tab-explorer")).toHaveAttribute("tabindex", "0");
+  await expect(page.locator("#view-tab-learn")).toHaveAttribute("tabindex", "-1");
   await page.locator("#view-tab-risk").click();
   await expect(page.locator("#view-risk")).toBeVisible();
   await expect(page.locator("#view-explorer")).toBeHidden();
   await expect(page).toHaveURL(/view=risk/);
+  await expect(page.locator("#view-tab-risk")).toHaveAttribute("tabindex", "0");
   await page.locator("#view-tab-evidence").click();
   await expect(page.locator("#view-evidence")).toBeVisible();
   await expect(page.locator("#limitations-list li")).toHaveCount(DATA.limitations.length);
+  await page.locator("#view-tab-risk").focus();
+  await page.keyboard.press("Home");
+  await expect(page.locator("#view-learn")).toBeVisible();
+  await expect(page.locator("#view-tab-learn")).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(page.locator("#view-evidence")).toBeVisible();
+  await expect(page.locator("#view-tab-evidence")).toBeFocused();
   await page.locator("#view-tab-explorer").focus();
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("#view-risk")).toBeVisible();
@@ -291,6 +302,23 @@ test("theme follows the operating system and old theme links are ignored", async
   await expectNoErrors(errors);
 });
 
+test("1360, 1000 and 390px stay clean in light and dark", async ({ page }) => {
+  const errors = await open(page);
+  for (const [width, height] of [[1360, 900], [1000, 900], [390, 844]]) {
+    for (const scheme of ["light", "dark"]) {
+      await page.setViewportSize({ width, height });
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.reload();
+      await expect(page.locator("#app-content")).toBeVisible();
+      await expect(page.locator("#view-explorer")).toBeVisible();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", scheme);
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      expect(overflow, `${width}px ${scheme}`).toBeLessThanOrEqual(1);
+    }
+  }
+  await expectNoErrors(errors);
+});
+
 test("welcome overlay presents the introduction, fits both widths and traps focus", async ({ page }) => {
   await page.setViewportSize({ width: 1360, height: 900 });
   await page.emulateMedia({ colorScheme: "light" });
@@ -308,17 +336,9 @@ test("welcome overlay presents the introduction, fits both widths and traps focu
     "How much could we lose? That probability becomes expected loss, and a Monte Carlo simulation measures bad-year losses (VaR).",
     "Can we trust it? Everything is tested on later loans the model never saw (2014-2015), not on the data it learned from.",
   ]);
-  await expect(page.locator(".welcome-data")).toHaveText(`Built on real resolved loans from 2007-2018. In the test window, ${pct(PE.meta.default_rate_total)} of loans defaulted.`);
-  for (const [target, title, text] of [
-    ["explorer", "Explorer", "See where risk concentrates"],
-    ["risk", "Risk lab", "Change assumptions and watch the loss tail move"],
-    ["simulator", "Applicant simulator", "Score a hypothetical borrower"],
-    ["learn", "Learn", "Plain-English glossary"],
-  ]) {
-    const card = page.locator(`[data-welcome-target="${target}"]`);
-    await expect(card.locator(".welcome-card-title")).toHaveText(title);
-    await expect(card.locator(".welcome-card-text")).toHaveText(text);
-  }
+  await expect(page.locator(".welcome-data")).toHaveCount(0);
+  await expect(page.locator(".welcome-cards")).toHaveCount(0);
+  await expect(page.locator("[data-welcome-target]")).toHaveCount(0);
   await expect(dialog).toBeFocused();
 
   const desktop = await dialog.evaluate((el) => {
@@ -330,6 +350,12 @@ test("welcome overlay presents the introduction, fits both widths and traps focu
   expect(desktop.right).toBeLessThanOrEqual(1360);
   expect(desktop.bottom).toBeLessThanOrEqual(900);
   expect(desktop.scroll).toBeLessThanOrEqual(desktop.client + 1);
+  const centers = await page.evaluate(() => {
+    const copy = document.querySelector(".welcome-copy").getBoundingClientRect();
+    const side = document.querySelector(".welcome-side").getBoundingClientRect();
+    return { copy: copy.top + copy.height / 2, side: side.top + side.height / 2 };
+  });
+  expect(Math.abs(centers.copy - centers.side)).toBeLessThanOrEqual(1);
   for (const button of await page.locator("#welcome-dialog button").all()) {
     const box = await button.boundingBox();
     expect(box.height).toBeGreaterThanOrEqual(44);
@@ -355,6 +381,9 @@ test("welcome overlay presents the introduction, fits both widths and traps focu
   expect(mobile.x).toBeGreaterThanOrEqual(0);
   expect(mobile.right).toBeLessThanOrEqual(391);
   expect(mobile.bottom).toBeLessThanOrEqual(845);
+  const startBox = await page.locator("#welcome-start").boundingBox();
+  expect(startBox.y).toBeGreaterThanOrEqual(0);
+  expect(startBox.y + startBox.height).toBeLessThanOrEqual(844);
   for (const button of await page.locator("#welcome-dialog button").all()) {
     const box = await button.boundingBox();
     expect(box.height).toBeGreaterThanOrEqual(44);
@@ -390,23 +419,8 @@ test("welcome overlay closes on the primary button, outside click and provenance
   await expectNoErrors(errors);
 });
 
-test("welcome cards open each destination and persist a dismissal", async ({ page }) => {
+test("welcome overlay persists a dismissal", async ({ page }) => {
   const errors = await open(page, { keepWelcome: true });
-  const targets = [
-    ["explorer", "view-explorer"],
-    ["risk", "view-risk"],
-    ["simulator", "view-risk"],
-    ["learn", "view-learn"],
-  ];
-  for (const [target, view] of targets) {
-    await expect(page.locator("#welcome-overlay")).toBeVisible();
-    await page.locator(`[data-welcome-target="${target}"]`).click();
-    await expect(page.locator("#welcome-overlay")).toBeHidden();
-    await expect(page.locator(`#${view}`)).toBeVisible();
-    await page.goto("/");
-    await expect(page.locator("#app-content")).toBeVisible();
-  }
-
   await expect(page.locator("#welcome-overlay")).toBeVisible();
   await page.locator("#welcome-dismiss").check();
   await page.locator("#welcome-start").click();
@@ -427,7 +441,19 @@ test("welcome overlay is suppressed by deep links", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("keyboard navigation reaches tiles, rows, chips and the drawer", async ({ page }) => {
+test("deep links still select every view", async ({ page }) => {
+  const errors = await open(page);
+  for (const view of ["explorer", "risk", "evidence", "learn"]) {
+    await page.goto(`/#view=${view}`);
+    await expect(page.locator("#app-content")).toBeVisible();
+    await expect(page.locator(`#view-${view}`)).toBeVisible();
+    await expect(page.locator(`#view-tab-${view}`)).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#welcome-overlay")).toBeHidden();
+  }
+  await expectNoErrors(errors);
+});
+
+test("keyboard navigation reaches tiles, rows and the drawer", async ({ page }) => {
   const errors = await open(page);
   const firstTile = page.locator("#tile-map .tile[data-id='AK']");
   await firstTile.focus();

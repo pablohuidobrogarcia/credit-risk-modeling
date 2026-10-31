@@ -31,9 +31,6 @@
     </a>
     <span class="window-pill" id="window-pill" aria-live="polite">Primary mature test window · 2014–2015 · 36-month</span>
     <div class="topbar-actions">
-      <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch theme" title="Switch theme">
-        <span id="theme-label">Auto</span>
-      </button>
       <button class="text-btn" id="provenance-btn" type="button"><span class="label-long">How do we know?</span><span class="label-short">Why?</span></button>
     </div>
   </div>
@@ -143,7 +140,6 @@
             <div class="map-scroll">
               <div class="tilemap" id="tile-map" role="group" aria-label="Segment tile map"></div>
             </div>
-            <div class="map-tooltip" id="map-tooltip" role="status" aria-live="polite" hidden></div>
             <div class="legend" id="map-legend"></div>
             <p class="panel-foot" id="map-note">—</p>
           </section>
@@ -436,6 +432,8 @@
   </div>
 </main>
 
+<div class="welcome-backdrop" id="welcome-overlay" hidden></div>
+
 <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
 <aside class="drawer" id="provenance-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
   <div class="drawer-head">
@@ -457,7 +455,7 @@
     </section>
     <section>
       <h3>How the rates are computed</h3>
-      <p>Observed default rate = defaults ÷ loans in the segment. The hover card and summary show a Wilson 95% confidence interval. Predicted PD is the mean calibrated champion prediction for the segment; expected loss uses the EAD-weighted PD × the effective portfolio LGD, reconciled to the headline EL rate.</p>
+      <p>Observed default rate = defaults ÷ loans in the segment. The selection summary shows a Wilson 95% confidence interval. Predicted PD is the mean calibrated champion prediction for the segment; expected loss uses the EAD-weighted PD × the effective portfolio LGD, reconciled to the headline EL rate.</p>
     </section>
     <section>
       <h3>Small-n masking</h3>

@@ -52,7 +52,6 @@ const state = {
   metric: "default_rate",
   sel: null,
   search: "",
-  theme: "auto",
   risk: { rho: null, pd: null, lgd: null },
   surfaceMetric: "var_0.999",
   cutoff: null,
@@ -77,7 +76,6 @@ function readHash() {
   state.metric = read("metric", "default_rate");
   state.sel = read("sel", null);
   state.search = read("q", "");
-  state.theme = ["auto", "light", "dark"].includes(read("theme", "auto")) ? read("theme", "auto") : "auto";
   state.surfaceMetric = SURFACE_METRICS[read("sm", "var_0.999")] ? read("sm", "var_0.999") : "var_0.999";
   const rho = Number(read("rho", ""));
   const pd = Number(read("pd", ""));
@@ -97,7 +95,6 @@ function writeHash(push) {
   params.set("metric", state.metric);
   if (state.sel) params.set("sel", state.sel);
   if (state.search) params.set("q", state.search);
-  params.set("theme", state.theme);
   if (state.risk.rho != null) params.set("rho", String(state.risk.rho));
   if (state.risk.pd != null) params.set("pd", String(state.risk.pd));
   if (state.risk.lgd != null) params.set("lgd", String(state.risk.lgd));
@@ -159,18 +156,10 @@ function systemDark() {
   return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
 }
 function effectiveTheme() {
-  return state.theme === "auto" ? (systemDark() ? "dark" : "light") : state.theme;
+  return systemDark() ? "dark" : "light";
 }
 function applyTheme() {
   document.documentElement.setAttribute("data-theme", effectiveTheme());
-  const label = $("#theme-label");
-  if (label) label.textContent = state.theme === "auto" ? "Auto" : state.theme === "dark" ? "Dark" : "Light";
-}
-function cycleTheme() {
-  state.theme = state.theme === "auto" ? "light" : state.theme === "light" ? "dark" : "auto";
-  applyTheme();
-  commit({ push: true, render: false });
-  paint();
 }
 
 /* ---------------------------------------------------------------- formatting */
@@ -191,8 +180,12 @@ function dimMeta(id) {
 /* ------------------------------------------------------------ info popovers */
 let INFO = {};
 let LEARN = { guide: [], terms: [] };
+let WELCOME = {};
 let infoReturnFocus = null;
 let infoAnchor = null;
+let welcomeOpen = false;
+let welcomeLastFocus = null;
+const WELCOME_STORAGE_KEY = "credit-risk-studio:welcome-dismissed";
 
 function infoButton(id, label, extraClass = "") {
   return `<button type="button" class="info-btn ${extraClass}" data-info="${esc(id)}" aria-label="About: ${esc(label)}" aria-expanded="false" aria-controls="info-popover">i</button>`;
@@ -346,7 +339,6 @@ const STATIC_INFO = [
   ["#sim-pd", "sim-pd", "Implied PD", "after"],
   ["#sim-pct", "sim-percentile", "Percentile", "after"],
   ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
-  ["#theme-toggle", "theme-toggle", "Theme", "after"],
   ["#provenance-btn", "provenance", "How do we know?", "after"],
 ];
 
@@ -639,37 +631,6 @@ function renderMetricTabs() {
   });
 }
 
-function tooltipHtml(item) {
-  const parts = [
-    `<strong>${esc(item.name)}</strong>`,
-    `n = ${fmtInt(item.n)} · EAD share ${fmtPct(item.ead_share, 1)}`,
-    `Observed default <b>${fmtPct(item.default_rate, 2)}</b> (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)})`,
-    `Predicted PD <b>${fmtPct(item.pred_pd, 2)}</b> · EL <b>${fmtPct(item.el_pct_ead, 2)}</b> of EAD`,
-    item.insufficient ? `<span style="color:var(--warning)">Insufficient data (n &lt; ${fmtInt(minN())})</span>` : "Click to select this segment",
-  ];
-  return parts.join("<br>");
-}
-
-function bindTooltip(el, item) {
-  const tip = $("#map-tooltip");
-  if (!tip) return;
-  const show = (event) => {
-    tip.innerHTML = tooltipHtml(item);
-    tip.hidden = false;
-    const rect = el.getBoundingClientRect();
-    const x = event && event.clientX ? event.clientX : rect.left + rect.width / 2;
-    const y = event && event.clientY ? event.clientY : rect.top;
-    tip.style.left = `${clamp(x + 14, 10, window.innerWidth - 300)}px`;
-    tip.style.top = `${clamp(y - 10, 10, window.innerHeight - 170)}px`;
-  };
-  const hide = () => { tip.hidden = true; };
-  el.addEventListener("mouseenter", show);
-  el.addEventListener("mousemove", show);
-  el.addEventListener("mouseleave", hide);
-  el.addEventListener("focus", show);
-  el.addEventListener("blur", hide);
-}
-
 const STATE_POSITIONS = {
   AK: [0, 0], ME: [11, 0],
   WA: [1, 1], ID: [2, 1], MT: [3, 1], ND: [4, 1], MN: [5, 1], IL: [6, 1], WI: [7, 1], MI: [8, 1], NY: [9, 1], VT: [10, 1], NH: [11, 1],
@@ -739,7 +700,6 @@ function makeTile(item, lo, hi) {
     tile.style.color = readableText(bg);
   }
   tile.textContent = state.dim === "state" ? item.id : item.name.length > 16 ? `${item.name.slice(0, 15)}…` : item.name;
-  bindTooltip(tile, item);
   tile.onclick = () => {
     if (state.dim === "total") return;
     state.sel = state.sel === item.id ? null : item.id;
@@ -1686,6 +1646,155 @@ function fillTable(selector, rows, cells) {
   body.innerHTML = rows.map((row) => `<tr>${cells(row).map((cell) => `<td>${cell}</td>`).join("")}</tr>`).join("");
 }
 
+/* --------------------------------------------------------------- welcome */
+function welcomeDismissed() {
+  try {
+    return window.localStorage.getItem(WELCOME_STORAGE_KEY) === "1";
+  } catch (err) {
+    return false;
+  }
+}
+
+function setWelcomeDismissed(dismissed) {
+  try {
+    if (dismissed) window.localStorage.setItem(WELCOME_STORAGE_KEY, "1");
+    else window.localStorage.removeItem(WELCOME_STORAGE_KEY);
+  } catch (err) {
+    /* Storage can be unavailable in private or restricted contexts. */
+  }
+}
+
+function renderWelcome() {
+  const overlay = $("#welcome-overlay");
+  if (!overlay || !WELCOME.title) return false;
+  const cards = (WELCOME.cards || []).map((card) => `
+    <button type="button" class="welcome-card-link" data-welcome-target="${esc(card.target)}">
+      <span class="welcome-card-title">${esc(card.title)}</span>
+      <span class="welcome-card-text">${esc(card.text)}</span>
+    </button>`).join("");
+  const items = ((WELCOME.what && WELCOME.what.items) || []).map((item) => `<li>${esc(resolveInfoText(item))}</li>`).join("");
+  overlay.innerHTML = `
+    <section class="welcome-card" id="welcome-dialog" role="dialog" aria-modal="true" aria-labelledby="welcome-title" aria-describedby="welcome-problem" tabindex="-1">
+      <div class="welcome-head">
+        <div>
+          <p class="eyebrow">Welcome</p>
+          <h2 id="welcome-title">${esc(WELCOME.title)}</h2>
+        </div>
+        <p class="welcome-data">${esc(resolveInfoText(WELCOME.data))}</p>
+      </div>
+      <div class="welcome-body">
+        <div class="welcome-copy">
+          <section>
+            <h3>${esc(WELCOME.problem.heading)}</h3>
+            <p id="welcome-problem">${esc(resolveInfoText(WELCOME.problem.text))}</p>
+          </section>
+          <section>
+            <h3>${esc(WELCOME.why.heading)}</h3>
+            <p>${esc(resolveInfoText(WELCOME.why.text))}</p>
+          </section>
+          <section>
+            <h3>${esc(WELCOME.what.heading)}</h3>
+            <ol class="welcome-list">${items}</ol>
+          </section>
+        </div>
+        <div class="welcome-side">
+          <div class="welcome-cards">${cards}</div>
+          <div class="welcome-actions">
+            <button type="button" class="btn btn-primary" id="welcome-start">${esc(WELCOME.primary)}</button>
+            <button type="button" class="welcome-link" id="welcome-provenance">${esc(WELCOME.provenance)}</button>
+          </div>
+          <label class="welcome-check">
+            <input type="checkbox" id="welcome-dismiss">
+            <span>${esc(WELCOME.dismiss)}</span>
+          </label>
+        </div>
+      </div>
+    </section>`;
+  $("#welcome-start").onclick = () => closeWelcome();
+  $("#welcome-provenance").onclick = () => {
+    closeWelcome(true);
+    openDrawer();
+  };
+  $("#welcome-dismiss").addEventListener("change", (event) => setWelcomeDismissed(event.target.checked));
+  $$("[data-welcome-target]", overlay).forEach((button) => {
+    button.onclick = () => followWelcomeTarget(button.dataset.welcomeTarget);
+  });
+  return true;
+}
+
+function followWelcomeTarget(target) {
+  closeWelcome(true);
+  if (target === "simulator") {
+    runGuideAction("scorecard");
+    return;
+  }
+  if (["explorer", "risk", "learn"].includes(target)) {
+    closeInfo(false);
+    setView(target);
+  }
+}
+
+function openWelcome() {
+  const overlay = $("#welcome-overlay");
+  if (!overlay || welcomeOpen || !renderWelcome()) return;
+  const active = document.activeElement;
+  welcomeLastFocus = active && active !== document.body && typeof active.focus === "function"
+    ? active
+    : ($("#hero-explore") || $("#view-tab-explorer"));
+  welcomeOpen = true;
+  overlay.hidden = false;
+  document.body.classList.add("welcome-open");
+  $("#welcome-dialog").focus({ preventScroll: true });
+}
+
+function closeWelcome(restoreFocus = true) {
+  const overlay = $("#welcome-overlay");
+  if (!overlay || !welcomeOpen) return;
+  welcomeOpen = false;
+  overlay.hidden = true;
+  document.body.classList.remove("welcome-open");
+  if (restoreFocus && welcomeLastFocus && typeof welcomeLastFocus.focus === "function") welcomeLastFocus.focus();
+  welcomeLastFocus = null;
+}
+
+function maybeOpenWelcome(deepLink) {
+  if (deepLink || welcomeDismissed() || !WELCOME.title) return;
+  openWelcome();
+}
+
+function bindWelcome() {
+  const overlay = $("#welcome-overlay");
+  if (!overlay) return;
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeWelcome();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (!welcomeOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeWelcome();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const card = $("#welcome-dialog");
+    const focusable = $$("button, a, input, select, [tabindex]:not([tabindex='-1'])", card)
+      .filter((el) => !el.disabled && el.getClientRects().length > 0);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (document.activeElement === card) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
 /* ---------------------------------------------------------------- drawer */
 function openDrawer() {
   const drawer = $("#provenance-drawer");
@@ -1743,16 +1852,20 @@ function paint() {
 function bindThemeMedia() {
   if (!window.matchMedia) return;
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
-  const onChange = () => { if (state.theme === "auto") { applyTheme(); paint(); } };
+  const onChange = () => { applyTheme(); paint(); };
   if (mq.addEventListener) mq.addEventListener("change", onChange);
 }
 
 async function boot() {
+  applyTheme();
+  const initialParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const deepLink = initialParams.has("view") || initialParams.has("term");
   try {
-    const [response, infoResponse, learnResponse] = await Promise.all([
+    const [response, infoResponse, learnResponse, welcomeResponse] = await Promise.all([
       fetch(DATA_URL, { cache: "no-cache" }),
       fetch("content/info.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
+      fetch("content/welcome.json", { cache: "no-cache" }).catch(() => null),
     ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();
@@ -1763,13 +1876,16 @@ async function boot() {
     if (learnResponse && learnResponse.ok) {
       try { LEARN = await learnResponse.json(); } catch (err) { LEARN = { guide: [], terms: [] }; }
     }
+    if (welcomeResponse && welcomeResponse.ok) {
+      try { WELCOME = await welcomeResponse.json(); } catch (err) { WELCOME = {}; }
+    }
     readHash();
     applyHashState();
     $("#app-skeleton").hidden = true;
     $("#app-content").hidden = false;
     bindDrawer();
     bindInfoDelegation();
-    $("#theme-toggle").onclick = cycleTheme;
+    bindWelcome();
     applyTheme();
     setupRiskControls();
     setupSimulator();
@@ -1780,6 +1896,7 @@ async function boot() {
     window.addEventListener("popstate", () => { readHash(); applyHashState(); writeHash(false); paint(); });
     window.addEventListener("hashchange", () => { readHash(); applyHashState(); writeHash(false); paint(); });
     writeHash(false);
+    maybeOpenWelcome(deepLink);
     loadPlotly().then(() => { paint(); }).catch((err) => {
       console.warn("Plotly unavailable:", err.message);
       paint();

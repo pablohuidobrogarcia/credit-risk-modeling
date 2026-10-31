@@ -10,6 +10,16 @@ const PLOTLY_PATH = path.join(ROOT, "node_modules/plotly.js-dist-min/plotly.min.
 const pct = (v, nd = 2) => `${(v * 100).toFixed(nd)}%`;
 const dims = ["total", "state", "grade", "purpose", "vintage", "home_ownership"];
 
+async function childBoxes(locator) {
+  return locator.evaluate((el) => {
+    const parent = el.getBoundingClientRect();
+    return [...el.children].map((child) => {
+      const rect = child.getBoundingClientRect();
+      return { top: rect.top - parent.top, height: rect.height };
+    });
+  });
+}
+
 async function open(page, { blockCdn = false, keepWelcome = false, url = "/" } = {}) {
   const errors = [];
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
@@ -30,6 +40,9 @@ async function open(page, { blockCdn = false, keepWelcome = false, url = "/" } =
   await page.waitForTimeout(700);
   if (!keepWelcome && await page.locator("#welcome-start").isVisible().catch(() => false)) {
     await page.locator("#welcome-start").click();
+    await expect(page.locator("#view-learn")).toBeVisible();
+    await page.locator("#view-tab-explorer").click();
+    await expect(page.locator("#view-explorer")).toBeVisible();
   }
   return errors;
 }
@@ -182,12 +195,16 @@ test("back and forward restore explorer state", async ({ page }) => {
 });
 
 test("view tabs are Learn first, default to Explorer and support keyboard arrows", async ({ page }) => {
-  const errors = await open(page);
+  const errors = await open(page, { keepWelcome: true });
   await expect(page.locator(".view-tab")).toHaveText(["Learn", "Portfolio Explorer", "Risk Lab", "Evidence & limits"]);
   await expect(page.locator("#view-explorer")).toBeVisible();
   await expect(page.locator("#view-tab-explorer")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#view-tab-explorer")).toHaveAttribute("tabindex", "0");
   await expect(page.locator("#view-tab-learn")).toHaveAttribute("tabindex", "-1");
+  await page.locator("#welcome-provenance").click();
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expect(page.locator("#view-explorer")).toBeVisible();
+  await page.locator("#drawer-close").click();
   await page.locator("#view-tab-risk").click();
   await expect(page.locator("#view-risk")).toBeVisible();
   await expect(page.locator("#view-explorer")).toBeHidden();
@@ -275,6 +292,30 @@ test("cutoff slider updates approval, bad rate and hash", async ({ page }) => {
   await expect(page.locator('[data-testid="cut-approval"]')).not.toHaveText(before);
   await expect(page).toHaveURL(/cut=560/);
   await expect(page.locator("#cutoff-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+  await expectNoErrors(errors);
+});
+
+test("Risk Lab side-by-side panels keep independent heights", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".risk-grid").first()).toHaveCSS("align-items", "start");
+  await expect(page.locator(".risk-grid.lower")).toHaveCSS("align-items", "start");
+  const lowerGrid = page.locator(".risk-grid.lower");
+  const [simBefore, cutoffBefore] = await childBoxes(lowerGrid);
+  await page.locator("#sim-breakdown-details summary").click();
+  await expect(page.locator("#sim-breakdown-details")).toHaveAttribute("open", "");
+  await page.waitForTimeout(250);
+  const [simAfter, cutoffAfter] = await childBoxes(lowerGrid);
+  expect(simAfter.height).toBeGreaterThan(simBefore.height);
+  expect(Math.abs(cutoffAfter.height - cutoffBefore.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cutoffAfter.top - cutoffBefore.top)).toBeLessThanOrEqual(1);
+  await page.locator("#sim-breakdown-details summary").click();
+  await expect(page.locator("#sim-breakdown-details")).not.toHaveAttribute("open", "");
+  await page.waitForTimeout(250);
+  const [, cutoffCollapsed] = await childBoxes(lowerGrid);
+  expect(Math.abs(cutoffCollapsed.height - cutoffBefore.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(cutoffCollapsed.top - cutoffBefore.top)).toBeLessThanOrEqual(1);
   await expectNoErrors(errors);
 });
 
@@ -391,53 +432,68 @@ test("welcome overlay presents the introduction, fits both widths and traps focu
 
   await page.keyboard.press("Escape");
   await expect(overlay).toBeHidden();
-  await expect(page.locator("#hero-explore")).toBeFocused();
+  await expect(page.locator("#view-learn")).toBeVisible();
+  await expect(page.locator("#view-learn")).toBeFocused();
+  await expect(page).toHaveURL(/view=learn/);
   await expectNoErrors(errors);
 });
 
-test("welcome overlay closes on the primary button, outside click and provenance link", async ({ page }) => {
+test("welcome dismissal opens Learn while provenance keeps the current tab", async ({ page }) => {
   await page.setViewportSize({ width: 1360, height: 900 });
   const errors = await open(page, { keepWelcome: true });
   await expect(page.locator("#welcome-overlay")).toBeVisible();
   await page.locator("#welcome-start").click();
   await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expect(page.locator("#view-learn")).toBeVisible();
+  await expect(page).toHaveURL(/view=learn/);
 
   await page.goto("/");
   await expect(page.locator("#app-content")).toBeVisible();
   await expect(page.locator("#welcome-overlay")).toBeVisible();
   await page.mouse.click(5, 5);
   await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expect(page.locator("#view-learn")).toBeVisible();
+  await expect(page).toHaveURL(/view=learn/);
 
   await page.goto("/");
   await expect(page.locator("#app-content")).toBeVisible();
   await expect(page.locator("#welcome-overlay")).toBeVisible();
+  const before = page.url();
   await page.locator("#welcome-provenance").click();
   await expect(page.locator("#welcome-overlay")).toBeHidden();
   await expect(page.locator("#provenance-drawer")).toBeVisible();
+  await expect(page.locator("#view-explorer")).toBeVisible();
+  expect(page.url()).toBe(before);
   await page.locator("#drawer-close").click();
   await expect(page.locator("#provenance-drawer")).toBeHidden();
   await expectNoErrors(errors);
 });
 
-test("welcome overlay persists a dismissal", async ({ page }) => {
+test("welcome overlay persists a dismissal and still opens Learn", async ({ page }) => {
   const errors = await open(page, { keepWelcome: true });
   await expect(page.locator("#welcome-overlay")).toBeVisible();
   await page.locator("#welcome-dismiss").check();
   await page.locator("#welcome-start").click();
   await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expect(page.locator("#view-learn")).toBeVisible();
+  await expect(page).toHaveURL(/view=learn/);
   expect(await page.evaluate(() => localStorage.getItem("credit-risk-studio:welcome-dismissed"))).toBe("1");
   await page.goto("/");
   await expect(page.locator("#app-content")).toBeVisible();
   await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expect(page.locator("#view-explorer")).toBeVisible();
   await expectNoErrors(errors);
 });
 
 test("welcome overlay is suppressed by deep links", async ({ page }) => {
   const errors = await open(page, { keepWelcome: true, url: "/#view=explorer" });
   await expect(page.locator("#welcome-overlay")).toBeHidden();
-  await page.goto("/#term=pd");
+  await page.goto("/#view=learn&term=pd");
   await expect(page.locator("#app-content")).toBeVisible();
   await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expect(page.locator("#view-learn")).toBeVisible();
+  await expect(page.locator("#term-pd")).toHaveAttribute("open", "");
+  await expect(page.locator("#glossary-list")).toHaveCSS("align-items", "start");
   await expectNoErrors(errors);
 });
 
@@ -592,6 +648,21 @@ test("Learn guide, glossary, categories, search and hash round-trip", async ({ p
   const LEARN = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/learn.json"), "utf8"));
   await page.locator("#view-tab-learn").click();
   await expect(page.locator("#learn-guide .guide-card")).toHaveCount(5);
+  await expect(page.locator("#glossary-list")).toHaveCSS("align-items", "start");
+  const glossaryEntries = page.locator("#glossary-list .glossary-entry");
+  const firstEntry = glossaryEntries.first();
+  const [firstBefore, secondBefore] = await childBoxes(page.locator("#glossary-list"));
+  await firstEntry.locator("summary").click();
+  await expect(firstEntry).toHaveAttribute("open", "");
+  const [firstExpanded, secondExpanded] = await childBoxes(page.locator("#glossary-list"));
+  expect(firstExpanded.height).toBeGreaterThan(firstBefore.height);
+  expect(Math.abs(secondExpanded.height - secondBefore.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(secondExpanded.top - secondBefore.top)).toBeLessThanOrEqual(1);
+  await firstEntry.locator("summary").click();
+  await expect(firstEntry).not.toHaveAttribute("open", "");
+  const [, secondCollapsed] = await childBoxes(page.locator("#glossary-list"));
+  expect(Math.abs(secondCollapsed.height - secondBefore.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(secondCollapsed.top - secondBefore.top)).toBeLessThanOrEqual(1);
   const required = ["loan", "default", "resolved-loan", "grade", "dti", "revolving-utilization", "annual-income", "home-ownership", "loan-purpose", "term", "vintage", "pd", "lgd", "ead", "el", "ul", "approval-rate", "bad-rate", "cutoff", "percentile", "scorecard", "score", "points", "pdo", "woe", "iv", "logistic-regression", "lightgbm", "champion", "features", "leakage", "calibration", "brier", "citl", "auc", "gini", "ks", "psi", "roc", "confusion-matrix", "out-of-time", "primary-window", "right-censoring", "small-segment-masking", "wilson-ci", "selection-bias", "monte-carlo", "vasicek", "rho", "systematic-factor", "stress-test", "var", "es", "loss-distribution", "importance-sampling", "basel-correlation", "not-a-decision", "descriptive"];
   for (const id of required) {
     const entry = LEARN.terms.find((t) => t.id === id);

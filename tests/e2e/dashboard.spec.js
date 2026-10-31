@@ -10,7 +10,7 @@ const PLOTLY_PATH = path.join(ROOT, "node_modules/plotly.js-dist-min/plotly.min.
 const pct = (v, nd = 2) => `${(v * 100).toFixed(nd)}%`;
 const dims = ["total", "state", "grade", "purpose", "vintage", "home_ownership"];
 
-async function open(page, { blockCdn = false } = {}) {
+async function open(page, { blockCdn = false, keepWelcome = false, url = "/" } = {}) {
   const errors = [];
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
   page.on("console", (msg) => {
@@ -24,10 +24,13 @@ async function open(page, { blockCdn = false } = {}) {
     if (blockCdn) return route.abort();
     return route.fulfill({ path: PLOTLY_PATH, contentType: "application/javascript" });
   });
-  await page.goto("/");
+  await page.goto(url);
   await expect(page.locator("#app-content")).toBeVisible();
   await expect(page.locator("#tile-map .tile").first()).toBeVisible();
   await page.waitForTimeout(700);
+  if (!keepWelcome && await page.locator("#welcome-start").isVisible().catch(() => false)) {
+    await page.locator("#welcome-start").click();
+  }
   return errors;
 }
 
@@ -114,6 +117,25 @@ test("metric tabs recolor the map and re-sort the list", async ({ page }) => {
   const topId = await firstRow.getAttribute("data-id");
   const topItem = PE.dimensions.state.find((x) => x.id === topId);
   await expect(firstRow.locator(".rank-value")).toHaveText(pct(topItem.el_pct_ead));
+  await expectNoErrors(errors);
+});
+
+test("map hover shows no tooltip and clicking still updates the linked details", async ({ page }) => {
+  const errors = await open(page);
+  await expect(page.locator("#map-tooltip")).toHaveCount(0);
+  await expect(page.locator(".map-tooltip")).toHaveCount(0);
+  const tile = page.locator("#tile-map .tile[data-id='CA']");
+  const label = await tile.getAttribute("aria-label");
+  expect(label).toContain("CA");
+  expect(label).toContain("n=");
+  await tile.hover();
+  await page.waitForTimeout(150);
+  await expect(page.locator(".map-tooltip")).toHaveCount(0);
+  await expect(page.locator("#map-tooltip")).toHaveCount(0);
+  await tile.click();
+  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(PE.dimensions.state.find((x) => x.id === "CA").default_rate));
+  await expect(page).toHaveURL(/sel=CA/);
   await expectNoErrors(errors);
 });
 
@@ -245,18 +267,163 @@ test("cutoff slider updates approval, bad rate and hash", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("theme toggle cycles auto, light and dark", async ({ page }) => {
-  const errors = await open(page);
-  const initial = await page.locator("html").getAttribute("data-theme");
-  await page.locator("#theme-toggle").click();
-  await expect(page.locator("#theme-label")).toHaveText("Light");
+test("theme follows the operating system and old theme links are ignored", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  const errors = await open(page, { url: "/#theme=dark" });
+  await expect(page.locator("#theme-toggle")).toHaveCount(0);
+  await expect(page.locator("#theme-label")).toHaveCount(0);
+  await expect(page.locator('[data-info="theme-toggle"]')).toHaveCount(0);
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await page.locator("#theme-toggle").click();
-  await expect(page.locator("#theme-label")).toHaveText("Dark");
+  await expect(page).not.toHaveURL(/theme=/);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("#surface-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+
+  await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await page.locator("#theme-toggle").click();
-  await expect(page.locator("#theme-label")).toHaveText("Auto");
-  await expect(page.locator("html")).toHaveAttribute("data-theme", initial);
+  await expect.poll(() => page.locator("#loss-chart").evaluate((el) => el.layout?.font?.color)).toBe("#e2e8f0");
+  await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el.layout?.font?.color)).toBe("#e2e8f0");
+
+  await page.emulateMedia({ colorScheme: "light" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect.poll(() => page.locator("#loss-chart").evaluate((el) => el.layout?.font?.color)).toBe("#1f2937");
+  await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el.layout?.font?.color)).toBe("#1f2937");
+  await expectNoErrors(errors);
+});
+
+test("welcome overlay presents the introduction, fits both widths and traps focus", async ({ page }) => {
+  await page.setViewportSize({ width: 1360, height: 900 });
+  await page.emulateMedia({ colorScheme: "light" });
+  const errors = await open(page, { keepWelcome: true });
+  const overlay = page.locator("#welcome-overlay");
+  const dialog = page.locator("#welcome-dialog");
+  await expect(overlay).toBeVisible();
+  await expect(dialog).toHaveAttribute("role", "dialog");
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(page.locator("#welcome-title")).toHaveText("Credit Risk Studio");
+  await expect(page.locator("#welcome-problem")).toHaveText("When a bank lends money, some borrowers will not pay it back. The bank does not know which ones, but it must still decide who to approve, at what price, and how much capital to keep in reserve.");
+  await expect(dialog).toContainText("Underestimate the losses and the bank can run out of capital in a bad year. Overestimate them and it rejects good customers.");
+  await expect(page.locator(".welcome-list li")).toHaveText([
+    "Who is likely to default? A scorecard turns a borrower's profile into a probability of default (PD).",
+    "How much could we lose? That probability becomes expected loss, and a Monte Carlo simulation measures bad-year losses (VaR).",
+    "Can we trust it? Everything is tested on later loans the model never saw (2014-2015), not on the data it learned from.",
+  ]);
+  await expect(page.locator(".welcome-data")).toHaveText(`Built on real resolved loans from 2007-2018. In the test window, ${pct(PE.meta.default_rate_total)} of loans defaulted.`);
+  for (const [target, title, text] of [
+    ["explorer", "Explorer", "See where risk concentrates"],
+    ["risk", "Risk lab", "Change assumptions and watch the loss tail move"],
+    ["simulator", "Applicant simulator", "Score a hypothetical borrower"],
+    ["learn", "Learn", "Plain-English glossary"],
+  ]) {
+    const card = page.locator(`[data-welcome-target="${target}"]`);
+    await expect(card.locator(".welcome-card-title")).toHaveText(title);
+    await expect(card.locator(".welcome-card-text")).toHaveText(text);
+  }
+  await expect(dialog).toBeFocused();
+
+  const desktop = await dialog.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return { x: box.x, y: box.y, right: box.right, bottom: box.bottom, client: el.clientHeight, scroll: el.scrollHeight };
+  });
+  expect(desktop.x).toBeGreaterThanOrEqual(0);
+  expect(desktop.y).toBeGreaterThanOrEqual(0);
+  expect(desktop.right).toBeLessThanOrEqual(1360);
+  expect(desktop.bottom).toBeLessThanOrEqual(900);
+  expect(desktop.scroll).toBeLessThanOrEqual(desktop.client + 1);
+  for (const button of await page.locator("#welcome-dialog button").all()) {
+    const box = await button.boundingBox();
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await page.keyboard.press("Shift+Tab");
+  expect(await page.evaluate(() => Boolean(document.activeElement?.closest("#welcome-dialog")))).toBe(true);
+
+  const darkBg = await dialog.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  const lightOnDark = await dialog.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(lightOnDark).not.toBe(darkBg);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(overlay).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  const mobile = await dialog.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return { x: box.x, right: box.right, bottom: box.bottom };
+  });
+  expect(mobile.x).toBeGreaterThanOrEqual(0);
+  expect(mobile.right).toBeLessThanOrEqual(391);
+  expect(mobile.bottom).toBeLessThanOrEqual(845);
+  for (const button of await page.locator("#welcome-dialog button").all()) {
+    const box = await button.boundingBox();
+    expect(box.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await page.keyboard.press("Escape");
+  await expect(overlay).toBeHidden();
+  await expect(page.locator("#hero-explore")).toBeFocused();
+  await expectNoErrors(errors);
+});
+
+test("welcome overlay closes on the primary button, outside click and provenance link", async ({ page }) => {
+  await page.setViewportSize({ width: 1360, height: 900 });
+  const errors = await open(page, { keepWelcome: true });
+  await expect(page.locator("#welcome-overlay")).toBeVisible();
+  await page.locator("#welcome-start").click();
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
+
+  await page.goto("/");
+  await expect(page.locator("#app-content")).toBeVisible();
+  await expect(page.locator("#welcome-overlay")).toBeVisible();
+  await page.mouse.click(5, 5);
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
+
+  await page.goto("/");
+  await expect(page.locator("#app-content")).toBeVisible();
+  await expect(page.locator("#welcome-overlay")).toBeVisible();
+  await page.locator("#welcome-provenance").click();
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expect(page.locator("#provenance-drawer")).toBeVisible();
+  await page.locator("#drawer-close").click();
+  await expect(page.locator("#provenance-drawer")).toBeHidden();
+  await expectNoErrors(errors);
+});
+
+test("welcome cards open each destination and persist a dismissal", async ({ page }) => {
+  const errors = await open(page, { keepWelcome: true });
+  const targets = [
+    ["explorer", "view-explorer"],
+    ["risk", "view-risk"],
+    ["simulator", "view-risk"],
+    ["learn", "view-learn"],
+  ];
+  for (const [target, view] of targets) {
+    await expect(page.locator("#welcome-overlay")).toBeVisible();
+    await page.locator(`[data-welcome-target="${target}"]`).click();
+    await expect(page.locator("#welcome-overlay")).toBeHidden();
+    await expect(page.locator(`#${view}`)).toBeVisible();
+    await page.goto("/");
+    await expect(page.locator("#app-content")).toBeVisible();
+  }
+
+  await expect(page.locator("#welcome-overlay")).toBeVisible();
+  await page.locator("#welcome-dismiss").check();
+  await page.locator("#welcome-start").click();
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem("credit-risk-studio:welcome-dismissed"))).toBe("1");
+  await page.goto("/");
+  await expect(page.locator("#app-content")).toBeVisible();
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await expectNoErrors(errors);
+});
+
+test("welcome overlay is suppressed by deep links", async ({ page }) => {
+  const errors = await open(page, { keepWelcome: true, url: "/#view=explorer" });
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await page.goto("/#term=pd");
+  await expect(page.locator("#app-content")).toBeVisible();
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
   await expectNoErrors(errors);
 });
 
@@ -513,6 +680,7 @@ test("no-JS fallback contains KPIs, model table and limitations", async ({ brows
   const page = await context.newPage();
   await page.goto("/");
   await expect(page.locator("#app-content")).toBeVisible();
+  await expect(page.locator("#welcome-overlay")).toBeHidden();
   await expect(page.locator("#kpi-loans")).toHaveText(DATA.display.n_rows);
   await expect(page.locator("#kpi-auc")).toHaveText(DATA.display.champion_auc);
   await expect(page.locator("#model-table tbody tr")).toHaveCount(7);
@@ -530,7 +698,11 @@ test("every docs asset is referenced", async () => {
 
 test("reduced motion keeps count-ups instant and turns the sweep into one step", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const errors = await open(page);
+  const errors = await open(page, { keepWelcome: true });
+  await expect(page.locator("#welcome-overlay")).toBeVisible();
+  const welcomeDuration = await page.locator("#welcome-dialog").evaluate((el) => getComputedStyle(el).animationDuration);
+  expect(parseFloat(welcomeDuration)).toBeLessThan(0.01);
+  await page.locator("#welcome-start").click();
   await page.locator("#view-tab-risk").click();
   await page.locator("#play-rho").click();
   await expect(page.locator("#play-rho")).toHaveAttribute("aria-pressed", "false");

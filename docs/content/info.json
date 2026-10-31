@@ -13,7 +13,7 @@
   },
   "map": {
     "title": "Segment map",
-    "text": "Each tile is one segment. Hover or focus a tile to see loans, the observed default rate with a 95% Wilson interval, predicted PD and expected loss. Tiles with fewer than {min_n} loans are hatched and marked with an exclamation point because their rates are too noisy to rank.",
+    "text": "Click a tile to see its details.",
     "try": "Select California and compare its 95% interval with a small state.",
     "term": "small-segment-masking"
   },
@@ -44,7 +44,7 @@
   "kpi-ci": {
     "title": "95% confidence interval",
     "text": "The Wilson interval shows the sampling uncertainty around the observed default rate. A small segment can have a wide interval even when its point estimate looks dramatic.",
-    "try": "Hover a state with fewer than {min_n} loans and compare its interval width.",
+    "try": "Select a state with fewer than {min_n} loans and compare its interval width.",
     "term": "wilson-ci"
   },
   "kpi-pd": {
@@ -256,12 +256,6 @@
     "text": "Loans that would be approved and did default. These are the false negatives of the approval rule from the lender's perspective.",
     "try": "Lower the cutoff and watch this count rise.",
     "term": "confusion-matrix"
-  },
-  "theme-toggle": {
-    "title": "Theme",
-    "text": "Cycles Auto, Light and Dark. Auto follows the operating system. The choice is stored in the URL hash so a shared link keeps the same appearance.",
-    "try": "Switch to Dark and reload the page.",
-    "term": "dashboard"
   },
   "provenance": {
     "title": "How do we know?",

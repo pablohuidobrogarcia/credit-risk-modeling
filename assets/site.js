@@ -1671,7 +1671,7 @@ function renderWelcome() {
         </div>
       </div>
     </section>`;
-  $("#welcome-start").onclick = () => closeWelcome();
+  $("#welcome-start").onclick = () => dismissWelcome();
   $("#welcome-provenance").onclick = () => {
     closeWelcome(true);
     openDrawer();
@@ -1703,6 +1703,12 @@ function closeWelcome(restoreFocus = true) {
   welcomeLastFocus = null;
 }
 
+function dismissWelcome() {
+  if (!welcomeOpen) return;
+  closeWelcome();
+  setView("learn");
+}
+
 function maybeOpenWelcome(deepLink) {
   if (deepLink || welcomeDismissed() || !WELCOME.title) return;
   openWelcome();
@@ -1712,13 +1718,13 @@ function bindWelcome() {
   const overlay = $("#welcome-overlay");
   if (!overlay) return;
   overlay.addEventListener("click", (event) => {
-    if (event.target === overlay) closeWelcome();
+    if (event.target === overlay) dismissWelcome();
   });
   document.addEventListener("keydown", (event) => {
     if (!welcomeOpen) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      closeWelcome();
+      dismissWelcome();
       return;
     }
     if (event.key !== "Tab") return;

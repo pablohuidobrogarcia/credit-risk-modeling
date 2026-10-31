@@ -419,7 +419,7 @@ button, input, select { font: inherit; color: inherit; }
 .gauge .hub { fill: var(--fg); }
 .gauge text { fill: var(--fg); font-family: var(--serif); font-weight: 650; }
 .gauge .scale { fill: var(--fg-soft); font-family: var(--sans); font-size: 9px; font-weight: 600; }
-.risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; }
+.risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; align-items: start; }
 .risk-grid > * { min-width: 0; }
 .summary-body > * { min-width: 0; }
 .risk-grid.lower { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -469,7 +469,7 @@ button, input, select { font: inherit; color: inherit; }
 .glossary-categories { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }
 .glossary-categories button { border: 1px solid var(--border); background: color-mix(in srgb, var(--card-solid) 55%, transparent); border-radius: 999px; padding: 0.35rem 0.68rem; font-size: 0.75rem; cursor: pointer; color: var(--fg-muted); }
 .glossary-categories button[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-.glossary-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+.glossary-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; align-items: start; }
 .glossary-entry { border: 1px solid var(--border); border-radius: 12px; background: color-mix(in srgb, var(--card-solid) 45%, transparent); padding: 0.75rem 0.85rem; }
 .glossary-entry[open] { background: color-mix(in srgb, var(--card-solid) 65%, transparent); }
 .glossary-entry summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 0.6rem; align-items: baseline; }

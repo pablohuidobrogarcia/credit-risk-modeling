@@ -335,9 +335,6 @@ const STATIC_INFO = [
   ["#surface-title", "surface", "VaR surface", "after"],
   ["#surface-metrics", "surface-metric", "Surface metric", "before"],
   ["#sim-title", "sim-presets", "Applicant simulator", "after"],
-  ["#sim-score", "sim-score", "Score", "after"],
-  ["#sim-pd", "sim-pd", "Implied PD", "after"],
-  ["#sim-pct", "sim-percentile", "Percentile", "after"],
   ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
   ["#provenance-btn", "provenance", "How do we know?", "after"],
 ];
@@ -675,7 +672,7 @@ function renderMap() {
   const legend = $("#map-legend");
   legend.innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
   const mobileHint = window.matchMedia && window.matchMedia("(max-width: 700px)").matches ? " On phones, the ranked list is the main touch interface; the map is a compact overview." : "";
-  $("#map-note").textContent = (eligible.length < items.length ? `${items.length - eligible.length} segment${items.length - eligible.length === 1 ? "" : "s"} masked for small n. Click a tile to link the list and summary.` : "Click a tile to link the list and summary. Small segments are masked automatically.") + mobileHint;
+  $("#map-note").textContent = "Click a tile to link the list and summary." + mobileHint;
   if (state.sel) {
     const selected = host.querySelector(`[data-id="${CSS.escape(state.sel)}"]`);
     if (selected) selected.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -846,17 +843,16 @@ function renderInsight() {
     copy.innerHTML = `<span class="big">${metricText(item[state.metric], state.metric, 2)}</span>
       ${esc(metricMeta(state.metric).short)}. This segment holds <strong>${fmtPct(item.ead_share, 1)}</strong> of EAD across <strong>${fmtInt(item.n)}</strong> loans. Observed default is <strong>${fmtPct(item.default_rate, 2)}</strong> (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)}), predicted PD is <strong>${fmtPct(item.pred_pd, 2)}</strong>, and expected loss is <strong>${fmtPct(item.el_pct_ead, 2)}</strong> of EAD — <strong>${Math.abs(diff * 100).toFixed(2)} pp ${direction}</strong> the portfolio.`;
   } else {
-    const masked = dimItems("state").filter((x) => x.insufficient).length;
     kicker.textContent = "Portfolio view";
     copy.innerHTML = `<span class="big">${fmtPct(total.default_rate, 2)}</span>
-      observed default across <strong>${fmtInt(total.n)}</strong> resolved loans. Predicted PD is <strong>${fmtPct(total.pred_pd, 2)}</strong> and expected loss is <strong>${fmtPct(total.el_pct_ead, 2)}</strong> of EAD. Pick a dimension, then a tile or a ranked row, to compare one segment with the portfolio. ${masked ? `<strong>${masked} states</strong> are masked for small n.` : ""}`;
+      observed default across <strong>${fmtInt(total.n)}</strong> resolved loans. Predicted PD is <strong>${fmtPct(total.pred_pd, 2)}</strong> and expected loss is <strong>${fmtPct(total.el_pct_ead, 2)}</strong> of EAD.`;
   }
 }
 
 function renderExplorer() {
   if (!pe()) return;
   const meta = pe().meta;
-  $("#explorer-caption").textContent = `Primary mature test window · ${meta.years.join("–")} · ${meta.term}-month · ${fmtInt(meta.n_total)} loans. Small segments (n < ${fmtInt(meta.min_n)}) are hatched and never drive a ranking.`;
+  $("#explorer-caption").textContent = "Pick a dimension, then a tile or a ranked row, to compare one segment with the portfolio.";
   renderDimensionTabs();
   renderMetricTabs();
   const search = $("#segment-search");
@@ -946,7 +942,7 @@ function renderRisk() {
   updateRiskControls();
   const scenario = scenarioForState();
   const hist = scenario && sc.histograms[scenario.key];
-  $("#scenario-sub").textContent = "Sliders snap to the precomputed simulation grid. The same state drives the histogram and the surface.";
+  $("#scenario-sub").textContent = "The same state drives the histogram and the surface.";
   $("#scenario-badge").textContent = scenario ? scenario.key.replace(/_/g, " · ") : "—";
   const kpis = $("#risk-kpis");
   if (hist && hist.exact) {
@@ -967,12 +963,10 @@ function renderRisk() {
       "es-99": "Average loss in the worst 1% of simulated years.",
       "es-999": "Average loss in the worst 0.1% of simulated years.",
     };
-    const infoIds = { "expected-loss": "risk-el", "unexpected-loss": "risk-ul", "var-99": "risk-var99", "var-999": "risk-var999", "es-99": "risk-es99", "es-999": "risk-es999" };
-    kpis.innerHTML = defs.map(([label, value, key]) => `<div class="summary-kpi"><p class="mini-label">${label} ${infoButton(infoIds[key], label)}</p><p class="value" data-testid="risk-${key}">—</p><p class="sub">${esc(meanings[key])}</p></div>`).join("");
+    kpis.innerHTML = defs.map(([label, value, key]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="risk-${key}">—</p><p class="sub">${esc(meanings[key])}</p></div>`).join("");
     defs.forEach(([label, value, key]) => countUp(kpis.querySelector(`[data-testid="risk-${key}"]`), value, (v) => fmtPct(v, 2)));
     $("#loss-sub").textContent = `${scenario.key.replace(/_/g, " ")} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
-    $("#tail-pill").textContent = `ES 99.9% ${fmtPct(ex["es_0.999_pct_ead"], 1)}`;
-    renderGauge(ex["var_0.999_pct_ead"]);
+      renderGauge(ex["var_0.999_pct_ead"]);
   }
   if (state.view === "risk") {
     drawLossChart(hist, scenario);
@@ -1035,7 +1029,7 @@ function drawLossChart(hist, scenario) {
   if (legend) {
     legend.innerHTML = markers.filter(([, value]) => num(value) != null).map(([label, value, color, dash]) => {
       const style = dash === "dot" ? "dotted" : dash;
-      return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong> ${fmtPct(value, 1)} of EAD</span>`;
+      return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong></span>`;
     }).join("");
   }
   if (!ok) showFallback(host, "assets/loss_distribution.png", "The interactive histogram could not be drawn; a static figure is shown.");
@@ -1303,9 +1297,9 @@ function setupSimulator() {
       </div>
       ${numeric
         ? `<input id="${id}" type="range" min="0" max="${Math.max(0, options.length - 1)}" step="1" value="${Math.max(0, options.findIndex((o) => o.key === key))}" aria-valuetext="${esc((options.find((o) => o.key === key) || options[0]).label)}">
-           <output class="sim-range-label" id="sim-label-${variable}">—</output>`
-        : `<select id="${id}">${optionHtml}</select>`}
-      <p class="sim-share" id="sim-share-${variable}"></p>`;
+            <output class="sim-range-label" id="sim-label-${variable}">—</output>
+            <p class="sim-share" id="sim-share-${variable}"></p>`
+         : `<select id="${id}">${optionHtml}</select>`}`;
     host.appendChild(wrap);
     const input = wrap.querySelector(numeric ? "input" : "select");
     input.value = key;
@@ -1396,13 +1390,13 @@ function renderSimulator() {
     const label = $(`#sim-label-${variable}`);
     if (label) label.textContent = opt.label;
     const share = $(`#sim-share-${variable}`);
-    if (share) share.textContent = opt.share ? `${(opt.share * 100).toFixed(1)}% of loans in the ${testYears} test window have this value.` : "";
+    if (share) share.textContent = opt.share ? `${(opt.share * 100).toFixed(1)}% of loans have this value.` : "";
   });
 
   countUp($("#sim-score"), score, (v) => String(Math.round(v)));
   countUp($("#sim-pd"), pd, (v) => fmtPct(v, 2));
   countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}%`);
-  $("#sim-score-note").textContent = "Higher score = lower implied risk.";
+  $("#sim-score-note").textContent = "";
   $("#sim-pd-note").textContent = `About ${Math.round(pd * 100)} out of 100 similar applicants default; the portfolio average is ${fmtPct(portfolioRate, 2)}.`;
   $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the ${testYears} test window.`;
   $("#sim-gini").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)}`;
@@ -1456,13 +1450,13 @@ function renderCutoff() {
   const overall = total ? (badAbove + badBelow) / total : 0;
   $("#cutoff-sub").textContent = `At cutoff ${Math.round(cutoff)}, ${fmtPct(approval, 1)} of applicants are approved; ${fmtPct(badApproved, 1)} of approved loans default, versus ${fmtPct(overall, 2)} overall. Approve everyone: ${fmtPct(overall, 2)} bad rate.`;
   const defs = [
-    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1), "cutoff-approval", "Share of applicants accepted."],
-    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1), "cutoff-bad", "Defaults among approved loans."],
-    ["Approved good", goodAbove, "cut-good", fmtInt, "cutoff-approved-good", "Good loans kept by the cutoff."],
-    ["Approved bad", badAbove, "cut-bad-n", fmtInt, "cutoff-approved-bad", "Bad loans kept by the cutoff."],
+    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1), "Share of applicants accepted."],
+    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1), "Defaults among approved loans."],
+    ["Approved good", goodAbove, "cut-good", fmtInt, "Good loans kept by the cutoff."],
+    ["Approved bad", badAbove, "cut-bad-n", fmtInt, "Bad loans kept by the cutoff."],
   ];
   const host = $("#cutoff-kpis");
-  host.innerHTML = defs.map(([label, , key, , info, meaning]) => `<div class="summary-kpi"><p class="mini-label">${label} ${infoButton(info, label)}</p><p class="value" data-testid="${key}">—</p><p class="sub">${esc(meaning)}</p></div>`).join("");
+  host.innerHTML = defs.map(([label, , key, , meaning]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="${key}">—</p><p class="sub">${esc(meaning)}</p></div>`).join("");
   defs.forEach(([, value, key, formatter]) => countUp(host.querySelector(`[data-testid="${key}"]`), value, formatter));
   if (!PLOTLY) { showFallback($("#cutoff-chart"), null, "Plotly is blocked; the cutoff chart is unavailable."); return; }
   const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
@@ -1584,16 +1578,8 @@ function renderLearn() {
 function renderEvidence() {
   if (!D) return;
   const disp = D.display || {};
-  const stats = D.simulation.statistics;
-  const cards = [
-    ["Resolved loans", disp.n_rows || fmtInt(D.data.n_rows), `${disp.data_years || ""} snapshot`],
-    ["Champion AUC", disp.champion_auc || fmtNum(D.pd.champion_auc, 4), `Gini ${disp.champion_gini || fmtNum(D.pd.champion_gini, 4)}`],
-    ["Expected loss", disp.el_rate || fmtPct(D.lgd.el_rate_oot, 2), disp.el_amount || fmtMoney(D.lgd.expected_loss_oot)],
-    ["VaR 99.9%", disp.sim_var999 || fmtPct(stats["var_0.999_pct_ead"], 2), disp.sim_var999_usd || fmtMoney(stats["var_0.999"])],
-  ];
-  $("#evidence-kpis").innerHTML = cards.map(([label, value, sub]) => `<div class="summary-kpi"><p class="mini-label">${esc(label)}</p><p class="value">${esc(value)}</p><p class="sub">${esc(sub)}</p></div>`).join("");
   const meta = pe().meta;
-  $("#evidence-window").textContent = `Primary test window: ${meta.years.join("–")}, ${meta.term}-month terms, ${fmtInt(meta.n_total)} resolved loans. The censored window is shown only to quantify the measurement artifact.`;
+  // Headline statistics are already shown in the hero KPI row.
   $("#benchmark-note").textContent = `The lender's own grade still beats a leakage-free model by ${disp.auc_gap_vs_benchmark || "—"} AUC. It is an upper bound on what a challenger could recover, not a failure of the pipeline.`;
   $("#calibration-note").textContent = disp.calibration_note || "";
   $("#lgd-note").textContent = `Loan-level LGD is not usable: every model has a negative out-of-time R². Expected loss therefore uses the portfolio-level LGD (${disp.realized_lgd || "—"} realized out of time).`;

@@ -73,7 +73,7 @@
   },
   "risk-rho": {
     "title": "Asset correlation (ρ)",
-    "text": "ρ controls how much loans move together through the systematic factor. A higher ρ makes defaults cluster in bad years and pushes the tail of the loss distribution up. The slider snaps to a precomputed grid.",
+    "text": "ρ controls how much loans move together through the systematic factor. A higher ρ makes defaults cluster in bad years and pushes the tail of the loss distribution up.",
     "try": "Drag ρ from its base case toward the right and watch VaR 99.9%.",
     "term": "rho"
   },
@@ -94,42 +94,6 @@
     "text": "The sweep moves ρ through the precomputed grid so you can see the tail respond. It does not re-simulate in the browser. With reduced motion enabled it advances one step per activation instead of animating.",
     "try": "Start the sweep, then pause it on a high-ρ point.",
     "term": "rho"
-  },
-  "risk-el": {
-    "title": "Expected loss in the simulation",
-    "text": "The average loss across simulated paths. It should sit near the headline expected loss; small differences come from the finite number of paths and the scenario grid.",
-    "try": "Compare this with the headline EL of {el_rate}.",
-    "term": "el"
-  },
-  "risk-ul": {
-    "title": "Unexpected loss",
-    "text": "The standard deviation of simulated losses around expected loss. It measures how much the loss typically varies, before looking at the extreme tail.",
-    "try": "Increase PD stress and watch UL rise.",
-    "term": "ul"
-  },
-  "risk-var99": {
-    "title": "VaR 99%",
-    "text": "In 99 of 100 simulated years, the portfolio loss stays below this share of EAD. It is a quantile of the simulated loss distribution, not a maximum possible loss.",
-    "try": "Compare VaR 99% with VaR 99.9%.",
-    "term": "var"
-  },
-  "risk-var999": {
-    "title": "VaR 99.9%",
-    "text": "In 999 of 1,000 simulated years, the portfolio loss stays below this share of EAD. It is more sensitive to the tail and to asset correlation than VaR 99%.",
-    "try": "Move ρ and watch how much more VaR 99.9% changes than VaR 99%.",
-    "term": "var"
-  },
-  "risk-es99": {
-    "title": "Expected Shortfall 99%",
-    "text": "The average loss in the worst 1% of simulated years. Unlike VaR, ES averages the tail instead of stopping at one quantile.",
-    "try": "Compare ES 99% with VaR 99%.",
-    "term": "es"
-  },
-  "risk-es999": {
-    "title": "Expected Shortfall 99.9%",
-    "text": "The average loss in the worst 0.1% of simulated years. This is the most tail-sensitive number in the Risk Lab.",
-    "try": "Raise ρ and PD stress together and watch ES 99.9%.",
-    "term": "es"
   },
   "gauge": {
     "title": "VaR gauge",
@@ -197,24 +161,6 @@
     "try": "Raise the payment share and watch the score fall.",
     "term": "dti"
   },
-  "sim-score": {
-    "title": "Score",
-    "text": "The score adds a fixed base to the points for each selected bin. Higher score means lower implied risk. The breakdown below the result lists every contribution.",
-    "try": "Open “Why this score?” and check the arithmetic.",
-    "term": "score"
-  },
-  "sim-pd": {
-    "title": "Implied PD",
-    "text": "The score is mapped to a probability of default through the published scorecard scaling. The text also translates it into “about N out of 100 similar applicants” and compares it with the portfolio default rate of {default_rate_oot}.",
-    "try": "Compare the typical and higher-risk presets.",
-    "term": "pd"
-  },
-  "sim-percentile": {
-    "title": "Percentile",
-    "text": "This says how many test-window loans have a lower score. It is phrased as “scores higher than X%” so the direction is unambiguous: a higher percentile is better.",
-    "try": "Move one input and watch the percentile shift.",
-    "term": "percentile"
-  },
   "sim-breakdown": {
     "title": "Why this score?",
     "text": "The breakdown lists the fixed base points and each variable's contribution. The base plus every contribution equals the displayed score, so the arithmetic is auditable.",
@@ -233,34 +179,10 @@
     "try": "Find the approximate cutoff where the bad rate rises sharply.",
     "term": "cutoff"
   },
-  "cutoff-approval": {
-    "title": "Approval rate",
-    "text": "The share of test-window loans that would be approved at this cutoff. It is a historical what-if, not a business decision.",
-    "try": "Compare this with “approve everyone.”",
-    "term": "approval-rate"
-  },
-  "cutoff-bad": {
-    "title": "Bad rate (approved)",
-    "text": "The default rate among approved loans at this cutoff. A higher cutoff usually lowers this number but also rejects more good borrowers.",
-    "try": "Compare it with the overall default rate.",
-    "term": "bad-rate"
-  },
-  "cutoff-approved-good": {
-    "title": "Approved good loans",
-    "text": "Loans that would be approved and did not default. This is the good volume retained by the cutoff.",
-    "try": "Raise the cutoff and watch this count fall.",
-    "term": "confusion-matrix"
-  },
-  "cutoff-approved-bad": {
-    "title": "Approved bad loans",
-    "text": "Loans that would be approved and did default. These are the false negatives of the approval rule from the lender's perspective.",
-    "try": "Lower the cutoff and watch this count rise.",
-    "term": "confusion-matrix"
-  },
   "provenance": {
     "title": "How do we know?",
     "text": "Opens the provenance drawer: data source, window, sample size, formulas, small-n masking and the limitations that remain. It is the audit trail for the numbers on screen.",
     "try": "Read the limitations before quoting a segment.",
-    "term": "dashboard"
+    "term": "small-segment-masking"
   }
 }

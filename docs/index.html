@@ -51,9 +51,7 @@
           <p class="eyebrow">Portfolio intelligence · Lending Club snapshot</p>
           <h1 id="hero-title">Where does the loss <span class="grad-text">actually live?</span></h1>
           <p class="lead">
-            One linked view of the mature test window. Switch the dimension and the map,
-            the ranking and the summary move together. Click any segment to see its default
-            rate, calibrated PD and expected loss — then take the tail into the risk lab.
+            One linked view of the mature test window.
           </p>
           <div class="hero-actions">
             <button class="btn btn-primary" id="hero-explore" type="button">Explore the portfolio</button>
@@ -232,7 +230,6 @@
                   <h3 id="loss-title">Loss distribution</h3>
                   <p class="panel-sub" id="loss-sub">—</p>
                 </div>
-                <span class="warning-pill" id="tail-pill">Tail risk</span>
               </div>
               <div class="chart-host" id="loss-chart" role="img" aria-label="Simulated portfolio loss histogram with expected loss and tail markers"></div>
               <div class="chart-legend" id="loss-legend" aria-label="Loss marker legend"></div>
@@ -262,7 +259,7 @@
             <div class="panel-head">
               <div>
                 <h3 id="sim-title">Applicant simulator</h3>
-                <p class="panel-sub">Educational illustration of the published scorecard. Not a lending decision.</p>
+                <p class="panel-sub">Educational illustration of the published scorecard. Not a lending decision. Shares are from the 2014-2015 test window.</p>
               </div>
               <span class="panel-badge" id="sim-gini">—</span>
             </div>
@@ -284,7 +281,7 @@
               <summary>Why this score?</summary>
               <div id="sim-breakdown"></div>
             </details>
-            <p class="panel-foot">Gini <span id="sim-gini-foot">—</span>. A higher score means lower implied risk.</p>
+            <p class="panel-foot">Gini <span id="sim-gini-foot">—</span>.</p>
           </section>
 
           <section class="panel" aria-labelledby="cutoff-title">
@@ -325,11 +322,6 @@
         </div>
 
         <div class="evidence-grid">
-          <section class="panel">
-            <h3>Headline statistics</h3>
-            <div class="evidence-kpis" id="evidence-kpis"></div>
-            <p class="panel-foot" id="evidence-window"></p>
-          </section>
           <section class="panel">
             <h3>Model comparison</h3>
             <div class="table-scroll">
@@ -379,7 +371,8 @@
 
         <section class="panel limitations-panel">
           <h3>What did not work, and limitations</h3>
-          <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
+          <p class="note-copy">Findings about discrimination, LGD, calibration and the forecast are reported next to their tables above.</p>
+          <ul class="limitations" id="limitations-list"><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li><li>Clustering is weakly separated: silhouette 0.1840, stability ARI 0.9566, and k-means separates the default rate by only 0.54 pp.</li></ul>
           <p class="note-copy" id="segments-note"></p>
         </section>
       </div>
@@ -392,7 +385,7 @@
           <div>
             <p class="eyebrow">Learn</p>
             <h2>Start here: a 5-minute guide</h2>
-            <p class="section-lead">Plain-English definitions, the project's own examples and a link from every term back to the widget that uses it.</p>
+            <p class="section-lead">Plain-English definitions, the project's own examples and a link from every term back to the widget that uses it. This dashboard is a descriptive view over historical Lending Club data, not a lending decision system, forecast or causal model; segment differences are correlations, not causal effects.</p>
           </div>
         </div>
         <div class="guide-grid" id="learn-guide"></div>

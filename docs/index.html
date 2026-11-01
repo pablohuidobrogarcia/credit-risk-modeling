@@ -115,10 +115,20 @@
         </div>
 
         <div class="explorer-grid">
-          <aside class="insight-card" id="insight-card" aria-live="polite">
-            <p class="mini-label" id="insight-kicker">What the data says</p>
-            <div id="insight-text" class="insight-copy"></div>
-          </aside>
+          <section class="panel diagnosis-panel" id="diagnosis-panel" aria-labelledby="diagnosis-title" aria-live="polite">
+            <div class="panel-head">
+              <div>
+                <h3 id="diagnosis-title">Segment diagnosis</h3>
+                <p class="panel-sub" id="diagnosis-sub">—</p>
+              </div>
+            </div>
+            <div class="diagnosis-track">
+              <svg class="diagnosis-curve" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <path d="M 24 2 C 24 18, 76 30, 76 48 C 76 66, 24 78, 24 98" />
+              </svg>
+              <ol class="diagnosis-steps" id="diagnosis-steps"></ol>
+            </div>
+          </section>
 
           <section class="panel map-panel" aria-labelledby="map-title">
             <div class="panel-head">

@@ -326,6 +326,7 @@ const STATIC_INFO = [
   ["#metric-tabs", "metric-tabs", "Color metric", "after"],
   ["#segment-search", "filter", "Filter segments", "after"],
   ["#map-title", "map", "Segment map", "after"],
+  ["#diagnosis-title", "diagnosis", "Segment diagnosis", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
   ["#score-hist-caption", "score-distribution", "Score distribution", "after"],
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
@@ -829,23 +830,140 @@ function renderScoreHist(host, hist, bins, caption, markerValue) {
   if (selCap && host.id === "score-hist") selCap.textContent = caption;
 }
 
-function renderInsight() {
+const DIAGNOSIS_CLOSE_THRESHOLD_PP = 2;
+const DIAGNOSIS_CLEAR_THRESHOLD_PP = 5;
+const DIAGNOSIS_CONCENTRATION_THRESHOLD = 1.10;
+const DIAGNOSIS_BELOW_WEIGHT_THRESHOLD = 0.90;
+let diagnosisOpenStep = 1;
+
+function diagnosisVerdictModel(gapPp) {
+  const gap = gapPp;
+  if (Math.abs(gap) <= DIAGNOSIS_CLOSE_THRESHOLD_PP) return "Close";
+  if (gap > DIAGNOSIS_CLEAR_THRESHOLD_PP) return "Clearly under-predicts";
+  if (gap > DIAGNOSIS_CLOSE_THRESHOLD_PP) return "Slightly under-predicts";
+  if (gap < -DIAGNOSIS_CLEAR_THRESHOLD_PP) return "Clearly over-predicts";
+  return "Slightly over-predicts";
+}
+
+function renderDiagnosis() {
+  const panel = $("#diagnosis-panel");
+  if (!panel || !pe()) return;
   const item = summaryItem();
-  const total = totalItem();
-  if (!item || !total) return;
+  const meta = pe().meta;
+  if (!item) return;
+  const masked = !!item.insufficient || item.n < minN();
   const selected = state.dim === "total" ? null : selectedItem();
-  const kicker = $("#insight-kicker");
-  const copy = $("#insight-text");
-  if (selected) {
-    const diff = (num(item[state.metric]) || 0) - (num(total[state.metric]) || 0);
-    const direction = diff >= 0 ? "above" : "below";
-    kicker.textContent = `${dimMeta(state.dim).label} view · ${item.name}`;
-    copy.innerHTML = `<span class="big">${metricText(item[state.metric], state.metric, 2)}</span>
-      ${esc(metricMeta(state.metric).short)}. This segment holds <strong>${fmtPct(item.ead_share, 1)}</strong> of EAD across <strong>${fmtInt(item.n)}</strong> loans. Observed default is <strong>${fmtPct(item.default_rate, 2)}</strong> (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)}), predicted PD is <strong>${fmtPct(item.pred_pd, 2)}</strong>, and expected loss is <strong>${fmtPct(item.el_pct_ead, 2)}</strong> of EAD — <strong>${Math.abs(diff * 100).toFixed(2)} pp ${direction}</strong> the portfolio.`;
-  } else {
-    kicker.textContent = "Portfolio view";
-    copy.innerHTML = `<span class="big">${fmtPct(total.default_rate, 2)}</span>
-      observed default across <strong>${fmtInt(total.n)}</strong> resolved loans. Predicted PD is <strong>${fmtPct(total.pred_pd, 2)}</strong> and expected loss is <strong>${fmtPct(total.el_pct_ead, 2)}</strong> of EAD.`;
+  $("#diagnosis-sub").textContent = selected ? `${dimMeta(state.dim).label} segment` : "Whole portfolio";
+  diagnosisOpenStep = 1;
+
+  const n = item.n || 0;
+  const loanShare = meta.n_total ? n / meta.n_total : 0;
+  const eadShare = num(item.ead_share) || 0;
+  const elShare = meta.el_pct_ead ? (eadShare * (num(item.el_pct_ead) || 0)) / meta.el_pct_ead : 0;
+  const ratio = loanShare > 0 ? elShare / loanShare : 0;
+  const gapPp = ((num(item.default_rate) || 0) - (num(item.pred_pd) || 0)) * 100;
+  const step2Verdict = diagnosisVerdictModel(gapPp);
+  const step3Verdict = ratio > DIAGNOSIS_CONCENTRATION_THRESHOLD
+    ? "Concentrates loss"
+    : ratio < DIAGNOSIS_BELOW_WEIGHT_THRESHOLD
+      ? "Below its weight"
+      : "In line";
+
+  const steps = [
+    {
+      id: 1,
+      title: "Is the sample reliable?",
+      verdict: (masked ? "Small sample" : "Reliable"),
+      content: masked
+        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
+        : `<p><strong>Loans in segment:</strong> ${fmtInt(n)}</p>
+           <p><strong>Rule:</strong> n ≥ ${fmtInt(minN())}</p>
+           <p><strong>95% CI:</strong> ${fmtPct(item.ci_low, 2)} – ${fmtPct(item.ci_high, 2)}</p>`,
+    },
+    {
+      id: 2,
+      title: "Does the model see it?",
+      verdict: masked ? "Small sample" : step2Verdict,
+      content: masked
+        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
+        : `<p><strong>Predicted PD:</strong> ${fmtPct(item.pred_pd, 2)}</p>
+           <p><strong>Observed default:</strong> ${fmtPct(item.default_rate, 2)}</p>
+           <p><strong>Gap:</strong> ${gapPp.toFixed(1)} pp</p>`,
+      disabled: masked,
+    },
+    {
+      id: 3,
+      title: "How much does it weigh?",
+      verdict: masked ? "Small sample" : step3Verdict,
+      content: masked
+        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
+        : `<p><strong>Share of loans:</strong> ${fmtPct(loanShare, 1)}</p>
+           <p><strong>Share of exposure (EAD):</strong> ${fmtPct(eadShare, 1)}</p>
+           <p><strong>Share of expected loss:</strong> ${fmtPct(elShare, 1)}</p>
+           <p class="diagnosis-formula">EL share = EAD share × segment EL ÷ portfolio EL</p>`,
+      disabled: masked,
+    },
+    {
+      id: 4,
+      title: "What this means",
+      verdict: masked ? "Small sample" : "Descriptive",
+      content: masked
+        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
+        : `<p>The model predicts ${fmtPct(item.pred_pd, 1)} and ${fmtPct(item.default_rate, 1)} is observed; this segment holds ${fmtPct(loanShare, 1)} of loans and ${fmtPct(elShare, 1)} of expected loss.</p>
+           ${step2Verdict !== "Close" ? `<button type="button" class="diagnosis-link" data-diagnosis-action="evidence">See calibration in Evidence</button>` : ""}`,
+      disabled: masked,
+    },
+  ];
+
+  const host = $("#diagnosis-steps");
+  host.innerHTML = steps.map((step) => `
+    <li class="diagnosis-step ${step.id === diagnosisOpenStep ? "is-open" : ""}" data-step="${step.id}">
+      <button type="button" class="diagnosis-step-trigger" aria-expanded="${step.id === diagnosisOpenStep}" aria-controls="diagnosis-detail-${step.id}" ${step.disabled ? "disabled" : ""}>
+        <span class="diagnosis-node">${String(step.id).padStart(2, "0")}</span>
+        <span class="diagnosis-step-title">${esc(step.title)}</span>
+        <span class="diagnosis-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div class="diagnosis-detail" id="diagnosis-detail-${step.id}" ${step.id === diagnosisOpenStep ? "" : "hidden"}>
+        <span class="diagnosis-verdict">${esc(step.verdict)}</span>
+        ${step.content}
+      </div>
+    </li>`).join("");
+
+  $$(".diagnosis-step-trigger", host).forEach((button) => {
+    button.addEventListener("click", () => {
+      const stepId = Number(button.closest(".diagnosis-step").dataset.step);
+      diagnosisOpenStep = diagnosisOpenStep === stepId ? null : stepId;
+      $$(".diagnosis-step", host).forEach((step) => {
+        const id = Number(step.dataset.step);
+        const open = id === diagnosisOpenStep;
+        step.classList.toggle("is-open", open);
+        const trigger = step.querySelector(".diagnosis-step-trigger");
+        const detail = step.querySelector(".diagnosis-detail");
+        trigger.setAttribute("aria-expanded", String(open));
+        if (detail) detail.hidden = !open;
+      });
+      const curve = panel.querySelector(".diagnosis-curve");
+      if (curve && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        curve.classList.toggle("is-drawn", diagnosisOpenStep != null);
+      }
+    });
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        button.click();
+      }
+    });
+  });
+  $$("[data-diagnosis-action='evidence']", host).forEach((button) => {
+    button.addEventListener("click", () => {
+      setView("evidence");
+      window.setTimeout(() => $("#calibration-note")?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
+    });
+  });
+  const curve = panel.querySelector(".diagnosis-curve");
+  if (curve) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) curve.classList.add("is-drawn");
+    else window.setTimeout(() => curve.classList.add("is-drawn"), 60);
   }
 }
 
@@ -869,7 +987,7 @@ function renderExplorer() {
   renderMap();
   renderList();
   renderSummary();
-  renderInsight();
+  renderDiagnosis();
 }
 
 /* ---------------------------------------------------------------- risk lab */

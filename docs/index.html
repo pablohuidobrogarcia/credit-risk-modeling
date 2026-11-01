@@ -122,11 +122,26 @@
                 <p class="panel-sub" id="diagnosis-sub">—</p>
               </div>
             </div>
-            <div class="diagnosis-track">
-              <svg class="diagnosis-curve" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                <path d="M 24 2 C 24 18, 76 30, 76 48 C 76 66, 24 78, 24 98" />
+            <div class="diagnosis-picture" id="diagnosis-picture">
+              <svg class="diagnosis-svg" viewBox="0 0 220 360" aria-hidden="true" focusable="false">
+                <path class="diagnosis-arc diagnosis-arc-1" d="M 108 24 C 178 24, 178 104, 108 104" />
+                <path class="diagnosis-arc diagnosis-arc-2" d="M 108 104 C 38 104, 38 184, 108 184" />
+                <path class="diagnosis-arc diagnosis-arc-3" d="M 108 184 C 178 184, 178 264, 108 264" />
+                <path class="diagnosis-arc diagnosis-arc-4" d="M 108 264 C 38 264, 38 344, 108 344" />
               </svg>
-              <ol class="diagnosis-steps" id="diagnosis-steps"></ol>
+              <button type="button" class="diagnosis-node diagnosis-node-1" data-step="1" aria-label="Step 1: Is the sample reliable?" aria-pressed="true">01</button>
+              <button type="button" class="diagnosis-node diagnosis-node-2" data-step="2" aria-label="Step 2: Does the model see it?" aria-pressed="false">02</button>
+              <button type="button" class="diagnosis-node diagnosis-node-3" data-step="3" aria-label="Step 3: How much does it weigh?" aria-pressed="false">03</button>
+              <button type="button" class="diagnosis-node diagnosis-node-4" data-step="4" aria-label="Step 4: What this means" aria-pressed="false">04</button>
+              <p class="diagnosis-step-label diagnosis-step-label-1">Is the sample reliable?</p>
+              <p class="diagnosis-step-label diagnosis-step-label-2">Does the model see it?</p>
+              <p class="diagnosis-step-label diagnosis-step-label-3">How much does it weigh?</p>
+              <p class="diagnosis-step-label diagnosis-step-label-4">What this means</p>
+            </div>
+            <div class="diagnosis-reading" id="diagnosis-reading" aria-live="polite">
+              <h4 class="diagnosis-reading-title" id="diagnosis-reading-title">Is the sample reliable?</h4>
+              <span class="diagnosis-verdict" id="diagnosis-reading-verdict">Reliable</span>
+              <div id="diagnosis-reading-body"></div>
             </div>
           </section>
 

@@ -296,56 +296,65 @@ button, input, select { font: inherit; color: inherit; }
 /* --------------------------------------------------------- explorer grid */
 .explorer-grid { display: grid; grid-template-columns: minmax(230px, 0.72fr) minmax(0, 1.55fr) minmax(280px, 1.05fr); gap: 0.8rem; align-items: start; }
 .diagnosis-panel { min-width: 0; }
-.diagnosis-track { position: relative; min-height: 24rem; padding: 0.35rem 0; }
-.diagnosis-curve { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
-.diagnosis-curve path {
-  fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; opacity: 0.42;
-  stroke-dasharray: 260; stroke-dashoffset: 260; transition: stroke-dashoffset 420ms var(--ease);
+.diagnosis-picture {
+  position: relative; width: 100%; max-width: 180px; margin: 0 auto 0.85rem;
+  aspect-ratio: 5 / 8; min-height: 240px;
 }
-.diagnosis-curve.is-drawn path { stroke-dashoffset: 0; }
-.diagnosis-steps { position: relative; z-index: 1; list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; }
-.diagnosis-step { position: relative; }
-.diagnosis-step-trigger {
-  display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 44px;
-  padding: 0.62rem 0.72rem; border: 1px solid var(--border); border-radius: 12px;
-  background: color-mix(in srgb, var(--card-solid) 64%, transparent); color: var(--fg);
-  cursor: pointer; text-align: left; font: inherit;
-  transition: border-color var(--speed) var(--ease), background var(--speed) var(--ease), transform var(--speed) var(--ease);
-}
-.diagnosis-step-trigger:hover { border-color: var(--accent); transform: translateY(-1px); }
-.diagnosis-step.is-open .diagnosis-step-trigger { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--card)); }
-.diagnosis-step:nth-child(even) .diagnosis-step-trigger { flex-direction: row-reverse; text-align: right; }
+.diagnosis-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.diagnosis-arc { fill: none; stroke-width: 34px; stroke-linecap: butt; }
+.diagnosis-arc-1 { stroke: color-mix(in srgb, var(--accent) 34%, var(--card-solid)); }
+.diagnosis-arc-2 { stroke: color-mix(in srgb, var(--accent) 50%, var(--card-solid)); }
+.diagnosis-arc-3 { stroke: color-mix(in srgb, var(--accent) 70%, var(--card-solid)); }
+.diagnosis-arc-4 { stroke: var(--accent); }
 .diagnosis-node {
-  width: 2rem; height: 2rem; flex: 0 0 2rem; border-radius: 999px; display: grid; place-items: center;
-  background: var(--accent); color: #fff; font-size: 0.78rem; font-weight: 800;
+  position: absolute; width: 44px; height: 44px; border-radius: 999px; padding: 0;
+  display: grid; place-items: center; background: var(--card); color: var(--fg);
+  border: 3px solid var(--accent); font-size: 0.78rem; font-weight: 800; line-height: 1;
+  cursor: pointer; box-shadow: var(--shadow-soft);
+  transition: background var(--speed) var(--ease), color var(--speed) var(--ease), border-width var(--speed) var(--ease), transform var(--speed) var(--ease);
 }
-.diagnosis-step-title { flex: 1 1 auto; font-weight: 700; }
-.diagnosis-chevron { flex: 0 0 auto; color: var(--fg-soft); transition: transform var(--speed) var(--ease); }
-.diagnosis-step.is-open .diagnosis-chevron { transform: rotate(180deg); }
+.diagnosis-node:hover { transform: scale(1.06); border-color: color-mix(in srgb, var(--accent) 80%, var(--fg)); }
+.diagnosis-node:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 3px; }
+.diagnosis-node.is-selected {
+  background: var(--node-color, var(--accent)); color: #fff; border-width: 4px;
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.diagnosis-node.is-disabled { opacity: 0.42; cursor: not-allowed; filter: grayscale(0.35); }
+.diagnosis-node-1 { --node-color: color-mix(in srgb, var(--accent) 34%, var(--card-solid)); left: 18%; top: 9%; }
+.diagnosis-node-2 { --node-color: color-mix(in srgb, var(--accent) 50%, var(--card-solid)); right: 18%; top: 32%; }
+.diagnosis-node-3 { --node-color: color-mix(in srgb, var(--accent) 70%, var(--card-solid)); left: 18%; top: 56%; }
+.diagnosis-node-4 { --node-color: var(--accent); right: 18%; top: 79%; }
+.diagnosis-step-label {
+  position: absolute; max-width: 9.5rem; font-size: 0.72rem; font-weight: 700;
+  color: var(--fg-muted); line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.diagnosis-step-label-1 { left: 2%; top: 5%; text-align: right; }
+.diagnosis-step-label-2 { right: 2%; top: 28%; text-align: left; }
+.diagnosis-step-label-3 { left: 2%; top: 52%; text-align: right; }
+.diagnosis-step-label-4 { right: 2%; top: 75%; text-align: left; }
+.diagnosis-reading {
+  border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 0.95rem;
+  background: color-mix(in srgb, var(--card-solid) 52%, transparent); min-height: 11.5rem;
+  transition: opacity 180ms var(--ease);
+}
+.diagnosis-reading.is-swapping { opacity: 0.45; }
+.diagnosis-reading-title { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 800; }
 .diagnosis-verdict {
-  display: inline-flex; align-items: center; margin-top: 0.45rem; padding: 0.18rem 0.55rem;
+  display: inline-flex; align-items: center; margin: 0 0 0.55rem; padding: 0.18rem 0.55rem;
   border-radius: 999px; font-size: 0.72rem; font-weight: 800;
   background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent);
 }
-.diagnosis-detail {
-  margin: 0.55rem 0 0; padding: 0.8rem 0.9rem; border: 1px solid var(--border);
-  border-radius: 12px; background: color-mix(in srgb, var(--card-solid) 52%, transparent);
-}
-.diagnosis-detail[hidden] { display: none; }
-.diagnosis-detail p { margin: 0.35rem 0; font-size: 0.88rem; color: var(--fg-muted); }
-.diagnosis-detail strong { color: var(--fg); }
-.diagnosis-detail .diagnosis-formula { font-size: 0.76rem; color: var(--fg-soft); }
+.diagnosis-reading p { margin: 0.32rem 0; font-size: 0.88rem; color: var(--fg-muted); }
+.diagnosis-reading strong { color: var(--fg); }
+.diagnosis-formula { font-size: 0.76rem; color: var(--fg-soft); }
 .diagnosis-disabled { color: var(--fg-soft); font-style: italic; }
 .diagnosis-link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
-  .diagnosis-curve path { transition: none; stroke-dashoffset: 0; }
-  .diagnosis-step-trigger, .diagnosis-chevron { transition: none; }
+  .diagnosis-reading { transition: none; }
 }
 @media (max-width: 860px) {
-  .diagnosis-track { min-height: 20rem; }
-  .diagnosis-curve { display: none; }
-  .diagnosis-track { border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent); margin-left: 1rem; padding-left: 0.9rem; }
-  .diagnosis-step-trigger { flex-direction: row !important; text-align: left; }
+  .diagnosis-picture { max-width: 100%; }
+  .diagnosis-step-label { max-width: 8rem; }
 }
 .chip {
   border: 1px solid var(--border); background: color-mix(in srgb, var(--card-solid) 64%, transparent);

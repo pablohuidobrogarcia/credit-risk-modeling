@@ -869,11 +869,11 @@ function renderDiagnosis() {
       ? "Below its weight"
       : "In line";
 
-  const steps = [
+  const stepData = [
     {
       id: 1,
       title: "Is the sample reliable?",
-      verdict: (masked ? "Small sample" : "Reliable"),
+      verdict: masked ? "Small sample" : "Reliable",
       content: masked
         ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
         : `<p><strong>Loans in segment:</strong> ${fmtInt(n)}</p>
@@ -915,56 +915,62 @@ function renderDiagnosis() {
     },
   ];
 
-  const host = $("#diagnosis-steps");
-  host.innerHTML = steps.map((step) => `
-    <li class="diagnosis-step ${step.id === diagnosisOpenStep ? "is-open" : ""}" data-step="${step.id}">
-      <button type="button" class="diagnosis-step-trigger" aria-expanded="${step.id === diagnosisOpenStep}" aria-controls="diagnosis-detail-${step.id}" ${step.disabled ? "disabled" : ""}>
-        <span class="diagnosis-node">${String(step.id).padStart(2, "0")}</span>
-        <span class="diagnosis-step-title">${esc(step.title)}</span>
-        <span class="diagnosis-chevron" aria-hidden="true">▾</span>
-      </button>
-      <div class="diagnosis-detail" id="diagnosis-detail-${step.id}" ${step.id === diagnosisOpenStep ? "" : "hidden"}>
-        <span class="diagnosis-verdict">${esc(step.verdict)}</span>
-        ${step.content}
-      </div>
-    </li>`).join("");
-
-  $$(".diagnosis-step-trigger", host).forEach((button) => {
-    button.addEventListener("click", () => {
-      const stepId = Number(button.closest(".diagnosis-step").dataset.step);
-      diagnosisOpenStep = diagnosisOpenStep === stepId ? null : stepId;
-      $$(".diagnosis-step", host).forEach((step) => {
-        const id = Number(step.dataset.step);
-        const open = id === diagnosisOpenStep;
-        step.classList.toggle("is-open", open);
-        const trigger = step.querySelector(".diagnosis-step-trigger");
-        const detail = step.querySelector(".diagnosis-detail");
-        trigger.setAttribute("aria-expanded", String(open));
-        if (detail) detail.hidden = !open;
+  const nodes = $$(".diagnosis-node", panel);
+  nodes.forEach((node) => {
+    const stepId = Number(node.dataset.step);
+    const step = stepData.find((entry) => entry.id === stepId);
+    const selected = stepId === diagnosisOpenStep;
+    node.setAttribute("aria-pressed", String(selected));
+    node.classList.toggle("is-selected", selected);
+    node.classList.toggle("is-disabled", !!step.disabled);
+    if (step.disabled) node.setAttribute("aria-disabled", "true");
+    else node.removeAttribute("aria-disabled");
+    node.disabled = !!step.disabled;
+    node.onclick = () => {
+      if (node.disabled) return;
+      diagnosisOpenStep = stepId;
+      nodes.forEach((other) => {
+        const otherId = Number(other.dataset.step);
+        const open = otherId === diagnosisOpenStep;
+        other.classList.toggle("is-selected", open);
+        other.setAttribute("aria-pressed", String(open));
       });
-      const curve = panel.querySelector(".diagnosis-curve");
-      if (curve && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        curve.classList.toggle("is-drawn", diagnosisOpenStep != null);
+      const reading = $("#diagnosis-reading");
+      const title = $("#diagnosis-reading-title");
+      const verdict = $("#diagnosis-reading-verdict");
+      const body = $("#diagnosis-reading-body");
+      if (reading && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        reading.classList.add("is-swapping");
+        window.setTimeout(() => reading.classList.remove("is-swapping"), 180);
       }
-    });
-    button.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        button.click();
-      }
-    });
+      if (title) title.textContent = step.title;
+      if (verdict) verdict.textContent = step.verdict;
+      if (body) body.innerHTML = step.content;
+      $$("[data-diagnosis-action='evidence']", body || panel).forEach((button) => {
+        button.addEventListener("click", () => {
+          setView("evidence");
+          window.setTimeout(() => $("#calibration-note")?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
+        });
+      });
+    };
+    if (!node.__diagnosisBound) {
+      node.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+          event.preventDefault();
+          const next = nodes.find((candidate, index) => index > nodes.indexOf(node) && !candidate.disabled);
+          if (next) { next.focus(); next.click(); }
+        } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+          event.preventDefault();
+          const previous = [...nodes].reverse().find((candidate, index) => nodes.indexOf(candidate) < nodes.indexOf(node) && !candidate.disabled);
+          if (previous) { previous.focus(); previous.click(); }
+        }
+      });
+      node.__diagnosisBound = true;
+    }
   });
-  $$("[data-diagnosis-action='evidence']", host).forEach((button) => {
-    button.addEventListener("click", () => {
-      setView("evidence");
-      window.setTimeout(() => $("#calibration-note")?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
-    });
-  });
-  const curve = panel.querySelector(".diagnosis-curve");
-  if (curve) {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) curve.classList.add("is-drawn");
-    else window.setTimeout(() => curve.classList.add("is-drawn"), 60);
-  }
+
+  const firstEnabled = nodes.find((node) => !node.disabled) || nodes[0];
+  if (firstEnabled) firstEnabled.click();
 }
 
 function renderExplorer() {

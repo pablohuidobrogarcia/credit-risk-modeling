@@ -188,7 +188,7 @@
   "diagnosis": {
     "title": "Segment diagnosis",
     "text": "Compares the selected segment with the portfolio on sample size, predicted versus observed default, and share of expected loss.",
-    "try": "Open each step and compare the verdicts.",
+    "try": "Click each number and compare the verdicts.",
     "term": "calibration"
   }
 }

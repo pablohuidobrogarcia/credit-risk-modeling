@@ -263,6 +263,16 @@ button, input, select { font: inherit; color: inherit; }
 .kpi-value { font-family: var(--serif); font-size: clamp(1.5rem, 2.3vw, 2.1rem); font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin: 0.15rem 0 0.1rem; }
 .kpi-card.risk .kpi-value { color: var(--warning); }
 .kpi-sub { color: var(--fg-muted); font-size: 0.8rem; }
+[data-theme="light"] .kpi-card { text-align: center; background: var(--card); }
+[data-theme="light"] .kpi-card::after { display: none; }
+[data-theme="light"] .kpi-strip .kpi-card:nth-child(1) { background: var(--lilac-light); }
+[data-theme="light"] .kpi-strip .kpi-card:nth-child(2) { background: var(--periwinkle-light); }
+[data-theme="light"] .kpi-strip .kpi-card:nth-child(3) { background: var(--sky-light); }
+[data-theme="light"] .kpi-strip .kpi-card:nth-child(4) { background: var(--teal-light); }
+[data-theme="light"] .kpi-card .mini-label,
+[data-theme="light"] .kpi-card .kpi-value,
+[data-theme="light"] .kpi-card .kpi-sub,
+[data-theme="light"] .kpi-card.risk .kpi-value { color: var(--ink); }
 
 /* ------------------------------------------------------------ view tabs */
 .view-tabs {

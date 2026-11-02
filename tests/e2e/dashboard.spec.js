@@ -180,6 +180,52 @@ test("removed header pill, hero note and insight chips stay out of the DOM", asy
   await expectNoErrors(errors);
 });
 
+test("hero KPI cards use ribbon pastels with centered ink text", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  const errors = await open(page);
+  const cards = page.locator(".kpi-strip .kpi-card");
+  await expect(cards).toHaveCount(4);
+  const expectedBackgrounds = ["rgb(214, 205, 245)", "rgb(195, 207, 246)", "rgb(182, 220, 243)", "rgb(172, 223, 214)"];
+  const results = await cards.evaluateAll((elements) => {
+    const parse = (value) => {
+      const match = value.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
+      return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : [0, 0, 0];
+    };
+    const channel = (value) => {
+      const v = value / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    const luminance = ([r, g, b]) => 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+    return elements.map((card) => {
+      const style = getComputedStyle(card);
+      const value = getComputedStyle(card.querySelector(".kpi-value"));
+      const label = getComputedStyle(card.querySelector(".mini-label"));
+      const sub = getComputedStyle(card.querySelector(".kpi-sub"));
+      const fg = luminance(parse(value.color));
+      const bg = luminance(parse(style.backgroundColor));
+      return {
+        background: style.backgroundColor,
+        valueColor: value.color,
+        valueAlign: value.textAlign,
+        labelAlign: label.textAlign,
+        subAlign: sub.textAlign,
+        tintDisplay: getComputedStyle(card, "::after").display,
+        ratio: (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05),
+      };
+    });
+  });
+  results.forEach((result, index) => {
+    expect(result.background).toBe(expectedBackgrounds[index]);
+    expect(result.valueColor).toBe("rgb(31, 41, 55)");
+    expect(result.valueAlign).toBe("center");
+    expect(result.labelAlign).toBe("center");
+    expect(result.subAlign).toBe("center");
+    expect(result.tintDisplay).toBe("none");
+    expect(result.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+  await expectNoErrors(errors);
+});
+
 test("back and forward restore explorer state", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#tile-map .tile[data-id='CA']").click();

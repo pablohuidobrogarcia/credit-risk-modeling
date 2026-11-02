@@ -840,12 +840,14 @@ function howBuiltContent(step) {
 function renderHowBuilt() {
   const panel = $("#how-built-panel");
   if (!panel) return;
+  const picture = $("#how-built-picture");
   const reading = $("#how-built-reading");
   const title = $("#how-built-reading-title");
   const body = $("#how-built-reading-body");
-  if (!reading || !title || !body) return;
+  if (!picture || !reading || !title || !body) return;
 
   const nodes = $$(".how-built-node", panel);
+  const svgSteps = $$("[data-step]", picture.querySelector("svg"));
   const selectStep = (stepId) => {
     howBuiltOpenStep = stepId;
     nodes.forEach((node) => {
@@ -853,8 +855,8 @@ function renderHowBuilt() {
       node.classList.toggle("is-selected", open);
       node.setAttribute("aria-pressed", String(open));
     });
-    $$(".how-built-arc", panel).forEach((arc, index) => {
-      arc.classList.toggle("is-selected", index + 1 === howBuiltOpenStep);
+    svgSteps.forEach((element) => {
+      element.classList.toggle("is-selected", Number(element.dataset.step) === howBuiltOpenStep);
     });
     const step = howBuiltContent(stepId);
     if (!step) return;
@@ -868,6 +870,14 @@ function renderHowBuilt() {
       <p><strong>Why:</strong> ${esc(resolveInfoText(step.why))}</p>
       <p><strong>What I learned:</strong> ${esc(resolveInfoText(step.learned))}</p>`;
   };
+
+  if (!picture.__howBuiltBound) {
+    picture.addEventListener("click", (event) => {
+      const stepElement = event.target.closest("[data-step]");
+      if (stepElement) selectStep(Number(stepElement.dataset.step));
+    });
+    picture.__howBuiltBound = true;
+  }
 
   nodes.forEach((node) => {
     if (node.__howBuiltBound) return;

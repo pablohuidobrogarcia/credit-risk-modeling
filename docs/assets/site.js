@@ -415,7 +415,7 @@ function palette() {
     skyLight: token("--sky-light"), sky: token("--sky"),
     tealLight: token("--teal-light"), teal: token("--teal"),
     greenLight: token("--green-light"), green: token("--green"),
-    ink: token("--ink"), accent: token("--accent"), fg: token("--fg"), muted: token("--fg-muted"),
+    ink: token("--ink"), onPastel: token("--on-pastel"), accent: token("--accent"), fg: token("--fg"), muted: token("--fg-muted"),
     border: token("--border"), surface: token("--surface"), bg: token("--bg"),
     risk,
     riskScale: risk.map((color, index) => [index / (risk.length - 1), color]),
@@ -443,11 +443,32 @@ function colorFor(value, lo, hi) {
   return scaleColor(clamp((value - lo) / (hi - lo), 0, 1));
 }
 function readableText(background) {
+  const p = palette();
+  if (background.startsWith("#")) {
+    const [r, g, b] = hexToRgb(background);
+    return readableText(`rgb(${r}, ${g}, ${b})`);
+  }
   const match = background.match(/\d+/g);
-  if (!match) return palette().surface;
+  if (!match) return p.surface;
   const [r, g, b] = match.map(Number);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.62 ? palette().ink : palette().surface;
+  const relative = (value) => {
+    const channel = value / 255;
+    return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+  };
+  const luminance = (color) => 0.2126 * relative(color.r) + 0.7152 * relative(color.g) + 0.0722 * relative(color.b);
+  const ratio = (a, b) => {
+    const l1 = luminance(a);
+    const l2 = luminance(b);
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  };
+  const bg = { r, g, b };
+  const toObject = (hex) => {
+    const [rr, gg, bb] = hexToRgb(hex);
+    return { r: rr, g: gg, b: bb };
+  };
+  const candidates = [p.onPastel, "#000000", "#ffffff"].map((color) => ({ color, value: ratio(bg, toObject(color)) }));
+  candidates.sort((a, b) => b.value - a.value);
+  return candidates[0].color;
 }
 
 /* ----------------------------------------------------------------- plotly */

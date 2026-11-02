@@ -406,8 +406,8 @@ test("theme follows the operating system and old theme links are ignored", async
 
   await page.emulateMedia({ colorScheme: "dark" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-  await expect.poll(() => page.locator("#loss-chart").evaluate((el) => el.layout?.font?.color)).toBe("#e2e8f0");
-  await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el.layout?.font?.color)).toBe("#e2e8f0");
+  await expect.poll(() => page.locator("#loss-chart").evaluate((el) => el.layout?.font?.color)).toBe("#e5e7eb");
+  await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el.layout?.font?.color)).toBe("#e5e7eb");
 
   await page.emulateMedia({ colorScheme: "light" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
@@ -900,6 +900,96 @@ test("no unresolved placeholders appear in popovers, glossary or explorer panels
   checkText(glossaryText, "glossary");
   checkText(await page.locator("#app-content").innerText(), "page");
   await expectNoErrors(errors);
+});
+
+test("all visible text keeps a readable contrast in light and dark", async ({ page }) => {
+  const contrastViolations = async () => page.evaluate(() => {
+    const parse = (value) => {
+      const match = value.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      if (!match) return null;
+      return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]), a: match[4] === undefined ? 1 : Number(match[4]) };
+    };
+    const channel = (value) => {
+      const v = value / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    const luminance = (color) => 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+    const background = (element) => {
+      let node = element;
+      while (node) {
+        const color = parse(getComputedStyle(node).backgroundColor);
+        if (color && color.a > 0.05) return color;
+        node = node.parentElement;
+      }
+      return { r: 255, g: 255, b: 255, a: 1 };
+    };
+    const out = [];
+    for (const element of document.querySelectorAll("body *")) {
+      if (element instanceof SVGElement || element.children.length) continue;
+      const text = (element.textContent || "").trim();
+      if (!text || element.closest("[aria-hidden='true']")) continue;
+      const style = getComputedStyle(element);
+      if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) continue;
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      const fg = parse(style.color);
+      if (!fg || fg.a === 0) continue;
+      const bg = background(element);
+      const l1 = luminance(fg); const l2 = luminance(bg);
+      const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      const size = parseFloat(style.fontSize);
+      const bold = parseInt(style.fontWeight, 10) >= 700;
+      const threshold = (size >= 24 || (size >= 18.66 && bold)) ? 3 : 4.5;
+      if (ratio < threshold) out.push({ text: text.slice(0, 40), ratio: Number(ratio.toFixed(2)), threshold });
+    }
+    return out;
+  });
+  const errors = await open(page);
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+    await page.reload();
+    await page.waitForTimeout(800);
+    for (const view of ["learn", "explorer", "risk", "evidence"]) {
+      await page.locator(`#view-tab-${view}`).click();
+      await page.waitForTimeout(300);
+      const violations = await contrastViolations();
+      expect(violations, `${scheme} ${view}`).toEqual([]);
+    }
+    await page.locator("#view-tab-explorer").click();
+    for (const dim of ["Total", "State", "Grade", "Purpose"]) {
+      await page.locator("#dimension-tabs button").filter({ hasText: dim }).click();
+      await page.waitForTimeout(300);
+      const violations = await contrastViolations();
+      expect(violations, `${scheme} ${dim}`).toEqual([]);
+    }
+  }
+  await expectNoErrors(errors);
+});
+
+test("site source uses only the approved palette and neutral colors", async () => {
+  const allowed = new Set([
+    "#d6cdf5", "#a99be0", "#4b3d8a", "#c3cff6", "#8fa6ea", "#b6dcf3", "#7fbbe6",
+    "#acdfd6", "#6fc6b9", "#c9e8b4", "#93d07f", "#1f2937", "#1d4ed8",
+    "#f7f8fc", "#eef2ff", "#ffffff", "#fff", "#000", "#000000", "#e2e8f0", "#e5e7eb",
+    "#0b1120", "#111827", "#172033", "#c4b5fd", "#93c5fd", "#0f172a",
+    "#4b5563", "#5b6472", "#94a3b8", "#cbd5e1", "#d9dbe3",
+    "#6a5aa8", "#566fb8", "#3d559c", "#4a86b3", "#356a96", "#3f9a8e", "#2c7c71", "#6aa14f", "#4f8638"
+  ]);
+  const files = [
+    "docs/assets/site.css", "docs/assets/site.js", "docs/index.html",
+    ...fs.readdirSync(path.join(ROOT, "docs/content")).filter((name) => name.endsWith(".json")).map((name) => `docs/content/${name}`)
+  ];
+  const found = [];
+  for (const file of files) {
+    const text = fs.readFileSync(path.join(ROOT, file), "utf8");
+    for (const match of text.matchAll(/#[0-9a-fA-F]{3,8}/g)) {
+      const before = text.slice(Math.max(0, match.index - 4), match.index);
+      if (before === "url(") continue;
+      const color = match[0].toLowerCase();
+      if (!allowed.has(color)) found.push(`${file}: ${color}`);
+    }
+  }
+  expect(found).toEqual([]);
 });
 
 test("reduced motion keeps count-ups instant and turns the sweep into one step", async ({ page }) => {

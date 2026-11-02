@@ -17,6 +17,7 @@
   --green-light: #c9e8b4;
   --green: #93d07f;
   --ink: #1f2937;
+  --on-pastel: #0f172a;
   --accent: #1d4ed8;
   --accent-2: var(--teal);
   --accent-3: var(--lilac);
@@ -70,6 +71,7 @@
   --green-light: #6aa14f;
   --green: #4f8638;
   --ink: #e2e8f0;
+  --on-pastel: #0f172a;
   --accent: #93c5fd;
   --accent-2: var(--teal);
   --accent-3: var(--lilac-dark);
@@ -156,7 +158,7 @@ button, input, select { font: inherit; color: inherit; }
 
 .skip-link {
   position: absolute; left: -9999px; top: 0; z-index: 200;
-  padding: 0.7rem 1rem; background: var(--accent); color: #fff; border-radius: 0 0 10px 0;
+  padding: 0.7rem 1rem; background: var(--accent); color: var(--surface); border-radius: 0 0 10px 0;
 }
 .skip-link:focus { left: 0; }
 
@@ -462,7 +464,7 @@ button, input, select { font: inherit; color: inherit; }
 .tile.empty { background: transparent; cursor: default; box-shadow: none; pointer-events: none; }
 .legend { display: flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.75rem; font-size: 0.72rem; color: var(--fg-muted); }
 .legend-bar { height: 8px; flex: 1 1 130px; border-radius: 999px; background: linear-gradient(90deg, var(--risk-low), var(--risk-2) 22%, var(--risk-3) 44%, var(--risk-4) 66%, var(--risk-5) 84%, var(--risk-high)); border: 1px solid var(--border); }
-.legend-swatch { width: 14px; height: 14px; border-radius: 4px; background: repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.55) 0 3px, rgba(100, 116, 139, 0.2) 3px 6px); }
+.legend-swatch { width: 14px; height: 14px; border-radius: 4px; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fg-soft) 55%, transparent) 0 3px, color-mix(in srgb, var(--fg-soft) 20%, transparent) 3px 6px); }
 .legend-num { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--fg); }
 
 /* ------------------------------------------------------------------ list */
@@ -541,7 +543,7 @@ button, input, select { font: inherit; color: inherit; }
 .sim-ctrl { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; border: 1px solid var(--border); border-radius: 10px; padding: 0.55rem 0.6rem; background: color-mix(in srgb, var(--card-solid) 38%, transparent); }
 .sim-ctrl-head { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
 .sim-ctrl label { font-size: 0.75rem; color: var(--fg); font-weight: 650; }
-.sim-contrib { font-size: 0.7rem; font-weight: 750; color: var(--accent-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sim-contrib { font-size: 0.7rem; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sim-ctrl select { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--card-solid); padding: 0.38rem 0.45rem; font-size: 0.78rem; }
 .sim-ctrl input[type="range"] { width: 100%; accent-color: var(--accent); }
 .sim-range-label { font-size: 0.75rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
@@ -612,7 +614,7 @@ body.welcome-open { overflow: hidden; }
 .welcome-backdrop {
   position: fixed; inset: 0; z-index: 120; display: grid; place-items: center;
   padding: clamp(0.6rem, 2vw, 1.5rem);
-  background: rgba(9, 14, 26, 0.5); backdrop-filter: blur(10px) saturate(1.15);
+  background: color-mix(in srgb, var(--ink) 52%, transparent); backdrop-filter: blur(10px) saturate(1.15);
   animation: fade-in 220ms var(--ease);
 }
 .welcome-card {
@@ -671,7 +673,7 @@ body.welcome-open { overflow: hidden; }
 }
 
 /* ----------------------------------------------------------------- drawer */
-.drawer-backdrop { position: fixed; inset: 0; z-index: 100; background: rgba(9, 14, 26, 0.45); backdrop-filter: blur(3px); animation: fade-in 240ms var(--ease); }
+.drawer-backdrop { position: fixed; inset: 0; z-index: 100; background: color-mix(in srgb, var(--ink) 46%, transparent); backdrop-filter: blur(3px); animation: fade-in 240ms var(--ease); }
 .drawer {
   position: fixed; z-index: 101; top: 0; right: 0; height: 100dvh; width: min(480px, 94vw);
   background: var(--card-solid); border-left: 1px solid var(--border); box-shadow: -24px 0 70px -30px rgba(0, 0, 0, 0.5);

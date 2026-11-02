@@ -482,7 +482,7 @@ button, input, select { font: inherit; color: inherit; }
 .rank-value { font-variant-numeric: tabular-nums; font-size: 0.83rem; font-weight: 750; text-align: right; }
 .rank-meta { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; }
 .rank-bar { height: 6px; flex: 1; border-radius: 999px; background: color-mix(in srgb, var(--fg) 9%, transparent); overflow: hidden; }
-.rank-bar span { display: block; height: 100%; border-radius: inherit; background: var(--grad); width: var(--w, 0%); transition: width 520ms var(--ease); }
+.rank-bar span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--periwinkle), var(--lilac-dark)); width: var(--w, 0%); transition: width 520ms var(--ease); }
 .rank-sub { font-size: 0.68rem; color: var(--fg-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .empty-state { color: var(--fg-muted); font-size: 0.85rem; padding: 0.8rem 0.35rem; }
 
@@ -495,8 +495,8 @@ button, input, select { font: inherit; color: inherit; }
 .score-figure figcaption { font-size: 0.76rem; color: var(--fg-soft); margin-bottom: 0.35rem; }
 .score-hist { min-height: 92px; display: flex; align-items: flex-end; }
 .score-hist svg { width: 100%; height: 92px; overflow: visible; }
-.score-hist .bar { fill: color-mix(in srgb, var(--accent) 65%, var(--accent-2)); transition: height 420ms var(--ease); }
-.score-hist .marker { stroke: var(--warning); stroke-width: 2; stroke-dasharray: 4 3; }
+.score-hist .bar { fill: var(--periwinkle); transition: height 420ms var(--ease); }
+.score-hist .marker { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 4 3; }
 .score-hist text { fill: var(--fg-soft); font-size: 8px; }
 
 /* -------------------------------------------------------------- risk lab */

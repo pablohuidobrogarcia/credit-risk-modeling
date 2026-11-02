@@ -405,6 +405,23 @@ function countUp(el, value, formatter) {
 }
 
 /* ---------------------------------------------------------------- colors */
+function palette() {
+  const style = getComputedStyle(document.documentElement);
+  const token = (name) => style.getPropertyValue(name).trim();
+  const risk = [token("--risk-low"), token("--risk-2"), token("--risk-3"), token("--risk-4"), token("--risk-5"), token("--risk-high")];
+  return {
+    lilacLight: token("--lilac-light"), lilac: token("--lilac"), lilacDark: token("--lilac-dark"),
+    periwinkleLight: token("--periwinkle-light"), periwinkle: token("--periwinkle"),
+    skyLight: token("--sky-light"), sky: token("--sky"),
+    tealLight: token("--teal-light"), teal: token("--teal"),
+    greenLight: token("--green-light"), green: token("--green"),
+    ink: token("--ink"), accent: token("--accent"), fg: token("--fg"), muted: token("--fg-muted"),
+    border: token("--border"), surface: token("--surface"), bg: token("--bg"),
+    risk,
+    riskScale: risk.map((color, index) => [index / (risk.length - 1), color]),
+  };
+}
+
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
   const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
@@ -416,20 +433,21 @@ function mix(a, b, t) {
   return `rgb(${Math.round(A[0] + (B[0] - A[0]) * t)}, ${Math.round(A[1] + (B[1] - A[1]) * t)}, ${Math.round(A[2] + (B[2] - A[2]) * t)})`;
 }
 function scaleColor(t) {
-  const stops = [[0, "#0f766e"], [0.5, "#eab308"], [1, "#b91c1c"]];
-  if (t <= 0.5) return mix(stops[0][1], stops[1][1], t / 0.5);
-  return mix(stops[1][1], stops[2][1], (t - 0.5) / 0.5);
+  const risk = palette().risk;
+  const scaled = clamp(t, 0, 1) * (risk.length - 1);
+  const index = Math.min(risk.length - 2, Math.floor(scaled));
+  return mix(risk[index], risk[index + 1], scaled - index);
 }
 function colorFor(value, lo, hi) {
-  if (num(value) == null || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return "#64748b";
+  if (num(value) == null || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return palette().muted;
   return scaleColor(clamp((value - lo) / (hi - lo), 0, 1));
 }
 function readableText(background) {
   const match = background.match(/\d+/g);
-  if (!match) return "#fff";
+  if (!match) return palette().surface;
   const [r, g, b] = match.map(Number);
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.62 ? "#111827" : "#ffffff";
+  return luminance > 0.62 ? palette().ink : palette().surface;
 }
 
 /* ----------------------------------------------------------------- plotly */
@@ -452,16 +470,16 @@ function loadPlotly() {
   });
 }
 function plotTheme() {
-  const dark = effectiveTheme() === "dark";
+  const p = palette();
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 11, color: dark ? "#e2e8f0" : "#1f2937" },
+    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 11, color: p.fg },
     margin: { l: 58, r: 18, t: 26, b: 46 },
-    xaxis: { gridcolor: dark ? "rgba(226,232,240,0.12)" : "rgba(20,27,45,0.1)", zerolinecolor: "rgba(0,0,0,0)", color: dark ? "#cbd5e1" : "#4b5563" },
-    yaxis: { gridcolor: dark ? "rgba(226,232,240,0.12)" : "rgba(20,27,45,0.1)", zerolinecolor: "rgba(0,0,0,0)", color: dark ? "#cbd5e1" : "#4b5563" },
-    legend: { orientation: "h", y: 1.12, x: 0, font: { color: dark ? "#e2e8f0" : "#1f2937" } },
-    colorway: ["#2563eb", "#0d9488", "#b45309", "#b91c1c", "#7c3aed"],
+    xaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
+    yaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
+    legend: { orientation: "h", y: 1.12, x: 0, font: { color: p.fg } },
+    colorway: [p.periwinkle, p.teal, p.sky, p.lilac, p.lilacDark],
   };
 }
 function plotlyConfig() {
@@ -1085,11 +1103,12 @@ function drawLossChart(hist, scenario) {
   const edges = hist.bin_edges_pct_ead || [];
   const centers = edges.slice(0, -1).map((v, i) => (v + edges[i + 1]) / 2);
   const ex = hist.exact || {};
+  const p = palette();
   const markers = [
-    ["EL", ex.expected_loss_pct_ead, "#1f2937", "solid"],
-    ["VaR 99%", ex["var_0.99_pct_ead"], "#b45309", "dash"],
-    ["VaR 99.9%", ex["var_0.999_pct_ead"], "#b91c1c", "dash"],
-    ["ES 99%", ex["es_0.99_pct_ead"], "#0f766e", "dot"],
+    ["EL", ex.expected_loss_pct_ead, p.ink, "solid"],
+    ["VaR 99%", ex["var_0.99_pct_ead"], p.teal, "dash"],
+    ["VaR 99.9%", ex["var_0.999_pct_ead"], p.lilacDark, "dash"],
+    ["ES 99%", ex["es_0.99_pct_ead"], p.sky, "dot"],
   ];
   const shapes = [];
   markers.forEach(([label, value, color, dash]) => {
@@ -1097,7 +1116,7 @@ function drawLossChart(hist, scenario) {
     const x = value * 100;
     shapes.push({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.6, dash } });
   });
-  const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: "rgba(37,99,235,0.72)", line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
+  const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: p.periwinkle, line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
     bargap: 0.02,
     xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02] },
     yaxis: { title: "Simulated paths" },
@@ -1135,6 +1154,7 @@ function drawSurface() {
   const host = $("#surface-chart");
   const surf = D.interactive && D.interactive.risk_surface;
   if (!host || !surf) return;
+  const p = palette();
   const base = surf.base_case;
   const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
   $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText} Click a point to move the sliders.`;
@@ -1152,9 +1172,9 @@ function drawSurface() {
   let ok = false;
   if (!hasWebGL() || window.innerWidth < 700) {
     ok = plot(host, [
-      { z, x: rhos, y: pds, type: "heatmap", colorscale: "YlOrRd", hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
-      { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: "#111827", line: { width: 2, color: "#fff" } }, hoverinfo: "skip", showlegend: false },
-      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle-open", size: 13, color: "#0f172a", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
+      { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
+      { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
+      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle-open", size: 13, color: p.ink, line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
     ], {
       height,
       title: { text: "2D heatmap fallback (no WebGL)", font: { size: 11 } },
@@ -1163,9 +1183,9 @@ function drawSurface() {
     host.dataset.mode = "heatmap";
   } else {
     ok = plot(host, [
-      { type: "surface", z, x: rhos, y: pds, colorscale: "YlOrRd", showscale: true, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
-      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: "#111827", symbol: "x" }, hoverinfo: "skip", showlegend: false },
-      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: "#0f172a" }, marker: { size: 5, color: "#0f172a", symbol: "circle-open", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
+      { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
+      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
+      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: p.ink }, marker: { size: 5, color: p.ink, symbol: "circle-open", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
     ], {
       height,
       scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
@@ -1539,17 +1559,18 @@ function renderCutoff() {
   defs.forEach(([, value, key, formatter]) => countUp(host.querySelector(`[data-testid="${key}"]`), value, formatter));
   if (!PLOTLY) { showFallback($("#cutoff-chart"), null, "Plotly is blocked; the cutoff chart is unavailable."); return; }
   const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
+  const p = palette();
   const ok = plot($("#cutoff-chart"), [
-    { x: centers, y: goods, type: "bar", name: "Good", marker: { color: "rgba(15,118,110,0.65)" } },
-    { x: centers, y: bads, type: "bar", name: "Bad", marker: { color: "rgba(185,28,28,0.65)" } },
+    { x: centers, y: goods, type: "bar", name: "Good", marker: { color: p.teal } },
+    { x: centers, y: bads, type: "bar", name: "Bad", marker: { color: p.lilacDark } },
   ], {
     barmode: "overlay", bargap: 0.03,
     xaxis: { title: "Scorecard score" }, yaxis: { title: "Loans" },
     shapes: [
-      { type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: "#111827", width: 2, dash: "dash" } },
-      { type: "line", x0: cut.cutoff_score, x1: cut.cutoff_score, yref: "paper", y0: 0, y1: 1, line: { color: "#b45309", width: 1.6, dash: "dot" } },
+      { type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 2, dash: "dash" } },
+      { type: "line", x0: cut.cutoff_score, x1: cut.cutoff_score, yref: "paper", y0: 0, y1: 1, line: { color: p.lilacDark, width: 1.6, dash: "dot" } },
     ],
-    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 1.02, text: "Published KS cutoff", showarrow: false, font: { size: 9, color: "#b45309" }, xanchor: "right" }],
+    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 1.02, text: "Published KS cutoff", showarrow: false, font: { size: 9, color: p.lilacDark }, xanchor: "right" }],
     margin: { l: 52, r: 16, t: 36, b: 44 }, showlegend: true,
   }, { small: true });
   if (!ok) showFallback($("#cutoff-chart"), null, "The cutoff chart could not be drawn.");

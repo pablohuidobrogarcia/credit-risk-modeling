@@ -843,8 +843,7 @@ function renderHowBuilt() {
   const reading = $("#how-built-reading");
   const title = $("#how-built-reading-title");
   const body = $("#how-built-reading-body");
-  const see = $("#how-built-see");
-  if (!reading || !title || !body || !see) return;
+  if (!reading || !title || !body) return;
 
   const nodes = $$(".how-built-node", panel);
   const selectStep = (stepId) => {
@@ -865,32 +864,6 @@ function renderHowBuilt() {
       <p><strong>What I did:</strong> ${esc(resolveInfoText(step.what))}</p>
       <p><strong>Why:</strong> ${esc(resolveInfoText(step.why))}</p>
       <p><strong>What I learned:</strong> ${esc(resolveInfoText(step.learned))}</p>`;
-    const target = step.see || {};
-    see.onclick = () => {
-      if (target.view === "learn") {
-        setView("learn");
-        window.setTimeout(() => {
-          state.term = target.term || null;
-          state.glossaryQuery = target.term || "";
-          state.glossaryCategory = "All";
-          renderLearn();
-          const entry = document.getElementById(`term-${target.term}`);
-          if (entry) { entry.open = true; entry.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "center" }); }
-        }, 120);
-      } else if (target.view === "evidence") {
-        setView("evidence");
-        window.setTimeout(() => {
-          const node = target.section === "censoring" ? $("#censoring-note")
-            : target.section === "model" ? $("#model-table")
-            : target.section === "calibration" ? $("#calibration-note")
-            : $("#view-evidence");
-          node?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" });
-        }, 120);
-      } else if (target.view === "risk") {
-        setView("risk");
-        window.setTimeout(() => $("#risk-kpis")?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
-      }
-    };
   };
 
   nodes.forEach((node) => {

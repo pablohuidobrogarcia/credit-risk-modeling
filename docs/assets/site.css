@@ -125,17 +125,17 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(1100px 700px at 8% -10%, rgba(251, 191, 36, 0.2), transparent 60%),
-    radial-gradient(1000px 700px at 92% 0%, rgba(37, 99, 235, 0.17), transparent 62%),
-    radial-gradient(1100px 900px at 55% 110%, rgba(13, 148, 136, 0.2), transparent 62%),
+    radial-gradient(1100px 700px at 8% -10%, color-mix(in srgb, var(--lilac) 24%, transparent), transparent 60%),
+    radial-gradient(1000px 700px at 92% 0%, color-mix(in srgb, var(--periwinkle) 22%, transparent), transparent 62%),
+    radial-gradient(1100px 900px at 55% 110%, color-mix(in srgb, var(--teal) 22%, transparent), transparent 62%),
     linear-gradient(180deg, var(--bg), var(--bg-deep));
 }
 
 [data-theme="dark"] body::before {
   background:
-    radial-gradient(1100px 700px at 8% -10%, rgba(180, 83, 9, 0.22), transparent 60%),
-    radial-gradient(1000px 700px at 92% 0%, rgba(37, 99, 235, 0.24), transparent 62%),
-    radial-gradient(1100px 900px at 55% 110%, rgba(13, 148, 136, 0.18), transparent 62%),
+    radial-gradient(1100px 700px at 8% -10%, color-mix(in srgb, var(--lilac) 28%, transparent), transparent 60%),
+    radial-gradient(1000px 700px at 92% 0%, color-mix(in srgb, var(--periwinkle) 26%, transparent), transparent 62%),
+    radial-gradient(1100px 900px at 55% 110%, color-mix(in srgb, var(--teal) 22%, transparent), transparent 62%),
     linear-gradient(180deg, var(--bg), var(--bg-deep));
 }
 
@@ -147,7 +147,7 @@ p { margin: 0; }
 a { color: var(--accent); }
 code, pre { font-family: var(--mono); }
 button, input, select { font: inherit; color: inherit; }
-::selection { background: rgba(124, 58, 237, 0.28); }
+::selection { background: color-mix(in srgb, var(--lilac) 34%, transparent); }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -250,7 +250,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-soft); }
 .btn:active { transform: translateY(0); }
-.btn-primary { background: var(--grad); color: #fff; }
+.btn-primary { background: var(--ink); color: var(--surface); }
 .btn-ghost { background: color-mix(in srgb, var(--card-solid) 60%, transparent); border-color: var(--border); color: var(--fg); }
 .btn-ghost:hover { border-color: var(--border-strong); }
 
@@ -308,7 +308,7 @@ button, input, select { font: inherit; color: inherit; }
 .segmented.compact button { padding: 0.32rem 0.6rem; font-size: 0.75rem; }
 .surface-toggle { flex-wrap: nowrap; width: auto; max-width: 100%; border-color: var(--border-strong); background: color-mix(in srgb, var(--card-solid) 74%, transparent); }
 .surface-toggle button { border-radius: 999px; }
-.surface-toggle button[aria-selected="true"] { background: var(--accent); color: #fff; }
+.surface-toggle button[aria-selected="true"] { background: var(--ink); color: var(--surface); }
 .chart-host.surface-host { height: 540px; min-height: 540px; }
 
 .search-wrap input {
@@ -427,7 +427,7 @@ button, input, select { font: inherit; color: inherit; }
   position: relative; border: 0; padding: 0.15rem; border-radius: 8px; cursor: pointer;
   min-height: 0; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
   font-size: clamp(9px, 0.9vw, 0.68rem); font-weight: 800; letter-spacing: 0.01em;
-  color: #fff; background: var(--tile-bg, #64748b);
+  color: var(--surface); background: var(--tile-bg, var(--fg-muted));
   transition: transform 180ms var(--ease), box-shadow 180ms var(--ease), outline-color 180ms var(--ease);
   outline: 2px solid transparent; outline-offset: 1px;
   text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28);
@@ -461,7 +461,7 @@ button, input, select { font: inherit; color: inherit; }
 }
 .tile.empty { background: transparent; cursor: default; box-shadow: none; pointer-events: none; }
 .legend { display: flex; align-items: center; flex-wrap: wrap; gap: 0.55rem; margin-top: 0.75rem; font-size: 0.72rem; color: var(--fg-muted); }
-.legend-bar { height: 8px; flex: 1 1 130px; border-radius: 999px; background: linear-gradient(90deg, #0f766e, #eab308 55%, #b91c1c); border: 1px solid var(--border); }
+.legend-bar { height: 8px; flex: 1 1 130px; border-radius: 999px; background: linear-gradient(90deg, var(--risk-low), var(--risk-2) 22%, var(--risk-3) 44%, var(--risk-4) 66%, var(--risk-5) 84%, var(--risk-high)); border: 1px solid var(--border); }
 .legend-swatch { width: 14px; height: 14px; border-radius: 4px; background: repeating-linear-gradient(135deg, rgba(100, 116, 139, 0.55) 0 3px, rgba(100, 116, 139, 0.2) 3px 6px); }
 .legend-num { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--fg); }
 
@@ -548,7 +548,7 @@ button, input, select { font: inherit; color: inherit; }
 .sim-share { font-size: 0.66rem; color: var(--fg-soft); min-height: 0.8rem; }
 .sim-scale { margin: 0.75rem 0 0.5rem; }
 .sim-scale-labels { display: flex; justify-content: space-between; gap: 0.7rem; font-size: 0.65rem; color: var(--fg-soft); margin-bottom: 0.2rem; }
-.sim-scale-track { position: relative; height: 8px; border-radius: 999px; background: linear-gradient(90deg, #0f766e, #eab308 55%, #b91c1c); }
+.sim-scale-track { position: relative; height: 8px; border-radius: 999px; background: linear-gradient(90deg, var(--risk-low), var(--risk-2) 22%, var(--risk-3) 44%, var(--risk-4) 66%, var(--risk-5) 84%, var(--risk-high)); }
 .sim-scale-fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: rgba(255, 255, 255, 0.36); }
 .sim-scale-marker { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: var(--card-solid); border: 3px solid var(--fg); transform: translate(-50%, -50%); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35); }
 .sim-breakdown { margin-top: 0.7rem; border-top: 1px solid var(--border); padding-top: 0.45rem; }

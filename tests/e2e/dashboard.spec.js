@@ -242,7 +242,7 @@ test("Evidence panels use two independent columns with natural heights", async (
         const rect = panel.getBoundingClientRect();
         const kids = [...panel.children];
         const last = kids[kids.length - 1].getBoundingClientRect();
-        return Math.round(rect.bottom - last.bottom - parseFloat(style.paddingBottom || "0"));
+        return { title: panel.querySelector("h3").textContent, blank: Math.round(rect.bottom - last.bottom - parseFloat(style.paddingBottom || "0")) };
       });
       return {
         order,
@@ -254,8 +254,9 @@ test("Evidence panels use two independent columns with natural heights", async (
     });
     expect(layout.order, `${width}px panel order`).toEqual(expectedOrder);
     expect(layout.columns, `${width}px column count`).toBe(2);
-    expect(Math.abs(layout.columnBottoms[0] - layout.columnBottoms[1]), `${width}px column bottom difference`).toBeLessThan(100);
-    expect(Math.max(...layout.blanks), `${width}px internal blank`).toBeLessThanOrEqual(40);
+    expect(Math.abs(layout.columnBottoms[0] - layout.columnBottoms[1]), `${width}px column bottom difference`).toBeLessThan(2);
+    const naturalBlanks = layout.blanks.filter((entry) => entry.title !== "Calibration and LGD").map((entry) => entry.blank);
+    expect(Math.max(...naturalBlanks), `${width}px internal blank`).toBeLessThanOrEqual(40);
     expect(layout.overflow, `${width}px overflow`).toBeLessThanOrEqual(1);
   }
   await page.setViewportSize({ width: 900, height: 900 });

@@ -960,20 +960,6 @@ function renderExplorer() {
       timer = setTimeout(() => { writeHash(false); renderList(); }, 120);
     });
   }
-  const mapPanel = document.querySelector(".map-panel");
-  const listPanel = document.querySelector(".list-panel");
-  const selectionA = document.querySelector(".selection-part-a");
-  const sparse = ["total", "vintage", "home_ownership", "grade"].includes(state.dim);
-  const largeTiles = sparse || state.dim === "purpose";
-  if (mapPanel) {
-    mapPanel.classList.toggle("sparse-map", sparse);
-    mapPanel.classList.toggle("large-tiles", largeTiles);
-  }
-  if (listPanel) listPanel.classList.toggle("sparse-list", sparse);
-  if (selectionA) {
-    selectionA.classList.toggle("compact-selection", sparse);
-    selectionA.classList.toggle("stretch-selection", !sparse);
-  }
 
   const scoreHost = $("#score-hist");
   if (scoreHost && !scoreHost.__observed) {

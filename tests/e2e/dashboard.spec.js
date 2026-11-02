@@ -902,6 +902,44 @@ test("no unresolved placeholders appear in popovers, glossary or explorer panels
   await expectNoErrors(errors);
 });
 
+test("explorer panels keep the State tab box geometry at 1360 and 1100", async ({ page }) => {
+  const errors = await open(page);
+  const selectors = [".how-built-panel", ".map-panel", ".selection-part-a", ".list-panel", ".selection-part-b"];
+  const readBoxes = () => page.evaluate((sels) => sels.map((selector) => {
+    const rect = document.querySelector(selector).getBoundingClientRect();
+    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+  }), selectors);
+  for (const width of [1360, 1100]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#view=explorer");
+    await page.waitForTimeout(800);
+    await page.locator("#dimension-tabs button").filter({ hasText: "State" }).click();
+    await page.waitForTimeout(500);
+    const state = await readBoxes();
+    for (const dim of ["Total", "Grade", "Purpose", "Vintage", "Home ownership"]) {
+      await page.locator("#dimension-tabs button").filter({ hasText: dim }).click();
+      await page.waitForTimeout(300);
+      const boxes = await readBoxes();
+      boxes.forEach((box, index) => {
+        expect(box.x, `${width} ${dim} box ${index} x`).toBeCloseTo(state[index].x, 0);
+        expect(box.y, `${width} ${dim} box ${index} y`).toBeCloseTo(state[index].y, 0);
+        expect(box.width, `${width} ${dim} box ${index} width`).toBeCloseTo(state[index].width, 0);
+        expect(box.height, `${width} ${dim} box ${index} height`).toBeCloseTo(state[index].height, 0);
+      });
+    }
+    await page.locator("#dimension-tabs button").filter({ hasText: "State" }).click();
+    await page.waitForTimeout(300);
+    const masked = page.locator("#tile-map .tile.insufficient").first();
+    if (await masked.count()) {
+      await masked.click();
+      await page.waitForTimeout(300);
+      const boxes = await readBoxes();
+      boxes.forEach((box, index) => expect(box.height).toBeCloseTo(state[index].height, 0));
+    }
+  }
+  await expectNoErrors(errors);
+});
+
 test("all visible text keeps a readable contrast in light and dark", async ({ page }) => {
   const contrastViolations = async () => page.evaluate(() => {
     const parse = (value) => {

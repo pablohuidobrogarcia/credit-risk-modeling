@@ -124,11 +124,35 @@
             </div>
             <div class="how-built-picture" id="how-built-picture">
               <svg class="how-built-svg" viewBox="0 0 360 600" aria-hidden="true" focusable="false">
-                <path class="how-built-arc how-built-arc-1" d="M 180 60 C 240 60, 240 160, 180 160" />
-                <path class="how-built-arc how-built-arc-2" d="M 180 160 C 120 160, 120 260, 180 260" />
-                <path class="how-built-arc how-built-arc-3" d="M 180 260 C 240 260, 240 360, 180 360" />
-                <path class="how-built-arc how-built-arc-4" d="M 180 360 C 120 360, 120 460, 180 460" />
-                <path class="how-built-arc how-built-arc-5" d="M 180 460 C 240 460, 240 560, 180 560" />
+                <defs>
+                  <linearGradient id="how-built-grad-1" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" class="how-built-stop-1" stop-opacity="0" />
+                    <stop offset="16%" class="how-built-stop-1" stop-opacity="1" />
+                    <stop offset="100%" class="how-built-stop-1b" stop-opacity="1" />
+                  </linearGradient>
+                  <linearGradient id="how-built-grad-2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" class="how-built-stop-2" stop-opacity="1" />
+                    <stop offset="100%" class="how-built-stop-2b" stop-opacity="1" />
+                  </linearGradient>
+                  <linearGradient id="how-built-grad-3" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" class="how-built-stop-3" stop-opacity="1" />
+                    <stop offset="100%" class="how-built-stop-3b" stop-opacity="1" />
+                  </linearGradient>
+                  <linearGradient id="how-built-grad-4" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" class="how-built-stop-4" stop-opacity="1" />
+                    <stop offset="100%" class="how-built-stop-4b" stop-opacity="1" />
+                  </linearGradient>
+                  <linearGradient id="how-built-grad-5" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" class="how-built-stop-5" stop-opacity="1" />
+                    <stop offset="84%" class="how-built-stop-5" stop-opacity="1" />
+                    <stop offset="100%" class="how-built-stop-5" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <path class="how-built-arc how-built-arc-1" fill="url(#how-built-grad-1)" d="M 180,60 C 280,60 280,160 180,160 C 210,160 210,130 180,130 C 210,130 210,90 180,90 C 210,90 210,60 180,60 Z" />
+                <path class="how-built-arc how-built-arc-2" fill="url(#how-built-grad-2)" d="M 180,150 C 80,150 80,250 180,250 C 150,250 150,220 180,220 C 150,220 150,180 180,180 C 150,180 150,150 180,150 Z" />
+                <path class="how-built-arc how-built-arc-3" fill="url(#how-built-grad-3)" d="M 180,240 C 280,240 280,340 180,340 C 210,340 210,310 180,310 C 210,310 210,270 180,270 C 210,270 210,240 180,240 Z" />
+                <path class="how-built-arc how-built-arc-4" fill="url(#how-built-grad-4)" d="M 180,330 C 80,330 80,430 180,430 C 150,430 150,400 180,400 C 150,400 150,360 180,360 C 150,360 150,330 180,330 Z" />
+                <path class="how-built-arc how-built-arc-5" fill="url(#how-built-grad-5)" d="M 180,420 C 280,420 280,520 180,520 C 210,520 210,490 180,490 C 210,490 210,450 180,450 C 210,450 210,420 180,420 Z" />
               </svg>
               <button type="button" class="how-built-node how-built-node-1" data-step="1" aria-label="Step 1: Data & leakage control" aria-pressed="true">01</button>
               <button type="button" class="how-built-node how-built-node-2" data-step="2" aria-label="Step 2: An honest validation split" aria-pressed="false">02</button>

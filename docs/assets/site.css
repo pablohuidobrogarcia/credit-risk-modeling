@@ -296,44 +296,44 @@ button, input, select { font: inherit; color: inherit; }
 /* --------------------------------------------------------- explorer grid */
 .explorer-grid { display: grid; grid-template-columns: minmax(420px, 0.95fr) minmax(0, 1.35fr) minmax(260px, 0.95fr); gap: 0.8rem; align-items: start; }
 .how-built-panel { min-width: 0; }
-.how-built-picture {
+ .how-built-picture {
   position: relative; width: 100%; max-width: 360px; margin: 0 auto 0.85rem;
   aspect-ratio: 360 / 600; min-height: 560px;
 }
 .how-built-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.how-built-arc { fill: none; stroke-width: 26px; stroke-linecap: butt; }
-.how-built-arc-1 { stroke: color-mix(in srgb, var(--accent) 30%, var(--card-solid)); }
-.how-built-arc-2 { stroke: color-mix(in srgb, var(--accent) 45%, var(--card-solid)); }
-.how-built-arc-3 { stroke: color-mix(in srgb, var(--accent) 60%, var(--card-solid)); }
-.how-built-arc-4 { stroke: color-mix(in srgb, var(--accent) 78%, var(--card-solid)); }
-.how-built-arc-5 { stroke: var(--accent); }
+.how-built-arc { fill: var(--how-built-fill, var(--card-solid)); stroke: none; }
+.how-built-arc.is-selected { filter: saturate(1.22) brightness(1.03); }
+.how-built-stop-1, .how-built-stop-1b { stop-color: color-mix(in srgb, #8b5cf6 34%, var(--card-solid)); }
+.how-built-stop-2, .how-built-stop-2b { stop-color: color-mix(in srgb, #3b82f6 34%, var(--card-solid)); }
+.how-built-stop-3, .how-built-stop-3b { stop-color: color-mix(in srgb, #0d9488 34%, var(--card-solid)); }
+.how-built-stop-4, .how-built-stop-4b { stop-color: color-mix(in srgb, #16a34a 34%, var(--card-solid)); }
+.how-built-stop-5, .how-built-stop-5b { stop-color: color-mix(in srgb, #8b5cf6 34%, var(--card-solid)); }
 .how-built-node {
-  position: absolute; width: 50px; height: 50px; border-radius: 999px; padding: 0;
-  display: grid; place-items: center; background: var(--card); color: var(--fg);
-  border: 3px solid var(--accent); font-size: 0.95rem; font-weight: 800; line-height: 1;
-  cursor: pointer; box-shadow: var(--shadow-soft);
-  transition: background var(--speed) var(--ease), color var(--speed) var(--ease), border-width var(--speed) var(--ease), transform var(--speed) var(--ease);
+  position: absolute; width: 46px; height: 46px; border-radius: 999px; padding: 0;
+  display: grid; place-items: center; background: var(--fg); color: var(--bg);
+  border: 0; font-size: 0.9rem; font-weight: 800; line-height: 1;
+  cursor: pointer; box-shadow: 0 0 0 2px color-mix(in srgb, var(--fg) 10%, transparent), var(--shadow-soft);
+  transition: transform var(--speed) var(--ease), box-shadow var(--speed) var(--ease);
 }
-.how-built-node:hover { transform: scale(1.06); border-color: color-mix(in srgb, var(--accent) 80%, var(--fg)); }
+.how-built-node:hover { transform: scale(1.06); }
 .how-built-node:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 3px; }
 .how-built-node.is-selected {
-  background: var(--node-color, var(--accent)); color: #fff; border-width: 4px;
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 28%, transparent), var(--shadow-soft);
 }
-.how-built-node-1 { --node-color: color-mix(in srgb, var(--accent) 30%, var(--card-solid)); left: 24%; top: 12%; }
-.how-built-node-2 { --node-color: color-mix(in srgb, var(--accent) 45%, var(--card-solid)); right: 24%; top: 29%; }
-.how-built-node-3 { --node-color: color-mix(in srgb, var(--accent) 60%, var(--card-solid)); left: 24%; top: 46%; }
-.how-built-node-4 { --node-color: color-mix(in srgb, var(--accent) 78%, var(--card-solid)); right: 24%; top: 62%; }
-.how-built-node-5 { --node-color: var(--accent); left: 24%; top: 79%; }
+.how-built-node-1 { left: 22%; top: 13%; }
+.how-built-node-2 { right: 22%; top: 30%; }
+.how-built-node-3 { left: 22%; top: 47%; }
+.how-built-node-4 { right: 22%; top: 64%; }
+.how-built-node-5 { left: 22%; top: 81%; }
 .how-built-label {
-  position: absolute; max-width: 6rem; font-size: 0.82rem; font-weight: 700;
-  color: var(--fg); line-height: 1.1; white-space: nowrap;
+  position: absolute; max-width: 7rem; font-size: 0.78rem; font-weight: 800;
+  color: var(--fg); line-height: 1.1; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.04em;
 }
-.how-built-label-1 { left: 70%; top: 14%; text-align: left; }
-.how-built-label-2 { right: 70%; top: 31%; text-align: right; }
-.how-built-label-3 { left: 70%; top: 48%; text-align: left; }
-.how-built-label-4 { right: 70%; top: 65%; text-align: right; }
-.how-built-label-5 { left: 70%; top: 82%; text-align: left; }
+.how-built-label-1 { left: 62%; top: 16%; text-align: left; }
+.how-built-label-2 { right: 62%; top: 32%; text-align: right; }
+.how-built-label-3 { left: 62%; top: 49%; text-align: left; }
+.how-built-label-4 { right: 62%; top: 66%; text-align: right; }
+.how-built-label-5 { left: 62%; top: 83%; text-align: left; }
 .how-built-reading {
   border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 0.95rem;
   background: color-mix(in srgb, var(--card-solid) 52%, transparent); min-height: 12rem;
@@ -348,24 +348,9 @@ button, input, select { font: inherit; color: inherit; }
 }
 @media (max-width: 860px) {
   .how-built-picture { max-width: 100%; }
-  .how-built-label { max-width: 7rem; font-size: 0.78rem; }
+  .how-built-label { max-width: 7rem; font-size: 0.74rem; }
 }
-.how-built-reading {
-  border: 1px solid var(--border); border-radius: 12px; padding: 0.85rem 0.95rem;
-  background: color-mix(in srgb, var(--card-solid) 52%, transparent); min-height: 12rem;
-  transition: opacity 180ms var(--ease);
-}
-.how-built-reading.is-swapping { opacity: 0.45; }
-.how-built-reading-title { margin: 0 0 0.45rem; font-size: 0.95rem; font-weight: 800; }
-.how-built-reading p { margin: 0.32rem 0; font-size: 0.88rem; color: var(--fg-muted); }
-.how-built-reading strong { color: var(--fg); }
-@media (prefers-reduced-motion: reduce) {
-  .how-built-reading { transition: none; }
-}
-@media (max-width: 860px) {
-  .how-built-picture { max-width: 100%; }
-  .how-built-label { max-width: 6rem; }
-}
+
 .chip {
   border: 1px solid var(--border); background: color-mix(in srgb, var(--card-solid) 64%, transparent);
   border-radius: 999px; padding: 0.4rem 0.7rem; font-size: 0.76rem; font-weight: 650;

@@ -853,6 +853,9 @@ function renderHowBuilt() {
       node.classList.toggle("is-selected", open);
       node.setAttribute("aria-pressed", String(open));
     });
+    $$(".how-built-arc", panel).forEach((arc, index) => {
+      arc.classList.toggle("is-selected", index + 1 === howBuiltOpenStep);
+    });
     const step = howBuiltContent(stepId);
     if (!step) return;
     if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {

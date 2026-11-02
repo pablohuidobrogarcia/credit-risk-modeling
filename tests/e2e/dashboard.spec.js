@@ -939,6 +939,40 @@ test("Learn guide, glossary, categories, search and hash round-trip", async ({ p
   await expectNoErrors(errors);
 });
 
+test("Learn guide cards use ribbon pastels with ink text and white buttons", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  const errors = await open(page);
+  await page.locator("#view-tab-learn").click();
+  const cards = page.locator("#learn-guide .guide-card");
+  await expect(cards).toHaveCount(5);
+  const expectedBackgrounds = ["rgb(214, 205, 245)", "rgb(195, 207, 246)", "rgb(182, 220, 243)", "rgb(172, 223, 214)", "rgb(201, 232, 180)"];
+  const results = await cards.evaluateAll((elements) => elements.map((card) => {
+    const style = getComputedStyle(card);
+    const title = getComputedStyle(card.querySelector("h3"));
+    const body = getComputedStyle(card.querySelector("p"));
+    const button = getComputedStyle(card.querySelector(".btn"));
+    return {
+      background: style.backgroundColor,
+      titleColor: title.color,
+      bodyColor: body.color,
+      buttonColor: button.color,
+      buttonBackground: button.backgroundColor,
+      buttonBorderWidth: button.borderTopWidth,
+      buttonBorderStyle: button.borderTopStyle,
+    };
+  }));
+  results.forEach((result, index) => {
+    expect(result.background).toBe(expectedBackgrounds[index]);
+    expect(result.titleColor).toBe("rgb(31, 41, 55)");
+    expect(result.bodyColor).toBe("rgb(31, 41, 55)");
+    expect(result.buttonColor).toBe("rgb(31, 41, 55)");
+    expect(result.buttonBackground).toBe("rgb(255, 255, 255)");
+    expect(result.buttonBorderWidth).toBe("1px");
+    expect(result.buttonBorderStyle).toBe("solid");
+  });
+  await expectNoErrors(errors);
+});
+
 test("info Learn more and glossary See it links resolve", async ({ page }) => {
   const errors = await open(page);
   await page.locator('[data-info="map"]').first().click();

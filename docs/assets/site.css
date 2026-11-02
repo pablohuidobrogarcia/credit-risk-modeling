@@ -578,6 +578,15 @@ button, input, select { font: inherit; color: inherit; }
 .guide-card h3 { font-size: 1rem; }
 .guide-card p { color: var(--fg-muted); font-size: 0.8rem; }
 .guide-card .btn { margin-top: auto; padding: 0.45rem 0.7rem; font-size: 0.74rem; }
+[data-theme="light"] .guide-grid .guide-card:nth-child(1) { background: var(--lilac-light); }
+[data-theme="light"] .guide-grid .guide-card:nth-child(2) { background: var(--periwinkle-light); }
+[data-theme="light"] .guide-grid .guide-card:nth-child(3) { background: var(--sky-light); }
+[data-theme="light"] .guide-grid .guide-card:nth-child(4) { background: var(--teal-light); }
+[data-theme="light"] .guide-grid .guide-card:nth-child(5) { background: var(--green-light); }
+[data-theme="light"] .guide-card h3,
+[data-theme="light"] .guide-card p,
+[data-theme="light"] .guide-card .btn { color: var(--ink); }
+[data-theme="light"] .guide-card .btn { background: var(--card-solid); border-color: var(--border-strong); }
 .glossary-panel { margin-top: 0.8rem; }
 .glossary-search input { min-width: 240px; }
 .glossary-categories { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.75rem; }

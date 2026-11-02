@@ -203,11 +203,13 @@ function infoContext() {
     min_n: fmtInt(meta.min_n),
     n_rows: fmtInt(D && D.data ? D.data.n_rows : null),
     champion_auc: fmtNum(D && D.pd ? D.pd.champion_auc : null, 4),
+    window_immature_auc: (D && D.display && D.display.window_immature_auc) || "—",
     var999: fmtPct(stats["var_0.999_pct_ead"], 2),
     mean_pd: fmtPct(meta.mean_pd, 2),
     portfolio_ead: fmtMoney(meta.ead_total),
     realized_lgd: fmtNum(D && D.lgd ? D.lgd.realised_lgd_oot : null, 4),
     auc_gap: (D && D.display && D.display.auc_gap_vs_benchmark) || "—",
+    rho_basel: (D && D.display && D.display.rho_basel) || "—",
     el_amount: fmtMoney(meta.el_amount),
   };
 }
@@ -916,6 +918,21 @@ function renderExplorer() {
       timer = setTimeout(() => { writeHash(false); renderList(); }, 120);
     });
   }
+  const mapPanel = document.querySelector(".map-panel");
+  const listPanel = document.querySelector(".list-panel");
+  const sparse = ["total", "vintage", "home_ownership", "grade"].includes(state.dim);
+  if (mapPanel) mapPanel.classList.toggle("sparse-map", sparse);
+  if (listPanel) listPanel.classList.toggle("sparse-list", sparse);
+
+  const scoreHost = $("#score-hist");
+  if (scoreHost && !scoreHost.__observed) {
+    scoreHost.__observed = true;
+    const resizeObserver = new ResizeObserver(() => {
+      if (state.view === "explorer") renderSummary();
+    });
+    resizeObserver.observe(scoreHost);
+  }
+
   renderMap();
   renderList();
   renderSummary();
@@ -1544,7 +1561,7 @@ function runGuideAction(action) {
   };
   if (action === "default") { state.dim = "state"; state.metric = "default_rate"; state.sel = null; go("explorer", "#view-explorer"); }
   else if (action === "scorecard") { go("risk", "#sim-title"); }
-  else if (action === "el") { state.dim = "state"; state.metric = "el_pct_ead"; state.sel = null; go("explorer", "#summary-card"); }
+  else if (action === "el") { state.dim = "state"; state.metric = "el_pct_ead"; state.sel = null; go("explorer", "#summary-kpis"); }
   else if (action === "tail") { go("risk", "#risk-kpis"); }
   else if (action === "validation") { go("evidence", "#view-evidence"); }
 }

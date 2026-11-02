@@ -866,6 +866,42 @@ test("every docs asset is referenced", async () => {
   for (const asset of assets) expect(refs, `unreferenced asset ${asset}`).toContain(asset);
 });
 
+test("no unresolved placeholders appear in popovers, glossary or explorer panels", async ({ page }) => {
+  const errors = await open(page);
+  const placeholder = /\{[a-zA-Z0-9_]+\}/;
+  const forbidden = ["undefined", "NaN"];
+  const checkText = (text, where) => {
+    expect(text, where).not.toMatch(placeholder);
+    for (const word of forbidden) expect(text, where).not.toContain(word);
+  };
+  for (const view of ["explorer", "risk", "evidence", "learn"]) {
+    await page.locator(`#view-tab-${view}`).click();
+    await page.waitForTimeout(300);
+    if (view === "explorer") {
+      for (let step = 1; step <= 5; step += 1) {
+        await page.locator(`.how-built-node-${step}`).click();
+        await page.waitForTimeout(100);
+        checkText(await page.locator("#how-built-reading").innerText(), `how-built step ${step}`);
+      }
+    }
+    const ids = await page.evaluate(() => Array.from(new Set(Array.from(document.querySelectorAll("[data-info]")).map((el) => el.dataset.info))));
+    for (const id of ids) {
+      const button = page.locator(`[data-info="${id}"]`).first();
+      if (!(await button.isVisible())) continue;
+      await button.click();
+      await page.waitForTimeout(100);
+      checkText(await page.locator("#info-popover").innerText(), `info button ${id} on ${view}`);
+      await page.keyboard.press("Escape");
+    }
+  }
+  await page.locator("#view-tab-learn").click();
+  await page.waitForTimeout(300);
+  const glossaryText = await page.locator("#glossary-list").innerText();
+  checkText(glossaryText, "glossary");
+  checkText(await page.locator("#app-content").innerText(), "page");
+  await expectNoErrors(errors);
+});
+
 test("reduced motion keeps count-ups instant and turns the sweep into one step", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   const errors = await open(page, { keepWelcome: true });

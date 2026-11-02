@@ -8,7 +8,7 @@
       "label": "Data",
       "what": "Used the public Lending Club loan book (2007-2018) and kept only resolved loans, labelling Charged Off and Default as default. Dropped every post-origination variable (recoveries, payments, last payment dates) and the lender's own grade and interest rate from the main feature set.",
       "why": "Those variables are consequences of the outcome or copies of the lender's own model, so using them would make the prediction circular.",
-      "learned": "The lender's own grade still beats the leakage-free model by about {auc_gap_vs_benchmark} AUC. I report it as an upper bound, not as a flaw."
+      "learned": "The lender's own grade still beats the leakage-free model by about {auc_gap} AUC. I report it as an upper bound, not as a flaw."
     },
     {
       "id": 2,

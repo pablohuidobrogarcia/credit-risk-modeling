@@ -65,7 +65,6 @@ let D = null;
 let PLOTLY = null;
 let plotlyTried = false;
 let sweepTimer = null;
-let lastFocus = null;
 
 /* ------------------------------------------------------------------ state */
 function readHash() {
@@ -340,7 +339,6 @@ const STATIC_INFO = [
   ["#surface-metrics", "surface-metric", "Surface metric", "before"],
   ["#sim-title", "sim-presets", "Applicant simulator", "after"],
   ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
-  ["#provenance-btn", "provenance", "How do we know?", "after"],
 ];
 
 function injectStaticInfo() {
@@ -1717,7 +1715,6 @@ function renderWelcome() {
         <div class="welcome-side">
           <div class="welcome-actions">
             <button type="button" class="btn btn-primary" id="welcome-start">${esc(WELCOME.primary)}</button>
-            <button type="button" class="welcome-link" id="welcome-provenance">${esc(WELCOME.provenance)}</button>
           </div>
           <label class="welcome-check">
             <input type="checkbox" id="welcome-dismiss">
@@ -1727,10 +1724,6 @@ function renderWelcome() {
       </div>
     </section>`;
   $("#welcome-start").onclick = () => dismissWelcome();
-  $("#welcome-provenance").onclick = () => {
-    closeWelcome(true);
-    openDrawer();
-  };
   $("#welcome-dismiss").addEventListener("change", (event) => setWelcomeDismissed(event.target.checked));
   return true;
 }
@@ -1802,48 +1795,6 @@ function bindWelcome() {
   });
 }
 
-/* ---------------------------------------------------------------- drawer */
-function openDrawer() {
-  const drawer = $("#provenance-drawer");
-  const backdrop = $("#drawer-backdrop");
-  if (!drawer || !backdrop || !D) return;
-  lastFocus = document.activeElement;
-  const meta = pe().meta;
-  $("#drawer-window").textContent = `Primary mature test window: ${meta.years.join("–")}, ${meta.term}-month terms. Only loans with a final outcome are measured.`;
-  $("#drawer-sample").textContent = `${fmtInt(meta.n_total)} resolved loans. The portfolio default rate is ${fmtPct(meta.default_rate_total, 2)}; predicted PD is EAD-weighted and expected loss is reconciled to the headline ${fmtPct(meta.el_pct_ead, 2)}.`;
-  $("#drawer-smalln").textContent = `Segments with fewer than ${fmtInt(meta.min_n)} loans are hatched on the map and excluded from the "highest/lowest" sentence. Their Wilson intervals are wide; no ranking should be read from them.`;
-  $("#drawer-limitations").innerHTML = (D.limitations || []).map((text) => `<li>${esc(text)}</li>`).join("");
-  drawer.hidden = false; backdrop.hidden = false;
-  drawer.setAttribute("aria-hidden", "false");
-  document.body.style.overflow = "hidden";
-  $("#drawer-close").focus();
-}
-function closeDrawer() {
-  const drawer = $("#provenance-drawer");
-  const backdrop = $("#drawer-backdrop");
-  if (!drawer || !backdrop) return;
-  drawer.hidden = true; backdrop.hidden = true;
-  drawer.setAttribute("aria-hidden", "true");
-  document.body.style.overflow = "";
-  if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
-}
-function bindDrawer() {
-  $("#provenance-btn").onclick = openDrawer;
-  $("#evidence-provenance").onclick = openDrawer;
-  $("#drawer-close").onclick = closeDrawer;
-  $("#drawer-backdrop").onclick = closeDrawer;
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !$("#provenance-drawer").hidden) closeDrawer();
-    if (event.key === "Tab" && !$("#provenance-drawer").hidden) {
-      const focusable = $$("button, a, input, select, [tabindex]:not([tabindex='-1'])", $("#provenance-drawer"));
-      if (!focusable.length) return;
-      const first = focusable[0]; const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    }
-  });
-}
-
 /* ------------------------------------------------------------------ paint */
 function paint() {
   if (!D) return;
@@ -1894,7 +1845,6 @@ async function boot() {
     applyHashState();
     $("#app-skeleton").hidden = true;
     $("#app-content").hidden = false;
-    bindDrawer();
     bindInfoDelegation();
     bindWelcome();
     applyTheme();

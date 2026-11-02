@@ -179,12 +179,6 @@
     "try": "Find the approximate cutoff where the bad rate rises sharply.",
     "term": "cutoff"
   },
-  "provenance": {
-    "title": "How do we know?",
-    "text": "Opens the provenance drawer: data source, window, sample size, formulas, small-n masking and the limitations that remain. It is the audit trail for the numbers on screen.",
-    "try": "Read the limitations before quoting a segment.",
-    "term": "small-segment-masking"
-  },
   "how-built": {
     "title": "How this was built",
     "text": "The main steps of the project, in order. Click a number to read what was done, why, and what was learned.",

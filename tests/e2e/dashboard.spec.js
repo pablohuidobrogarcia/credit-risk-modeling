@@ -201,10 +201,10 @@ test("view tabs are Learn first, default to Explorer and support keyboard arrows
   await expect(page.locator("#view-tab-explorer")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#view-tab-explorer")).toHaveAttribute("tabindex", "0");
   await expect(page.locator("#view-tab-learn")).toHaveAttribute("tabindex", "-1");
-  await page.locator("#welcome-provenance").click();
+  await page.keyboard.press("Escape");
   await expect(page.locator("#welcome-overlay")).toBeHidden();
+  await page.locator("#view-tab-explorer").click();
   await expect(page.locator("#view-explorer")).toBeVisible();
-  await page.locator("#drawer-close").click();
   await page.locator("#view-tab-risk").click();
   await expect(page.locator("#view-risk")).toBeVisible();
   await expect(page.locator("#view-explorer")).toBeHidden();
@@ -643,7 +643,7 @@ test("welcome overlay presents the introduction, fits both widths and traps focu
   await expectNoErrors(errors);
 });
 
-test("welcome dismissal opens Learn while provenance keeps the current tab", async ({ page }) => {
+test("welcome dismissal opens Learn while the backdrop keeps the current tab", async ({ page }) => {
   await page.setViewportSize({ width: 1360, height: 900 });
   const errors = await open(page, { keepWelcome: true });
   await expect(page.locator("#welcome-overlay")).toBeVisible();
@@ -659,18 +659,20 @@ test("welcome dismissal opens Learn while provenance keeps the current tab", asy
   await expect(page.locator("#welcome-overlay")).toBeHidden();
   await expect(page.locator("#view-learn")).toBeVisible();
   await expect(page).toHaveURL(/view=learn/);
+  await expectNoErrors(errors);
+});
 
-  await page.goto("/");
-  await expect(page.locator("#app-content")).toBeVisible();
-  await expect(page.locator("#welcome-overlay")).toBeVisible();
-  const before = page.url();
-  await page.locator("#welcome-provenance").click();
-  await expect(page.locator("#welcome-overlay")).toBeHidden();
-  await expect(page.locator("#provenance-drawer")).toBeVisible();
-  await expect(page.locator("#view-explorer")).toBeVisible();
-  expect(page.url()).toBe(before);
-  await page.locator("#drawer-close").click();
-  await expect(page.locator("#provenance-drawer")).toBeHidden();
+test("provenance drawer is removed and its key facts remain", async ({ page }) => {
+  const errors = await open(page);
+  await expect(page.locator("#provenance-btn, #provenance-drawer, #drawer-backdrop, #evidence-provenance")).toHaveCount(0);
+  await page.locator("#view-tab-learn").click();
+  await page.locator("#term-el > summary").click();
+  await expect(page.locator("#term-el")).toContainText("Expected loss uses the exposure-weighted PD times the portfolio-level LGD, reconciled to the headline expected-loss rate.");
+  const footer = page.locator(".site-footer");
+  await expect(footer).toContainText("Reproduce:");
+  await expect(footer.locator("code").filter({ hasText: "python -m src.pipeline all" })).toHaveCount(1);
+  const bodyText = await page.locator("body").innerText();
+  expect(bodyText).not.toMatch(/How do we know\?|Open provenance drawer|provenance drawer/i);
   await expectNoErrors(errors);
 });
 
@@ -714,7 +716,7 @@ test("deep links still select every view", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("keyboard navigation reaches tiles, rows and the drawer", async ({ page }) => {
+test("keyboard navigation reaches tiles and rows", async ({ page }) => {
   const errors = await open(page);
   const firstTile = page.locator("#tile-map .tile[data-id='AK']");
   await firstTile.focus();
@@ -725,10 +727,6 @@ test("keyboard navigation reaches tiles, rows and the drawer", async ({ page }) 
   await page.keyboard.press("ArrowDown");
   const rowFocus = await page.evaluate(() => document.activeElement?.getAttribute("data-id"));
   expect(rowFocus).toBeTruthy();
-  await page.locator("#provenance-btn").click();
-  await expect(page.locator("#provenance-drawer")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#provenance-drawer")).toBeHidden();
   await expectNoErrors(errors);
 });
 

@@ -29,9 +29,6 @@
       </span>
       <span>Credit Risk <em>Studio</em></span>
     </a>
-    <div class="topbar-actions">
-      <button class="text-btn" id="provenance-btn" type="button"><span class="label-long">How do we know?</span><span class="label-short">Why?</span></button>
-    </div>
   </div>
 </header>
 
@@ -420,7 +417,6 @@
               assumptions are reported as they are.
             </p>
           </div>
-          <button class="btn btn-ghost" id="evidence-provenance" type="button">Open provenance drawer</button>
         </div>
 
         <div class="evidence-columns">
@@ -521,6 +517,7 @@
         </p>
         <div class="links">
           <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">Source code</a>
+          <span class="footer-command">Reproduce: <code>python -m src.pipeline all</code></span>
           <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Validation report</a>
           <a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club">Dataset</a>
           <a href="#top">Back to top</a>
@@ -532,47 +529,6 @@
 </main>
 
 <div class="welcome-backdrop" id="welcome-overlay" hidden></div>
-
-<div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
-<aside class="drawer" id="provenance-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
-  <div class="drawer-head">
-    <div>
-      <p class="eyebrow">Provenance</p>
-      <h2 id="drawer-title">How do we know?</h2>
-    </div>
-    <button class="icon-btn" id="drawer-close" type="button" aria-label="Close provenance drawer">Close</button>
-  </div>
-  <div class="drawer-body">
-    <section>
-      <h3>Data source</h3>
-      <p>Lending Club public loan-level snapshot (2007–2018), resolved loans only. The dashboard is descriptive: it does not estimate a causal effect of any segment.</p>
-    </section>
-    <section>
-      <h3>Window and sample</h3>
-      <p id="drawer-window">—</p>
-      <p id="drawer-sample">—</p>
-    </section>
-    <section>
-      <h3>How the rates are computed</h3>
-      <p>Observed default rate = defaults ÷ loans in the segment. The selection summary shows a Wilson 95% confidence interval. Predicted PD is the mean calibrated champion prediction for the segment; expected loss uses the EAD-weighted PD × the effective portfolio LGD, reconciled to the headline EL rate.</p>
-    </section>
-    <section>
-      <h3>Small-n masking</h3>
-      <p id="drawer-smalln">—</p>
-    </section>
-    <section>
-      <h3>Limitations</h3>
-      <ul id="drawer-limitations" class="limitations compact-list"></ul>
-      <p>Segments are correlated with grade and term, so the differences are descriptive, not causal. Small segments carry wide intervals and are masked in the map.</p>
-    </section>
-    <section>
-      <h3>Reproduce it</h3>
-      <pre><code>python -m src.pipeline all
-python -m src.pipeline figures
-python -m pytest</code></pre>
-    </section>
-  </div>
-</aside>
 
 <noscript><p class="noscript">This dashboard needs JavaScript to load <code>data.json</code>. The static figures in <code>assets/</code> remain available.</p></noscript>
 

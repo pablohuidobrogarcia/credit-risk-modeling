@@ -174,7 +174,7 @@ test("removed header pill, hero note and insight chips stay out of the DOM", asy
   await expect(page.locator(".hero-note")).toHaveCount(0);
   await expect(page.locator("#insight-chips")).toHaveCount(0);
   await expect(page.locator(".chip-row")).toHaveCount(0);
-  await expect(page.locator("#diagnosis-panel")).toBeVisible();
+  await expect(page.locator("#how-built-panel")).toBeVisible();
   await page.locator("#tile-map .tile[data-id='CA']").click();
   await expect(page.locator("#summary-title")).toHaveText("CA");
   await expectNoErrors(errors);

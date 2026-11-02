@@ -115,33 +115,36 @@
         </div>
 
         <div class="explorer-grid">
-          <section class="panel diagnosis-panel" id="diagnosis-panel" aria-labelledby="diagnosis-title" aria-live="polite">
+          <section class="panel how-built-panel" id="how-built-panel" aria-labelledby="how-built-title" aria-live="polite">
             <div class="panel-head">
               <div>
-                <h3 id="diagnosis-title">Segment diagnosis</h3>
-                <p class="panel-sub" id="diagnosis-sub">—</p>
+                <h3 id="how-built-title">How this was built</h3>
+                <p class="panel-sub" id="how-built-sub">Click a number</p>
               </div>
             </div>
-            <div class="diagnosis-picture" id="diagnosis-picture">
-              <svg class="diagnosis-svg" viewBox="0 0 240 560" aria-hidden="true" focusable="false">
-                <path class="diagnosis-arc diagnosis-arc-1" d="M 150 60 C 225 60, 225 180, 150 180" />
-                <path class="diagnosis-arc diagnosis-arc-2" d="M 150 180 C 15 180, 15 300, 150 300" />
-                <path class="diagnosis-arc diagnosis-arc-3" d="M 150 300 C 225 300, 225 420, 150 420" />
-                <path class="diagnosis-arc diagnosis-arc-4" d="M 150 420 C 15 420, 15 540, 150 540" />
+            <div class="how-built-picture" id="how-built-picture">
+              <svg class="how-built-svg" viewBox="0 0 240 600" aria-hidden="true" focusable="false">
+                <path class="how-built-arc how-built-arc-1" d="M 150 60 C 225 60, 225 160, 150 160" />
+                <path class="how-built-arc how-built-arc-2" d="M 150 160 C 15 160, 15 260, 150 260" />
+                <path class="how-built-arc how-built-arc-3" d="M 150 260 C 225 260, 225 360, 150 360" />
+                <path class="how-built-arc how-built-arc-4" d="M 150 360 C 15 360, 15 460, 150 460" />
+                <path class="how-built-arc how-built-arc-5" d="M 150 460 C 225 460, 225 560, 150 560" />
               </svg>
-              <button type="button" class="diagnosis-node diagnosis-node-1" data-step="1" aria-label="Step 1: Is the sample reliable?" aria-pressed="true">01</button>
-              <button type="button" class="diagnosis-node diagnosis-node-2" data-step="2" aria-label="Step 2: Does the model see it?" aria-pressed="false">02</button>
-              <button type="button" class="diagnosis-node diagnosis-node-3" data-step="3" aria-label="Step 3: How much does it weigh?" aria-pressed="false">03</button>
-              <button type="button" class="diagnosis-node diagnosis-node-4" data-step="4" aria-label="Step 4: What this means" aria-pressed="false">04</button>
-              <p class="diagnosis-step-label diagnosis-step-label-1">Sample</p>
-              <p class="diagnosis-step-label diagnosis-step-label-2">Model fit</p>
-              <p class="diagnosis-step-label diagnosis-step-label-3">Weight</p>
-              <p class="diagnosis-step-label diagnosis-step-label-4">Meaning</p>
+              <button type="button" class="how-built-node how-built-node-1" data-step="1" aria-label="Step 1: Data & leakage control" aria-pressed="true">01</button>
+              <button type="button" class="how-built-node how-built-node-2" data-step="2" aria-label="Step 2: An honest validation split" aria-pressed="false">02</button>
+              <button type="button" class="how-built-node how-built-node-3" data-step="3" aria-label="Step 3: Scorecard and challengers" aria-pressed="false">03</button>
+              <button type="button" class="how-built-node how-built-node-4" data-step="4" aria-label="Step 4: Calibration and LGD" aria-pressed="false">04</button>
+              <button type="button" class="how-built-node how-built-node-5" data-step="5" aria-label="Step 5: Portfolio loss simulation" aria-pressed="false">05</button>
+              <p class="how-built-label how-built-label-1">Data</p>
+              <p class="how-built-label how-built-label-2">Validation</p>
+              <p class="how-built-label how-built-label-3">Scorecard</p>
+              <p class="how-built-label how-built-label-4">Calibration</p>
+              <p class="how-built-label how-built-label-5">Simulation</p>
             </div>
-            <div class="diagnosis-reading" id="diagnosis-reading" aria-live="polite">
-              <h4 class="diagnosis-reading-title" id="diagnosis-reading-title">Is the sample reliable?</h4>
-              <span class="diagnosis-verdict" id="diagnosis-reading-verdict">Reliable</span>
-              <div id="diagnosis-reading-body"></div>
+            <div class="how-built-reading" id="how-built-reading" aria-live="polite">
+              <h4 class="how-built-reading-title" id="how-built-reading-title">—</h4>
+              <div id="how-built-reading-body"></div>
+              <button type="button" class="how-built-see" id="how-built-see">See results</button>
             </div>
           </section>
 

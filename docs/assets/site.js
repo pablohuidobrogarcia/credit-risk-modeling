@@ -180,6 +180,7 @@ function dimMeta(id) {
 /* ------------------------------------------------------------ info popovers */
 let INFO = {};
 let LEARN = { guide: [], terms: [] };
+let PROCESS = { steps: [] };
 let WELCOME = {};
 let infoReturnFocus = null;
 let infoAnchor = null;
@@ -326,7 +327,7 @@ const STATIC_INFO = [
   ["#metric-tabs", "metric-tabs", "Color metric", "after"],
   ["#segment-search", "filter", "Filter segments", "after"],
   ["#map-title", "map", "Segment map", "after"],
-  ["#diagnosis-title", "diagnosis", "Segment diagnosis", "after"],
+  ["#how-built-title", "how-built", "How this was built", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
   ["#score-hist-caption", "score-distribution", "Score distribution", "after"],
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
@@ -830,147 +831,86 @@ function renderScoreHist(host, hist, bins, caption, markerValue) {
   if (selCap && host.id === "score-hist") selCap.textContent = caption;
 }
 
-const DIAGNOSIS_CLOSE_THRESHOLD_PP = 2;
-const DIAGNOSIS_CLEAR_THRESHOLD_PP = 5;
-const DIAGNOSIS_CONCENTRATION_THRESHOLD = 1.10;
-const DIAGNOSIS_BELOW_WEIGHT_THRESHOLD = 0.90;
-let diagnosisOpenStep = 1;
+let howBuiltOpenStep = 1;
 
-function diagnosisVerdictModel(gapPp) {
-  const gap = gapPp;
-  if (Math.abs(gap) <= DIAGNOSIS_CLOSE_THRESHOLD_PP) return "Close";
-  if (gap > DIAGNOSIS_CLEAR_THRESHOLD_PP) return "Clearly under-predicts";
-  if (gap > DIAGNOSIS_CLOSE_THRESHOLD_PP) return "Slightly under-predicts";
-  if (gap < -DIAGNOSIS_CLEAR_THRESHOLD_PP) return "Clearly over-predicts";
-  return "Slightly over-predicts";
+function howBuiltContent(step) {
+  return (PROCESS.steps || []).find((entry) => entry.id === step) || null;
 }
 
-function renderDiagnosis() {
-  const panel = $("#diagnosis-panel");
-  if (!panel || !pe()) return;
-  const item = summaryItem();
-  const meta = pe().meta;
-  if (!item) return;
-  const masked = !!item.insufficient || item.n < minN();
-  const selected = state.dim === "total" ? null : selectedItem();
-  $("#diagnosis-sub").textContent = selected ? `${dimMeta(state.dim).label} segment` : "Whole portfolio";
-  diagnosisOpenStep = 1;
+function renderHowBuilt() {
+  const panel = $("#how-built-panel");
+  if (!panel) return;
+  const reading = $("#how-built-reading");
+  const title = $("#how-built-reading-title");
+  const body = $("#how-built-reading-body");
+  const see = $("#how-built-see");
+  if (!reading || !title || !body || !see) return;
 
-  const n = item.n || 0;
-  const loanShare = meta.n_total ? n / meta.n_total : 0;
-  const eadShare = num(item.ead_share) || 0;
-  const elShare = meta.el_pct_ead ? (eadShare * (num(item.el_pct_ead) || 0)) / meta.el_pct_ead : 0;
-  const ratio = loanShare > 0 ? elShare / loanShare : 0;
-  const gapPp = ((num(item.default_rate) || 0) - (num(item.pred_pd) || 0)) * 100;
-  const step2Verdict = diagnosisVerdictModel(gapPp);
-  const step3Verdict = ratio > DIAGNOSIS_CONCENTRATION_THRESHOLD
-    ? "Concentrates loss"
-    : ratio < DIAGNOSIS_BELOW_WEIGHT_THRESHOLD
-      ? "Below its weight"
-      : "In line";
-
-  const stepData = [
-    {
-      id: 1,
-      title: "Is the sample reliable?",
-      verdict: masked ? "Small sample" : "Reliable",
-      content: masked
-        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
-        : `<p><strong>Loans in segment:</strong> ${fmtInt(n)}</p>
-           <p><strong>Rule:</strong> n ≥ ${fmtInt(minN())}</p>
-           <p><strong>95% CI:</strong> ${fmtPct(item.ci_low, 2)} – ${fmtPct(item.ci_high, 2)}</p>`,
-    },
-    {
-      id: 2,
-      title: "Does the model see it?",
-      verdict: masked ? "Small sample" : step2Verdict,
-      content: masked
-        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
-        : `<p><strong>Predicted PD:</strong> ${fmtPct(item.pred_pd, 2)}</p>
-           <p><strong>Observed default:</strong> ${fmtPct(item.default_rate, 2)}</p>
-           <p><strong>Gap:</strong> ${gapPp.toFixed(1)} pp</p>`,
-      disabled: masked,
-    },
-    {
-      id: 3,
-      title: "How much does it weigh?",
-      verdict: masked ? "Small sample" : step3Verdict,
-      content: masked
-        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
-        : `<p><strong>Share of loans:</strong> ${fmtPct(loanShare, 1)}</p>
-           <p><strong>Share of exposure (EAD):</strong> ${fmtPct(eadShare, 1)}</p>
-           <p><strong>Share of expected loss:</strong> ${fmtPct(elShare, 1)}</p>
-           <p class="diagnosis-formula">EL share = EAD share × segment EL ÷ portfolio EL</p>`,
-      disabled: masked,
-    },
-    {
-      id: 4,
-      title: "What this means",
-      verdict: masked ? "Small sample" : "Descriptive",
-      content: masked
-        ? `<p class="diagnosis-disabled">Not enough data to diagnose this segment.</p>`
-        : `<p>The model predicts ${fmtPct(item.pred_pd, 1)} and ${fmtPct(item.default_rate, 1)} is observed; this segment holds ${fmtPct(loanShare, 1)} of loans and ${fmtPct(elShare, 1)} of expected loss.</p>
-           ${step2Verdict !== "Close" ? `<button type="button" class="diagnosis-link" data-diagnosis-action="evidence">See calibration in Evidence</button>` : ""}`,
-      disabled: masked,
-    },
-  ];
-
-  const nodes = $$(".diagnosis-node", panel);
-  nodes.forEach((node) => {
-    const stepId = Number(node.dataset.step);
-    const step = stepData.find((entry) => entry.id === stepId);
-    const selected = stepId === diagnosisOpenStep;
-    node.setAttribute("aria-pressed", String(selected));
-    node.classList.toggle("is-selected", selected);
-    node.classList.toggle("is-disabled", !!step.disabled);
-    if (step.disabled) node.setAttribute("aria-disabled", "true");
-    else node.removeAttribute("aria-disabled");
-    node.disabled = !!step.disabled;
-    node.onclick = () => {
-      if (node.disabled) return;
-      diagnosisOpenStep = stepId;
-      nodes.forEach((other) => {
-        const otherId = Number(other.dataset.step);
-        const open = otherId === diagnosisOpenStep;
-        other.classList.toggle("is-selected", open);
-        other.setAttribute("aria-pressed", String(open));
-      });
-      const reading = $("#diagnosis-reading");
-      const title = $("#diagnosis-reading-title");
-      const verdict = $("#diagnosis-reading-verdict");
-      const body = $("#diagnosis-reading-body");
-      if (reading && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        reading.classList.add("is-swapping");
-        window.setTimeout(() => reading.classList.remove("is-swapping"), 180);
-      }
-      if (title) title.textContent = step.title;
-      if (verdict) verdict.textContent = step.verdict;
-      if (body) body.innerHTML = step.content;
-      $$("[data-diagnosis-action='evidence']", body || panel).forEach((button) => {
-        button.addEventListener("click", () => {
-          setView("evidence");
-          window.setTimeout(() => $("#calibration-note")?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
-        });
-      });
-    };
-    if (!node.__diagnosisBound) {
-      node.addEventListener("keydown", (event) => {
-        if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-          event.preventDefault();
-          const next = nodes.find((candidate, index) => index > nodes.indexOf(node) && !candidate.disabled);
-          if (next) { next.focus(); next.click(); }
-        } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-          event.preventDefault();
-          const previous = [...nodes].reverse().find((candidate, index) => nodes.indexOf(candidate) < nodes.indexOf(node) && !candidate.disabled);
-          if (previous) { previous.focus(); previous.click(); }
-        }
-      });
-      node.__diagnosisBound = true;
+  const nodes = $$(".how-built-node", panel);
+  const selectStep = (stepId) => {
+    howBuiltOpenStep = stepId;
+    nodes.forEach((node) => {
+      const open = Number(node.dataset.step) === howBuiltOpenStep;
+      node.classList.toggle("is-selected", open);
+      node.setAttribute("aria-pressed", String(open));
+    });
+    const step = howBuiltContent(stepId);
+    if (!step) return;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      reading.classList.add("is-swapping");
+      window.setTimeout(() => reading.classList.remove("is-swapping"), 180);
     }
+    title.textContent = step.title;
+    body.innerHTML = `
+      <p><strong>What I did:</strong> ${esc(resolveInfoText(step.what))}</p>
+      <p><strong>Why:</strong> ${esc(resolveInfoText(step.why))}</p>
+      <p><strong>What I learned:</strong> ${esc(resolveInfoText(step.learned))}</p>`;
+    const target = step.see || {};
+    see.onclick = () => {
+      if (target.view === "learn") {
+        setView("learn");
+        window.setTimeout(() => {
+          state.term = target.term || null;
+          state.glossaryQuery = target.term || "";
+          state.glossaryCategory = "All";
+          renderLearn();
+          const entry = document.getElementById(`term-${target.term}`);
+          if (entry) { entry.open = true; entry.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "center" }); }
+        }, 120);
+      } else if (target.view === "evidence") {
+        setView("evidence");
+        window.setTimeout(() => {
+          const node = target.section === "censoring" ? $("#censoring-note")
+            : target.section === "model" ? $("#model-table")
+            : target.section === "calibration" ? $("#calibration-note")
+            : $("#view-evidence");
+          node?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" });
+        }, 120);
+      } else if (target.view === "risk") {
+        setView("risk");
+        window.setTimeout(() => $("#risk-kpis")?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
+      }
+    };
+  };
+
+  nodes.forEach((node) => {
+    if (node.__howBuiltBound) return;
+    node.addEventListener("click", () => selectStep(Number(node.dataset.step)));
+    node.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const next = nodes.find((candidate, index) => index > nodes.indexOf(node));
+        if (next) { next.focus(); next.click(); }
+      } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        const previous = [...nodes].reverse().find((candidate) => nodes.indexOf(candidate) < nodes.indexOf(node));
+        if (previous) { previous.focus(); previous.click(); }
+      }
+    });
+    node.__howBuiltBound = true;
   });
 
-  const firstEnabled = nodes.find((node) => !node.disabled) || nodes[0];
-  if (firstEnabled) firstEnabled.click();
+  selectStep(howBuiltOpenStep || 1);
 }
 
 function renderExplorer() {
@@ -993,7 +933,7 @@ function renderExplorer() {
   renderMap();
   renderList();
   renderSummary();
-  renderDiagnosis();
+  renderHowBuilt();
 }
 
 /* ---------------------------------------------------------------- risk lab */
@@ -1924,11 +1864,12 @@ async function boot() {
   const initialParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const deepLink = initialParams.has("view") || initialParams.has("term");
   try {
-    const [response, infoResponse, learnResponse, welcomeResponse] = await Promise.all([
+    const [response, infoResponse, learnResponse, welcomeResponse, processResponse] = await Promise.all([
       fetch(DATA_URL, { cache: "no-cache" }),
       fetch("content/info.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/welcome.json", { cache: "no-cache" }).catch(() => null),
+      fetch("content/process.json", { cache: "no-cache" }).catch(() => null),
     ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();
@@ -1938,6 +1879,9 @@ async function boot() {
     }
     if (learnResponse && learnResponse.ok) {
       try { LEARN = await learnResponse.json(); } catch (err) { LEARN = { guide: [], terms: [] }; }
+    }
+    if (processResponse && processResponse.ok) {
+      try { PROCESS = await processResponse.json(); } catch (err) { PROCESS = { steps: [] }; }
     }
     if (welcomeResponse && welcomeResponse.ok) {
       try { WELCOME = await welcomeResponse.json(); } catch (err) { WELCOME = {}; }

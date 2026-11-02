@@ -185,10 +185,10 @@
     "try": "Read the limitations before quoting a segment.",
     "term": "small-segment-masking"
   },
-  "diagnosis": {
-    "title": "Segment diagnosis",
-    "text": "Compares the selected segment with the portfolio on sample size, predicted versus observed default, and share of expected loss.",
-    "try": "Click each number and compare the verdicts.",
-    "term": "calibration"
+  "how-built": {
+    "title": "How this was built",
+    "text": "The main steps of the project, in order. Click a number to read what was done, why, and what was learned.",
+    "try": "Click a number and read the step.",
+    "term": "leakage"
   }
 }

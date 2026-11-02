@@ -122,48 +122,83 @@
                 <p class="panel-sub" id="how-built-sub">Click a number</p>
               </div>
             </div>
+            <!-- Reference artwork: docs/assets/process-ribbon.svg -->
             <div class="how-built-picture" id="how-built-picture">
-              <svg class="how-built-svg" viewBox="0 0 360 600" aria-hidden="true" focusable="false">
-                <defs>
-                  <linearGradient id="how-built-grad-1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" class="how-built-stop-1" stop-opacity="0" />
-                    <stop offset="16%" class="how-built-stop-1" stop-opacity="1" />
-                    <stop offset="100%" class="how-built-stop-1b" stop-opacity="1" />
-                  </linearGradient>
-                  <linearGradient id="how-built-grad-2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" class="how-built-stop-2" stop-opacity="1" />
-                    <stop offset="100%" class="how-built-stop-2b" stop-opacity="1" />
-                  </linearGradient>
-                  <linearGradient id="how-built-grad-3" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" class="how-built-stop-3" stop-opacity="1" />
-                    <stop offset="100%" class="how-built-stop-3b" stop-opacity="1" />
-                  </linearGradient>
-                  <linearGradient id="how-built-grad-4" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" class="how-built-stop-4" stop-opacity="1" />
-                    <stop offset="100%" class="how-built-stop-4b" stop-opacity="1" />
-                  </linearGradient>
-                  <linearGradient id="how-built-grad-5" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" class="how-built-stop-5" stop-opacity="1" />
-                    <stop offset="84%" class="how-built-stop-5" stop-opacity="1" />
-                    <stop offset="100%" class="how-built-stop-5" stop-opacity="0" />
-                  </linearGradient>
-                </defs>
-                <path class="how-built-arc how-built-arc-1" fill="url(#how-built-grad-1)" d="M 180,60 C 280,60 280,160 180,160 C 210,160 210,130 180,130 C 210,130 210,90 180,90 C 210,90 210,60 180,60 Z" />
-                <path class="how-built-arc how-built-arc-2" fill="url(#how-built-grad-2)" d="M 180,150 C 80,150 80,250 180,250 C 150,250 150,220 180,220 C 150,220 150,180 180,180 C 150,180 150,150 180,150 Z" />
-                <path class="how-built-arc how-built-arc-3" fill="url(#how-built-grad-3)" d="M 180,240 C 280,240 280,340 180,340 C 210,340 210,310 180,310 C 210,310 210,270 180,270 C 210,270 210,240 180,240 Z" />
-                <path class="how-built-arc how-built-arc-4" fill="url(#how-built-grad-4)" d="M 180,330 C 80,330 80,430 180,430 C 150,430 150,400 180,400 C 150,400 150,360 180,360 C 150,360 150,330 180,330 Z" />
-                <path class="how-built-arc how-built-arc-5" fill="url(#how-built-grad-5)" d="M 180,420 C 280,420 280,520 180,520 C 210,520 210,490 180,490 C 210,490 210,450 180,450 C 210,450 210,420 180,420 Z" />
-              </svg>
-              <button type="button" class="how-built-node how-built-node-1" data-step="1" aria-label="Step 1: Data & leakage control" aria-pressed="true">01</button>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 604" width="380" height="604" class="process-ribbon" focusable="false" aria-hidden="true">
+  <style>
+    .process-ribbon {
+      --pr-a1: #d6cdf5; --pr-b1: #a99be0;
+      --pr-a2: #c3cff6; --pr-b2: #8fa6ea;
+      --pr-a3: #b6dcf3; --pr-b3: #7fbbe6;
+      --pr-a4: #acdfd6; --pr-b4: #6fc6b9;
+      --pr-a5: #c9e8b4; --pr-b5: #93d07f;
+      --pr-badge: #1f2937; --pr-badge-text: #ffffff; --pr-label: #1f2937; --pr-ring: #1d4ed8;
+    }
+    @media (prefers-color-scheme: dark) {
+      .process-ribbon:not(.force-light) {
+        --pr-a1: #6a5aa8; --pr-b1: #4b3d8a;
+        --pr-a2: #566fb8; --pr-b2: #3d559c;
+        --pr-a3: #4a86b3; --pr-b3: #356a96;
+        --pr-a4: #3f9a8e; --pr-b4: #2c7c71;
+        --pr-a5: #6aa14f; --pr-b5: #4f8638;
+        --pr-badge: #e2e8f0; --pr-badge-text: #0f172a; --pr-label: #e5e7eb; --pr-ring: #93c5fd;
+      }
+    }
+    .process-ribbon.force-dark {
+      --pr-a1: #6a5aa8; --pr-b1: #4b3d8a; --pr-a2: #566fb8; --pr-b2: #3d559c;
+      --pr-a3: #4a86b3; --pr-b3: #356a96; --pr-a4: #3f9a8e; --pr-b4: #2c7c71;
+      --pr-a5: #6aa14f; --pr-b5: #4f8638;
+      --pr-badge: #e2e8f0; --pr-badge-text: #0f172a; --pr-label: #e5e7eb; --pr-ring: #93c5fd;
+    }
+    .ribbon { fill: none; stroke-width: 48; stroke-linecap: butt; stroke-linejoin: butt; opacity: .94; transition: opacity .2s; }
+    .step.is-selected .ribbon { opacity: 1; filter: saturate(1.4); }
+    .label { font: 700 12px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .06em; fill: var(--pr-label); text-anchor: middle; dominant-baseline: central; }
+    .badge { fill: var(--pr-badge); }
+    .badge-num { font: 700 17px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--pr-badge-text); text-anchor: middle; dominant-baseline: central; }
+    .badge-ring { fill: none; stroke: var(--pr-ring); stroke-width: 0; }
+    .step.is-selected .badge-ring { stroke-width: 4; }
+    @media (prefers-reduced-motion: reduce) { .ribbon { transition: none; } }
+  </style>
+  <defs>
+    <linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="172"><stop offset="0" style="stop-color:var(--pr-a1)"/><stop offset="1" style="stop-color:var(--pr-b1)"/></linearGradient>
+    <linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="0" y1="124" x2="0" y2="276"><stop offset="0" style="stop-color:var(--pr-a2)"/><stop offset="1" style="stop-color:var(--pr-b2)"/></linearGradient>
+    <linearGradient id="g3" gradientUnits="userSpaceOnUse" x1="0" y1="228" x2="0" y2="380"><stop offset="0" style="stop-color:var(--pr-a3)"/><stop offset="1" style="stop-color:var(--pr-b3)"/></linearGradient>
+    <linearGradient id="g4" gradientUnits="userSpaceOnUse" x1="0" y1="332" x2="0" y2="484"><stop offset="0" style="stop-color:var(--pr-a4)"/><stop offset="1" style="stop-color:var(--pr-b4)"/></linearGradient>
+    <linearGradient id="g5" gradientUnits="userSpaceOnUse" x1="0" y1="436" x2="0" y2="588"><stop offset="0" style="stop-color:var(--pr-a5)"/><stop offset="1" style="stop-color:var(--pr-b5)"/></linearGradient>
+    <linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="110" y2="0"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
+    <mask id="ribbon-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="380" height="604">
+      <rect x="0" y="0" width="380" height="68" fill="url(#fade)"/>
+      <rect x="0" y="68" width="380" height="472" fill="#fff"/>
+      <rect x="0" y="540" width="380" height="64" fill="url(#fade)"/>
+    </mask>
+  </defs>
+  <g mask="url(#ribbon-mask)">
+    <g class="step" id="step-1" data-step="1"><path class="ribbon" stroke="url(#g1)" d="M40 44 H270 A52 52 0 0 1 270 148"/></g>
+    <g class="step" id="step-2" data-step="2"><path class="ribbon" stroke="url(#g2)" d="M270 148 H110 A52 52 0 0 0 110 252"/></g>
+    <g class="step" id="step-3" data-step="3"><path class="ribbon" stroke="url(#g3)" d="M110 252 H270 A52 52 0 0 1 270 356"/></g>
+    <g class="step" id="step-4" data-step="4"><path class="ribbon" stroke="url(#g4)" d="M270 356 H110 A52 52 0 0 0 110 460"/></g>
+    <g class="step" id="step-5" data-step="5"><path class="ribbon" stroke="url(#g5)" d="M110 460 H270 A52 52 0 0 1 270 564 H40"/></g>
+  </g>
+  <g class="labels">
+    <text class="label" x="190" y="96">DATA</text>
+    <text class="label" x="190" y="200">VALIDATION</text>
+    <text class="label" x="190" y="304">SCORECARD</text>
+    <text class="label" x="190" y="408">CALIBRATION</text>
+    <text class="label" x="190" y="512">SIMULATION</text>
+  </g>
+  <g class="badges">
+    <g class="step" id="badge-1" data-step="1"><circle class="badge" cx="346" cy="96" r="21"/><circle class="badge-ring" cx="346" cy="96" r="26"/><text class="badge-num" x="346" y="96">1</text></g>
+    <g class="step" id="badge-2" data-step="2"><circle class="badge" cx="34" cy="200" r="21"/><circle class="badge-ring" cx="34" cy="200" r="26"/><text class="badge-num" x="34" y="200">2</text></g>
+    <g class="step" id="badge-3" data-step="3"><circle class="badge" cx="346" cy="304" r="21"/><circle class="badge-ring" cx="346" cy="304" r="26"/><text class="badge-num" x="346" y="304">3</text></g>
+    <g class="step" id="badge-4" data-step="4"><circle class="badge" cx="34" cy="408" r="21"/><circle class="badge-ring" cx="34" cy="408" r="26"/><text class="badge-num" x="34" y="408">4</text></g>
+    <g class="step" id="badge-5" data-step="5"><circle class="badge" cx="346" cy="512" r="21"/><circle class="badge-ring" cx="346" cy="512" r="26"/><text class="badge-num" x="346" y="512">5</text></g>
+  </g>
+</svg>
+              <button type="button" class="how-built-node how-built-node-1" data-step="1" aria-label="Step 1: Data and leakage control" aria-pressed="true">01</button>
               <button type="button" class="how-built-node how-built-node-2" data-step="2" aria-label="Step 2: An honest validation split" aria-pressed="false">02</button>
               <button type="button" class="how-built-node how-built-node-3" data-step="3" aria-label="Step 3: Scorecard and challengers" aria-pressed="false">03</button>
               <button type="button" class="how-built-node how-built-node-4" data-step="4" aria-label="Step 4: Calibration and LGD" aria-pressed="false">04</button>
               <button type="button" class="how-built-node how-built-node-5" data-step="5" aria-label="Step 5: Portfolio loss simulation" aria-pressed="false">05</button>
-              <p class="how-built-label how-built-label-1">Data</p>
-              <p class="how-built-label how-built-label-2">Validation</p>
-              <p class="how-built-label how-built-label-3">Scorecard</p>
-              <p class="how-built-label how-built-label-4">Calibration</p>
-              <p class="how-built-label how-built-label-5">Simulation</p>
             </div>
             <div class="how-built-reading" id="how-built-reading" aria-live="polite">
               <h4 class="how-built-reading-title" id="how-built-reading-title">—</h4>

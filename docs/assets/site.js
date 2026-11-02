@@ -1055,7 +1055,6 @@ function renderRisk() {
       ["EL", ex.expected_loss_pct_ead, "expected-loss"],
       ["UL", ex.unexpected_loss_pct_ead, "unexpected-loss"],
       ["VaR 99%", ex["var_0.99_pct_ead"], "var-99"],
-      ["VaR 99.9%", ex["var_0.999_pct_ead"], "var-999"],
       ["ES 99%", ex["es_0.99_pct_ead"], "es-99"],
       ["ES 99.9%", ex["es_0.999_pct_ead"], "es-999"],
     ];
@@ -1063,7 +1062,6 @@ function renderRisk() {
       "expected-loss": "Average loss across simulated paths.",
       "unexpected-loss": "Typical variation around expected loss.",
       "var-99": `Loss stays below this in 99 of 100 simulated years.`,
-      "var-999": `Loss stays below this in 999 of 1,000 simulated years.`,
       "es-99": "Average loss in the worst 1% of simulated years.",
       "es-999": "Average loss in the worst 0.1% of simulated years.",
     };
@@ -1164,7 +1162,7 @@ function drawSurface() {
   const p = palette();
   const base = surf.base_case;
   const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
-  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText} Click a point to move the sliders.`;
+  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText} Rotate/zoom; sliders stay.`;
   if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
   const matrix = surfaceMatrix(state.surfaceMetric);
   if (!matrix) return;
@@ -1201,43 +1199,6 @@ function drawSurface() {
     host.dataset.mode = "surface";
   }
   if (!ok) { showFallback(host, "assets/risk_surface_static.png", "The surface could not be drawn; a static figure is shown."); return; }
-  const el = host;
-  if (!el.__clickBound) {
-    el.__clickBound = true;
-    el.on("plotly_click", (event) => {
-      const point = event && event.points && event.points[0];
-      if (!point) return;
-      let rho = Number(point.x);
-      let pd = Number(point.y);
-      if (!Number.isFinite(rho) || !Number.isFinite(pd)) {
-        const n = Number(point.pointNumber);
-        if (Number.isFinite(n) && el.dataset.mode === "heatmap") {
-          rho = rhos[n % rhos.length]; pd = pds[Math.floor(n / rhos.length)];
-        }
-      }
-      const opts = riskOptions();
-      if (!opts.rhos.includes(rho) || !opts.pds.includes(pd)) return;
-      el.__lastPlotlyClick = Date.now();
-      state.risk.rho = rho; state.risk.pd = pd;
-      commit({ push: true });
-    });
-    // 3D hit-testing depends on the camera and can miss a thin surface. Keep a
-    // deterministic pointer fallback so a click on the chart always moves the
-    // linked sliders, even in a headless browser.
-    el.addEventListener("click", (event) => {
-      if (event.target.closest(".modebar")) return;
-      if (Date.now() - (el.__lastPlotlyClick || 0) < 220) return;
-      const rect = el.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const fx = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      const fy = clamp((event.clientY - rect.top) / rect.height, 0, 1);
-      const rho = rhos[Math.round(fx * (rhos.length - 1))];
-      const pd = pds[Math.round(fy * (pds.length - 1))];
-      if (rho == null || pd == null) return;
-      state.risk.rho = rho; state.risk.pd = pd;
-      commit({ push: true });
-    });
-  }
 }
 function nearestValue(values, target) {
   return values[nearestIndex(values, target)];

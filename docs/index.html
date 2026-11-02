@@ -279,8 +279,8 @@
             <h2>Move the assumptions, watch the tail</h2>
             <p class="section-lead">
               Every slider snaps to a precomputed simulation grid. The histogram and the 3D
-              surface share the same state; click the surface to move the sliders. The page
-              never re-simulates.
+              surface share the same state; drag the surface to rotate and scroll to zoom. It
+              does not change the sliders. The page never re-simulates.
             </p>
           </div>
           <button class="btn btn-primary" id="play-rho" type="button" aria-pressed="false">Play ρ sweep</button>
@@ -423,60 +423,63 @@
           <button class="btn btn-ghost" id="evidence-provenance" type="button">Open provenance drawer</button>
         </div>
 
-        <div class="evidence-grid">
-          <section class="panel">
-            <h3>Model comparison</h3>
-            <div class="table-scroll">
-              <table id="model-table">
-                <caption>Mature out-of-time window (★ = selected champion)</caption>
-                <thead><tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr></thead>
-                <tbody><tr><td>lightgbm ★</td><td>0.6572</td><td>0.3144</td><td>0.2274</td><td>30</td></tr><tr><td>random_forest</td><td>0.6468</td><td>0.2936</td><td>0.2088</td><td>30</td></tr><tr><td>probit</td><td>0.6219</td><td>0.2438</td><td>0.1770</td><td>8</td></tr><tr><td>logit_l2</td><td>0.6218</td><td>0.2436</td><td>0.1766</td><td>8</td></tr><tr><td>logit</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>logit_l1</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>decision_tree</td><td>0.5509</td><td>0.1018</td><td>0.1018</td><td>30</td></tr></tbody>
-              </table>
-            </div>
-            <p class="panel-foot" id="benchmark-note"></p>
-          </section>
-        </div>
+        <div class="evidence-columns">
+          <div class="evidence-column">
+            <section class="panel">
+              <h3>Model comparison</h3>
+              <div class="table-scroll">
+                <table id="model-table">
+                  <caption>Mature out-of-time window (★ = selected champion)</caption>
+                  <thead><tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr></thead>
+                  <tbody><tr><td>lightgbm ★</td><td>0.6572</td><td>0.3144</td><td>0.2274</td><td>30</td></tr><tr><td>random_forest</td><td>0.6468</td><td>0.2936</td><td>0.2088</td><td>30</td></tr><tr><td>probit</td><td>0.6219</td><td>0.2438</td><td>0.1770</td><td>8</td></tr><tr><td>logit_l2</td><td>0.6218</td><td>0.2436</td><td>0.1766</td><td>8</td></tr><tr><td>logit</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>logit_l1</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>decision_tree</td><td>0.5509</td><td>0.1018</td><td>0.1018</td><td>30</td></tr></tbody>
+                </table>
+              </div>
+              <p class="panel-foot" id="benchmark-note"></p>
+            </section>
 
-        <div class="evidence-grid">
-          <section class="panel">
-            <h3>Calibration and LGD</h3>
-            <p class="note-copy" id="calibration-note"></p>
-            <div class="table-scroll">
-              <table id="lgd-table">
-                <caption>Loan-level LGD models, out of time</caption>
-                <thead><tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr></thead>
-                <tbody><tr><td>gamma_glm</td><td>0.1004</td><td>0.1572</td><td>-0.0758</td></tr><tr><td>lightgbm ★</td><td>0.1015</td><td>0.1538</td><td>-0.0294</td></tr><tr><td>two_part</td><td>0.1000</td><td>0.1559</td><td>-0.0578</td></tr></tbody>
-              </table>
-            </div>
-            <p class="note-copy" id="lgd-note"></p>
-          </section>
-          <section class="panel">
-            <h3>Censoring and the test window</h3>
-            <p class="note-copy" id="censoring-note"></p>
-            <div class="table-scroll">
-              <table id="window-table">
-                <caption>Mature vs censored validation window</caption>
-                <thead><tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr></thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <p class="note-copy" id="forecast-note"></p>
-            <div class="table-scroll">
-              <table id="forecast-table">
-                <caption>Monthly default-rate forecast, benchmark comparison</caption>
-                <thead><tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr></thead>
-                <tbody><tr><td>last value naive</td><td>0.0132</td><td>0.0112</td><td>0.5543</td></tr><tr><td>ets</td><td>0.0140</td><td>0.0119</td><td>0.5903</td></tr><tr><td>sarimax</td><td>0.0246</td><td>0.0229</td><td>1.1319</td></tr><tr><td>seasonal naive</td><td>0.0363</td><td>0.0344</td><td>1.7036</td></tr></tbody>
-              </table>
-            </div>
-          </section>
-        </div>
+            <section class="panel">
+              <h3>Calibration and LGD</h3>
+              <p class="note-copy" id="calibration-note"></p>
+              <div class="table-scroll">
+                <table id="lgd-table">
+                  <caption>Loan-level LGD models, out of time</caption>
+                  <thead><tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr></thead>
+                  <tbody><tr><td>gamma_glm</td><td>0.1004</td><td>0.1572</td><td>-0.0758</td></tr><tr><td>lightgbm ★</td><td>0.1015</td><td>0.1538</td><td>-0.0294</td></tr><tr><td>two_part</td><td>0.1000</td><td>0.1559</td><td>-0.0578</td></tr></tbody>
+                </table>
+              </div>
+              <p class="note-copy" id="lgd-note"></p>
+            </section>
+          </div>
 
-        <section class="panel limitations-panel">
-          <h3>What did not work, and limitations</h3>
-          <p class="note-copy">Findings about discrimination, LGD, calibration and the forecast are reported next to their tables above.</p>
-          <ul class="limitations" id="limitations-list"><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li><li>Clustering is weakly separated: silhouette 0.1840, stability ARI 0.9566, and k-means separates the default rate by only 0.54 pp.</li></ul>
-          <p class="note-copy" id="segments-note"></p>
-        </section>
+          <div class="evidence-column">
+            <section class="panel">
+              <h3>Censoring and the test window</h3>
+              <p class="note-copy" id="censoring-note"></p>
+              <div class="table-scroll">
+                <table id="window-table">
+                  <caption>Mature vs censored validation window</caption>
+                  <thead><tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <p class="note-copy" id="forecast-note"></p>
+              <div class="table-scroll">
+                <table id="forecast-table">
+                  <caption>Monthly default-rate forecast, benchmark comparison</caption>
+                  <thead><tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr></thead>
+                  <tbody><tr><td>last value naive</td><td>0.0132</td><td>0.0112</td><td>0.5543</td></tr><tr><td>ets</td><td>0.0140</td><td>0.0119</td><td>0.5903</td></tr><tr><td>sarimax</td><td>0.0246</td><td>0.0229</td><td>1.1319</td></tr><tr><td>seasonal naive</td><td>0.0363</td><td>0.0344</td><td>1.7036</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel limitations-panel">
+              <h3>What did not work, and limitations</h3>
+              <p class="note-copy">Findings about discrimination, LGD, calibration and the forecast are reported next to their tables above.</p>
+              <ul class="limitations" id="limitations-list"><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li><li>Clustering is weakly separated: silhouette 0.1840, stability ARI 0.9566, and k-means separates the default rate by only 0.54 pp.</li></ul>
+              <p class="note-copy" id="segments-note"></p>
+            </section>
+          </div>
+        </div>
       </div>
     </section>
 

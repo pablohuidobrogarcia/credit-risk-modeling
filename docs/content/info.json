@@ -98,7 +98,7 @@
   "gauge": {
     "title": "VaR gauge",
     "text": "The gauge places VaR 99.9% on a 0–60% loss scale so the current scenario has a visual reference. The scale is descriptive; it is not a regulatory limit or an appetite statement.",
-    "try": "Use the surface to pick a high-stress point and watch the needle.",
+    "try": "Use the sliders to pick a high-stress scenario and watch the needle.",
     "term": "var"
   },
   "loss-histogram": {
@@ -109,8 +109,8 @@
   },
   "surface": {
     "title": "VaR surface",
-    "text": "The surface shows the selected risk metric across ρ and PD stress on the precomputed grid. The dark marker is the current scenario and the outlined marker is the base case. Click or tap a point to move the sliders.",
-    "try": "Click a high-ρ, high-PD point and then read the histogram.",
+    "text": "The surface shows the selected risk metric across ρ and PD stress on the precomputed grid. The dark marker is the current scenario and the outlined marker is the base case. Drag to rotate and scroll to zoom; it does not change the sliders.",
+    "try": "Rotate the surface to a high-ρ, high-PD corner, then use the sliders and read the histogram.",
     "term": "vasicek"
   },
   "surface-metric": {

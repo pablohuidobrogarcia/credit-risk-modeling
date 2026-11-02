@@ -226,6 +226,51 @@ test("view tabs are Learn first, default to Explorer and support keyboard arrows
   await expectNoErrors(errors);
 });
 
+test("Evidence panels use two independent columns with natural heights", async ({ page }) => {
+  const errors = await open(page);
+  const expectedOrder = ["Model comparison", "Calibration and LGD", "Censoring and the test window", "What did not work, and limitations"];
+  for (const [width, height] of [[1360, 900], [1100, 900]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#view=evidence");
+    await expect(page.locator("#view-evidence")).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const columns = [...document.querySelectorAll(".evidence-column")].map((column) => column.getBoundingClientRect());
+      const panels = [...document.querySelectorAll(".evidence-column .panel")];
+      const order = panels.map((panel) => panel.querySelector("h3").textContent);
+      const blanks = panels.map((panel) => {
+        const style = getComputedStyle(panel);
+        const rect = panel.getBoundingClientRect();
+        const kids = [...panel.children];
+        const last = kids[kids.length - 1].getBoundingClientRect();
+        return Math.round(rect.bottom - last.bottom - parseFloat(style.paddingBottom || "0"));
+      });
+      return {
+        order,
+        columnBottoms: columns.map((rect) => Math.round(rect.bottom)),
+        blanks,
+        columns: getComputedStyle(document.querySelector(".evidence-columns")).gridTemplateColumns.split(" ").length,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    expect(layout.order, `${width}px panel order`).toEqual(expectedOrder);
+    expect(layout.columns, `${width}px column count`).toBe(2);
+    expect(Math.abs(layout.columnBottoms[0] - layout.columnBottoms[1]), `${width}px column bottom difference`).toBeLessThan(100);
+    expect(Math.max(...layout.blanks), `${width}px internal blank`).toBeLessThanOrEqual(40);
+    expect(layout.overflow, `${width}px overflow`).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.goto("/#view=evidence");
+  const stacked = await page.evaluate(() => ({
+    columns: getComputedStyle(document.querySelector(".evidence-columns")).gridTemplateColumns.split(" ").length,
+    order: [...document.querySelectorAll(".evidence-column .panel")].map((panel) => panel.querySelector("h3").textContent),
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+  }));
+  expect(stacked.columns).toBe(1);
+  expect(stacked.order).toEqual(expectedOrder);
+  expect(stacked.overflow).toBeLessThanOrEqual(1);
+  await expectNoErrors(errors);
+});
+
 test("risk sliders, play sweep and surface control the shared state", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
@@ -255,20 +300,57 @@ test("risk sliders, play sweep and surface control the shared state", async ({ p
   await expectNoErrors(errors);
 });
 
-test("clicking the surface point moves the linked sliders", async ({ page }) => {
+test("clicking the surface does not move the linked sliders", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
   const surface = page.locator("#surface-chart");
   await expect(surface.locator("canvas")).toBeVisible({ timeout: 20_000 });
   await surface.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
-  const before = await page.locator("#scenario-badge").innerText();
+  const readState = () => page.evaluate(() => ({
+    rho: document.querySelector("#risk-rho").value,
+    pd: document.querySelector("#risk-pd").value,
+    lgd: document.querySelector("#risk-lgd").value,
+    hash: location.hash,
+    badge: document.querySelector("#scenario-badge").textContent,
+  }));
+  const before = await readState();
   const box = await surface.boundingBox();
-  await page.mouse.click(box.x + box.width * 0.52, box.y + box.height * 0.48);
+  const cx = box.x + box.width * 0.52;
+  const cy = box.y + box.height * 0.48;
+  await page.mouse.click(cx, cy);
   await page.waitForTimeout(400);
-  const after = await page.locator("#scenario-badge").innerText();
-  expect(after).not.toBe(before);
-  await expect(page).toHaveURL(/rho=/);
+  expect(await readState()).toEqual(before);
+
+  const cameraBefore = await surface.evaluate((el) => JSON.stringify(el._fullLayout?.scene?.camera?.eye));
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 70, cy + 12, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  const cameraAfter = await surface.evaluate((el) => JSON.stringify(el._fullLayout?.scene?.camera?.eye));
+  expect(cameraAfter, "dragging should still rotate the surface").not.toBe(cameraBefore);
+
+  await page.mouse.move(cx, cy);
+  await page.waitForTimeout(300);
+  expect(await page.locator("#surface-chart .hoverlayer").count()).toBeGreaterThan(0);
+  expect(await readState()).toEqual(before);
+  await expectNoErrors(errors);
+});
+
+test("surface copy says it does not change the sliders", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#surface-sub")).toContainText("Rotate/zoom");
+  await expect(page.locator("#surface-sub")).toContainText("sliders stay");
+  await page.locator('.info-btn[data-info="surface"]').click();
+  await expect(page.locator("#info-popover")).toContainText("does not change the sliders");
+  await page.keyboard.press("Escape");
+  await page.locator("#view-tab-learn").click();
+  const learnText = await page.locator("#view-learn").innerText();
+  expect(learnText).not.toMatch(/click the surface|surface.{0,80}(move|moves|set|sets|change|changes) the sliders/i);
+  const pageText = await page.locator("body").innerText();
+  expect(pageText).not.toMatch(/click the surface|click a point to move the sliders/i);
   await expectNoErrors(errors);
 });
 
@@ -328,7 +410,9 @@ test("VaR gauge moves above the loss distribution and tracks every slider", asyn
   await expect(scenario.locator("#risk-gauge")).toHaveCount(0);
   await expect(scenario.locator("#gauge-caption")).toHaveCount(0);
   await expect(scenario.locator(".slider-field")).toHaveCount(3);
-  await expect(scenario.locator("#risk-kpis .summary-kpi")).toHaveCount(6);
+  await expect(scenario.locator("#risk-kpis .summary-kpi")).toHaveCount(5);
+  await expect(scenario.locator("#risk-kpis .mini-label")).toHaveText(["EL", "UL", "VaR 99%", "ES 99%", "ES 99.9%"]);
+  await expect(scenario.locator("#risk-kpis")).not.toContainText("VaR 99.9%");
   await expect(gaugePanel).toContainText("VaR 99.9% gauge");
   await expect(gaugePanel.locator("#risk-gauge")).toBeVisible();
   await expect(gaugePanel.locator('[data-info="gauge"]')).toBeVisible();
@@ -341,15 +425,62 @@ test("VaR gauge moves above the loss distribution and tracks every slider", asyn
   expect(gaugeBeforeLoss).toBe(true);
 
   const gaugeValue = page.locator("#risk-gauge text:not(.scale)");
+  const expectedGauge = async () => {
+    const key = (await page.locator("#scenario-badge").innerText()).replace(/ · /g, "_");
+    const exact = DATA.interactive.scenario_explorer.histograms[key].exact;
+    return `${(exact["var_0.999_pct_ead"] * 100).toFixed(1)}%`;
+  };
   let before = await gaugeValue.textContent();
   await page.locator("#risk-rho").fill("5");
   await expect.poll(() => gaugeValue.textContent()).not.toBe(before);
+  await expect(gaugeValue).toHaveText(await expectedGauge());
   before = await gaugeValue.textContent();
   await page.locator("#risk-pd").fill("2");
   await expect.poll(() => gaugeValue.textContent()).not.toBe(before);
+  await expect(gaugeValue).toHaveText(await expectedGauge());
   before = await gaugeValue.textContent();
   await page.locator("#risk-lgd").fill("1");
   await expect.poll(() => gaugeValue.textContent()).not.toBe(before);
+  await expect(gaugeValue).toHaveText(await expectedGauge());
+  await expectNoErrors(errors);
+});
+
+test("Scenario KPI row has five cards with no empty cell at 1360, 1000 and 390", async ({ page }) => {
+  const errors = await open(page);
+  for (const [width, height] of [[1360, 900], [1000, 900], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#view=risk");
+    await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+    const layout = await page.evaluate(() => {
+      const grid = document.querySelector("#risk-kpis");
+      const style = getComputedStyle(grid);
+      const contentWidth = grid.getBoundingClientRect().width - parseFloat(style.paddingLeft || "0") - parseFloat(style.paddingRight || "0");
+      const gap = parseFloat(style.columnGap || "0");
+      const cards = [...grid.querySelectorAll(".summary-kpi")];
+      const rows = new Map();
+      cards.forEach((card) => {
+        const rect = card.getBoundingClientRect();
+        const key = Math.round(rect.top);
+        if (!rows.has(key)) rows.set(key, []);
+        rows.get(key).push(rect.width);
+      });
+      return {
+        count: cards.length,
+        columns: style.gridTemplateColumns.split(" ").length,
+        lastColumnSpan: getComputedStyle(cards[cards.length - 1]).gridColumnStart,
+        rowOccupancy: [...rows.values()].map((widths) => widths.reduce((sum, value) => sum + value, 0) + gap * (widths.length - 1)),
+        contentWidth,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    expect(layout.count, `${width}px card count`).toBe(5);
+    expect(layout.columns, `${width}px grid columns`).toBe(width >= 700 ? 5 : 2);
+    for (const [index, occupancy] of layout.rowOccupancy.entries()) {
+      expect(Math.abs(occupancy - layout.contentWidth), `${width}px row ${index} fills the grid`).toBeLessThanOrEqual(2);
+    }
+    if (width < 700) expect(layout.lastColumnSpan).toBe("span 2");
+    expect(layout.overflow, `${width}px overflow`).toBeLessThanOrEqual(1);
+  }
   await expectNoErrors(errors);
 });
 

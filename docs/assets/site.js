@@ -689,13 +689,16 @@ function makeTile(item, lo, hi) {
   tile.className = `tile${item.insufficient ? " insufficient" : ""}${state.sel === item.id ? " selected" : ""}`;
   tile.dataset.id = item.id;
   tile.setAttribute("aria-label", `${item.name}: ${metricText(item[state.metric])} ${metricMeta(state.metric).short}; n=${fmtInt(item.n)}${item.insufficient ? "; insufficient data" : ""}`);
+  tile.title = item.name;
   tile.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
   if (!item.insufficient) {
     const bg = colorFor(item[state.metric], lo, hi);
     tile.style.setProperty("--tile-bg", bg);
     tile.style.color = readableText(bg);
   }
-  tile.textContent = state.dim === "state" ? item.id : item.name.length > 16 ? `${item.name.slice(0, 15)}…` : item.name;
+  const rawName = state.dim === "state" ? item.id : item.name;
+  const displayName = rawName.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  tile.textContent = displayName;
   tile.onclick = () => {
     if (state.dim === "total") return;
     state.sel = state.sel === item.id ? null : item.id;
@@ -920,9 +923,18 @@ function renderExplorer() {
   }
   const mapPanel = document.querySelector(".map-panel");
   const listPanel = document.querySelector(".list-panel");
+  const selectionA = document.querySelector(".selection-part-a");
   const sparse = ["total", "vintage", "home_ownership", "grade"].includes(state.dim);
-  if (mapPanel) mapPanel.classList.toggle("sparse-map", sparse);
+  const largeTiles = sparse || state.dim === "purpose";
+  if (mapPanel) {
+    mapPanel.classList.toggle("sparse-map", sparse);
+    mapPanel.classList.toggle("large-tiles", largeTiles);
+  }
   if (listPanel) listPanel.classList.toggle("sparse-list", sparse);
+  if (selectionA) {
+    selectionA.classList.toggle("compact-selection", sparse);
+    selectionA.classList.toggle("stretch-selection", !sparse);
+  }
 
   const scoreHost = $("#score-hist");
   if (scoreHost && !scoreHost.__observed) {

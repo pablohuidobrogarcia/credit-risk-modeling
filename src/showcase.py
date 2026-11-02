@@ -482,12 +482,12 @@ def og_card(summary: Dict[str, Any]) -> Path:
     ax.axis("off")
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.add_patch(plt.Rectangle((0, 0), 1, 1, color="#0B2545"))
-    ax.add_patch(plt.Rectangle((0, 0), 1, 0.09, color=vs.OKABE_ITO["orange"]))
+    ax.add_patch(plt.Rectangle((0, 0), 1, 1, color=vs.OKABE_ITO["ink"]))
+    ax.add_patch(plt.Rectangle((0, 0), 1, 0.09, color=vs.OKABE_ITO["lilac"]))
     ax.text(0.055, 0.86, "Credit Risk Modeling", color="white", fontsize=30, fontweight="bold")
     ax.text(0.055, 0.79, "Lending Club · PD · LGD · EL · Monte Carlo capital",
-            color="#BFD3E6", fontsize=15)
-    ax.plot([0.055, 0.945], [0.72, 0.72], color="#2E5A88", lw=1.5)
+            color=vs.OKABE_ITO["lilac_light"], fontsize=15)
+    ax.plot([0.055, 0.945], [0.72, 0.72], color=vs.OKABE_ITO["periwinkle"], lw=1.5)
 
     cards = [
         ("Champion AUC", f"{pd_['champion_auc']:.4f}", "Gini " + f"{pd_['champion_gini']:.4f}"),
@@ -498,22 +498,22 @@ def og_card(summary: Dict[str, Any]) -> Path:
     x0, dx = 0.055, 0.225
     for i, (label, value, sub) in enumerate(cards):
         x = x0 + i * dx
-        ax.text(x, 0.56, label, color="#9FC0E0", fontsize=14)
+        ax.text(x, 0.56, label, color=vs.OKABE_ITO["lilac_light"], fontsize=14)
         ax.text(x, 0.40, value, color="white", fontsize=27, fontweight="bold")
-        ax.text(x, 0.33, sub, color="#9FC0E0", fontsize=12)
+        ax.text(x, 0.33, sub, color=vs.OKABE_ITO["periwinkle_light"], fontsize=12)
 
     ax.text(0.055, 0.19,
             "Fully reproducible · mature "
             f"{pd_.get('train_years', [2010])[0]}-{pd_.get('oot_years', [2015])[-1]} validation · "
             "every number from summary.json",
-            color="#BFD3E6", fontsize=12.5)
+            color=vs.OKABE_ITO["lilac_light"], fontsize=12.5)
     ax.text(0.055, 0.125, "github.com/pablohuidobrogarcia/credit-risk-modeling",
-            color="#9FC0E0", fontsize=12.5)
+            color=vs.OKABE_ITO["periwinkle_light"], fontsize=12.5)
     DOCS_ASSETS.mkdir(parents=True, exist_ok=True)
     out = DOCS_ASSETS / "og-card.png"
     # Fixed 1200x630 output: no tight bbox, so the social card is exactly the
     # size Open Graph expects.
-    fig.savefig(out, dpi=100, facecolor="#0B2545", bbox_inches=None, pad_inches=0)
+    fig.savefig(out, dpi=100, facecolor=vs.OKABE_ITO["ink"], bbox_inches=None, pad_inches=0)
     plt.close(fig)
     return out
 
@@ -546,7 +546,7 @@ def figure_static_risk_surface(summary: Dict[str, Any]) -> Path:
         ri = rhos.index(grid["rho"][k]) if grid["rho"][k] in rhos else 0
         pj = pds.index(grid["pd_mult"][k]) if grid["pd_mult"][k] in pds else 0
         var_mat[pj, ri] = grid["var_0.999"][k] / summary["simulation"]["total_ead"] * 100
-    im = ax.imshow(var_mat, aspect="auto", cmap="YlOrRd")
+    im = ax.imshow(var_mat, aspect="auto", cmap=vs.risk_cmap())
     ax.set_xticks(range(len(rhos)))
     ax.set_xticklabels([f"{r:.2f}" for r in rhos], rotation=45)
     ax.set_yticks(range(len(pds)))
@@ -595,7 +595,7 @@ def figure_static_loan_map(summary: Dict[str, Any]) -> Path:
     pc1 = [p["pc1"] for p in pts]
     pc2 = [p["pc2"] for p in pts]
     default = [p["default"] for p in pts]
-    colors = ['#d62728' if d else '#1f77b4' for d in default]
+    colors = [vs.ROLE["danger"] if d else vs.ROLE["secondary"] for d in default]
     ax.scatter(pc1, pc2, c=colors, alpha=0.5, s=10)
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")

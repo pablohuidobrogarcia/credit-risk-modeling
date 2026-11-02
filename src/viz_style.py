@@ -18,48 +18,67 @@ import matplotlib
 
 matplotlib.use("Agg")  # headless / CI friendly
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.ticker import FuncFormatter  # noqa: E402
 
 from .config import project_root  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Palette — Okabe-Ito, the standard colorblind-safe qualitative set.
+# Palette — the same ribbon palette used by the interactive dashboard.
 # ---------------------------------------------------------------------------
 OKABE_ITO: dict[str, str] = {
-    "blue": "#0072B2",
-    "orange": "#E69F00",
-    "green": "#009E73",
-    "vermillion": "#D55E00",
-    "purple": "#CC79A7",
-    "sky": "#56B4E9",
-    "yellow": "#F0E442",
-    "grey": "#999999",
+    "lilac_light": "#d6cdf5",
+    "lilac": "#a99be0",
+    "lilac_dark": "#4b3d8a",
+    "periwinkle_light": "#c3cff6",
+    "periwinkle": "#8fa6ea",
+    "sky_light": "#b6dcf3",
+    "sky": "#7fbbe6",
+    "teal_light": "#acdfd6",
+    "teal": "#6fc6b9",
+    "green_light": "#c9e8b4",
+    "green": "#93d07f",
+    "ink": "#1f2937",
+    "grey": "#7b8494",
     "black": "#000000",
-    "navy": "#1B3A5B",
-    "light_grey": "#DDDDDD",
+    "light_grey": "#d9dbe3",
 }
+
+RISK_RAMP: list[str] = [
+    OKABE_ITO["green"],
+    OKABE_ITO["teal"],
+    OKABE_ITO["sky"],
+    OKABE_ITO["periwinkle"],
+    OKABE_ITO["lilac"],
+    OKABE_ITO["lilac_dark"],
+]
 
 # Semantic roles so the same quantity is always the same colour across figures.
 ROLE: dict[str, str] = {
-    "primary": OKABE_ITO["blue"],
-    "secondary": OKABE_ITO["orange"],
-    "tertiary": OKABE_ITO["green"],
-    "danger": OKABE_ITO["vermillion"],
+    "primary": OKABE_ITO["periwinkle"],
+    "secondary": OKABE_ITO["teal"],
+    "tertiary": OKABE_ITO["sky"],
+    "danger": OKABE_ITO["lilac_dark"],
     "muted": OKABE_ITO["grey"],
     "accent": OKABE_ITO["sky"],
-    "series": OKABE_ITO["purple"],
-    "reference": OKABE_ITO["black"],
+    "series": OKABE_ITO["lilac"],
+    "reference": OKABE_ITO["ink"],
 }
 
 # Category colours for multi-series bars/segments (cycled in order).
 CATEGORICAL: list[str] = [
-    OKABE_ITO["blue"],
-    OKABE_ITO["orange"],
-    OKABE_ITO["green"],
-    OKABE_ITO["vermillion"],
-    OKABE_ITO["purple"],
+    OKABE_ITO["periwinkle"],
+    OKABE_ITO["teal"],
     OKABE_ITO["sky"],
+    OKABE_ITO["lilac"],
+    OKABE_ITO["green"],
+    OKABE_ITO["lilac_dark"],
 ]
+
+def risk_cmap() -> LinearSegmentedColormap:
+    """Return the shared green→teal→sky→periwinkle→lilac risk ramp."""
+    return LinearSegmentedColormap.from_list("studio_risk", RISK_RAMP)
+
 
 SHOWCASE_DIR = project_root() / "reports" / "figures" / "showcase"
 DOCS_ASSETS = project_root() / "docs" / "assets"
@@ -77,28 +96,28 @@ def apply_style() -> None:
             "figure.dpi": 130,
             "savefig.dpi": 130,
             "savefig.bbox": "tight",
-            "savefig.facecolor": "white",
-            "figure.facecolor": "white",
-            "axes.facecolor": "white",
+            "savefig.facecolor": "#ffffff",
+            "figure.facecolor": "#ffffff",
+            "axes.facecolor": "#ffffff",
             "axes.grid": True,
-            "grid.alpha": 0.25,
+            "grid.alpha": 0.35,
             "grid.color": OKABE_ITO["light_grey"],
             "grid.linewidth": 0.7,
             "axes.spines.top": False,
             "axes.spines.right": False,
-            "axes.edgecolor": "#333333",
+            "axes.edgecolor": OKABE_ITO["ink"],
             "axes.titleweight": "bold",
             "axes.titlesize": 13,
             "axes.titlelocation": "left",
             "axes.titlepad": 12,
             "axes.labelsize": 10.5,
-            "axes.labelcolor": "#222222",
+            "axes.labelcolor": OKABE_ITO["ink"],
             "xtick.labelsize": 9.5,
             "ytick.labelsize": 9.5,
             "legend.frameon": False,
             "legend.fontsize": 9,
             "font.size": 10.5,
-            "text.color": "#222222",
+            "text.color": OKABE_ITO["ink"],
         }
     )
 

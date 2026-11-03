@@ -170,6 +170,9 @@ function applyTheme() {
 function metricMeta(id) {
   return METRICS.find((m) => m.id === id) || METRICS[0];
 }
+function metricColorLabel() {
+  return metricMeta(state.metric).short.replace(/^./, (char) => char.toLowerCase());
+}
 function metricValue(item, metric = state.metric) {
   return num(item ? item[metric] : null);
 }
@@ -215,6 +218,7 @@ function infoContext() {
     auc_gap: (D && D.display && D.display.auc_gap_vs_benchmark) || "—",
     rho_basel: (D && D.display && D.display.rho_basel) || "—",
     el_amount: fmtMoney(meta.el_amount),
+    metric: metricColorLabel(),
   };
 }
 
@@ -687,7 +691,12 @@ function selectExplorerItem(item) {
 
 function geoLabel(item, fullName) {
   const masked = item.insufficient ? `; n < ${fmtInt(pe().meta.min_n)}, masked` : "";
-  return `${fullName}: n=${fmtInt(item.n)}, default ${fmtPct(item.default_rate, 2)} (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)})${masked}`;
+  const metric = metricMeta(state.metric).short;
+  const value = metricText(item[state.metric], state.metric, 2);
+  const ci = state.metric === "default_rate"
+    ? ` (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)})`
+    : "";
+  return `${fullName}: ${metric} ${value}${ci}; n=${fmtInt(item.n)}${masked}`;
 }
 
 function showGeoTooltip(host, text) {
@@ -758,21 +767,20 @@ function loadUsMap() {
 }
 
 function setGeoMeta(title, items, subtitle, captionId, fallbackCaption) {
-  const meta = pe().meta;
   $("#map-title").textContent = title;
   $("#map-subtitle").textContent = subtitle;
-  $("#map-metric-badge").textContent = "Observed default";
+  $("#map-metric-badge").textContent = metricMeta(state.metric).short;
   $("#map-note").textContent = resolveInfoText((INFO[captionId] && INFO[captionId].text) || fallbackCaption);
 }
 
 function setGeoLegend(lo, hi) {
   const meta = pe().meta;
-  $("#map-legend").innerHTML = `<span class="legend-num">${fmtPct(lo, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${fmtPct(hi, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
+  $("#map-legend").innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
 }
 
 function geoRange(items) {
-  const eligible = items.filter((item) => !item.insufficient && num(item.default_rate) != null);
-  const values = eligible.map((item) => item.default_rate);
+  const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
+  const values = eligible.map((item) => item[state.metric]);
   return {
     eligible,
     lo: values.length ? Math.min(...values) : 0,
@@ -781,11 +789,11 @@ function geoRange(items) {
 }
 
 function renderStateMap(host, items, meta) {
-  const { eligible, lo, hi } = geoRange(items);
+  const { lo, hi } = geoRange(items);
   setGeoMeta("US state map", items,
-    `${items.length} states and DC · ${meta.n_total.toLocaleString("en-US")} loans · color = observed default`,
+    `${items.length} states and DC · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
     "state-map",
-    "Each state is colored by its default rate; hatched = fewer than 500 loans. Click a state or use the small-states buttons.");
+    "Each state is colored by the selected metric; hatched = fewer than 500 loans. Click a state or use the small-states buttons.");
   setGeoLegend(lo, hi);
   host.className = "geo-visual state-visual";
   if (!US_MAP_SVG) {
@@ -817,7 +825,7 @@ function renderStateMap(host, items, meta) {
       bindGeoItem(host, path, item, fullName, false);
       return;
     }
-    path.style.setProperty("--state-fill", colorFor(item.default_rate, lo, hi));
+    path.style.setProperty("--state-fill", colorFor(item[state.metric], lo, hi));
     path.setAttribute("tabindex", "0");
     path.setAttribute("role", "button");
     bindGeoItem(host, path, item, fullName, true);
@@ -828,7 +836,7 @@ function renderStateMap(host, items, meta) {
     if (item.insufficient) {
       return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(geoLabel(item, fullName))}">${esc(item.id)}</button>`;
     }
-    const bg = colorFor(item.default_rate, lo, hi);
+    const bg = colorFor(item[state.metric], lo, hi);
     return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(geoLabel(item, fullName))}">${esc(item.id)}</button>`;
   };
   const smallHost = $(".state-small-strip", host);
@@ -852,9 +860,9 @@ function renderStateMap(host, items, meta) {
 function renderGradeStaircase(host, items, meta) {
   const { lo, hi } = geoRange(items);
   setGeoMeta("Grade risk staircase", items,
-    `${items.length} grades · ${meta.n_total.toLocaleString("en-US")} loans · color = observed default`,
+    `${items.length} grades · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
     "grade-staircase",
-    "Step height and color show default rate by grade.");
+    "Step height and color show the selected metric by grade.");
   setGeoLegend(lo, hi);
   host.className = "geo-visual grade-visual";
   const ordered = items.slice().sort((a, b) => a.id.localeCompare(b.id));
@@ -865,18 +873,18 @@ function renderGradeStaircase(host, items, meta) {
   const baseline = height - 38;
   const top = 38;
   const stepWidth = Math.max(28, (width - margin * 2 - gap * (ordered.length - 1)) / ordered.length);
-  const maxRate = Math.max(...ordered.map((item) => num(item.default_rate) || 0), 0.0001);
+  const maxValue = Math.max(...ordered.map((item) => num(item[state.metric]) || 0), 0.0001);
   const maxHeight = baseline - top;
 
   const groups = ordered.map((item, index) => {
-    const rate = num(item.default_rate) || 0;
-    const stepHeight = Math.max(22, 22 + (rate / maxRate) * (maxHeight - 22));
+    const value = num(item[state.metric]) || 0;
+    const stepHeight = Math.max(22, 22 + (value / maxValue) * (maxHeight - 22));
     const selected = state.sel === item.id;
     const raise = selected ? 6 : 0;
     const x = margin + index * (stepWidth + gap);
     const y = baseline - stepHeight - raise;
     const cx = x + stepWidth / 2;
-    const bg = colorFor(rate, lo, hi);
+    const bg = colorFor(value, lo, hi);
     const textColor = readableText(bg);
     const cls = `grade-step${item.insufficient ? " is-masked" : ""}${selected ? " is-selected" : ""}`;
     const fill = item.insufficient ? "url(#grade-hatch)" : bg;
@@ -884,7 +892,7 @@ function renderGradeStaircase(host, items, meta) {
     return `<g class="${cls}" data-id="${esc(item.id)}" tabindex="${tabindex}" role="button">
       <rect class="grade-step-face" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${stepWidth.toFixed(1)}" height="${stepHeight.toFixed(1)}" rx="7" style="fill:${fill}"></rect>
       <text class="grade-step-letter" x="${cx.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle">${esc(item.id)}</text>
-      <text class="grade-step-rate" x="${cx.toFixed(1)}" y="${(y + 25).toFixed(1)}" text-anchor="middle" style="fill:${item.insufficient ? "var(--ink)" : textColor}">${fmtPct(rate, 1)}</text>
+      <text class="grade-step-rate" x="${cx.toFixed(1)}" y="${(y + 25).toFixed(1)}" text-anchor="middle" style="fill:${item.insufficient ? "var(--ink)" : textColor}">${metricText(value, state.metric, 1)}</text>
       <text class="grade-step-n" x="${cx.toFixed(1)}" y="${(baseline + 24).toFixed(1)}" text-anchor="middle">n=${fmtInt(item.n)}</text>
     </g>`;
   }).join("");

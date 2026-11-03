@@ -135,6 +135,57 @@ test("state map exposes small-state buttons and blocks masked states", async ({ 
   await expectNoErrors(errors);
 });
 
+test("state map follows the metric selector", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').evaluate((element) => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+  await page.waitForTimeout(250);
+  const fills = () => page.locator("#tile-map .us-map-svg .st:not(.is-masked)").evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fill));
+  const legend = () => page.locator("#map-legend .legend-num").allTextContents();
+  const chipFill = () => page.locator('.state-small-strip .state-chip[data-id="RI"]').evaluate((element) => getComputedStyle(element).backgroundColor);
+  const defaultFills = await fills();
+  const defaultLegend = await legend();
+  const defaultChip = await chipFill();
+  await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
+
+  await page.locator("#metric-tabs button[data-metric='pred_pd']").click();
+  await expect(page.locator("#map-subtitle")).toContainText("color = predicted PD");
+  await page.waitForTimeout(250);
+  const predFills = await fills();
+  expect(predFills.filter((fill, index) => fill !== defaultFills[index]).length).toBeGreaterThanOrEqual(10);
+  expect(await legend()).not.toEqual(defaultLegend);
+  expect(await chipFill()).not.toBe(defaultChip);
+  await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
+  await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').hover();
+  await expect(page.locator(".geo-tooltip")).toContainText("Predicted PD");
+  await expect(page.locator(".geo-tooltip")).not.toContainText("95% CI");
+
+  await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
+  await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
+  await page.waitForTimeout(250);
+  expect(await fills()).not.toEqual(defaultFills);
+  await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
+  await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').hover();
+  await expect(page.locator(".geo-tooltip")).toContainText("Expected loss");
+  await expect(page.locator(".geo-tooltip")).not.toContainText("95% CI");
+
+  await page.locator("#metric-tabs button[data-metric='default_rate']").click();
+  await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
+  await page.waitForTimeout(250);
+  expect(await fills()).toEqual(defaultFills);
+  expect(await legend()).toEqual(defaultLegend);
+  expect(await chipFill()).toBe(defaultChip);
+  await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
+
+  for (const [width, height] of [[1100, 900], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#view=explorer&dim=state&metric=pred_pd");
+    await expect(page.locator("#map-subtitle")).toContainText("color = predicted PD");
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(overflow, `${width}px`).toBeLessThanOrEqual(1);
+  }
+  await expectNoErrors(errors);
+});
+
 test("grade staircase renders A to G and selects a grade", async ({ page }) => {
   const errors = await open(page);
   await page.locator('#dimension-tabs button[data-dim="grade"]').click();
@@ -161,6 +212,57 @@ test("grade staircase renders A to G and selects a grade", async ({ page }) => {
   await expect(page.locator(".grade-step")).toHaveCount(7);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+  await expectNoErrors(errors);
+});
+
+test("grade staircase follows the metric selector", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('#dimension-tabs button[data-dim="grade"]').click();
+  const stepData = () => page.locator(".grade-step").evaluateAll((elements) => elements.map((step) => ({
+    id: step.dataset.id,
+    height: Math.round(step.querySelector(".grade-step-face").getBoundingClientRect().height * 100) / 100,
+    label: step.querySelector(".grade-step-rate").textContent,
+    fill: getComputedStyle(step.querySelector(".grade-step-face")).fill,
+  })));
+  const defaultData = await stepData();
+  const defaultLegend = await page.locator("#map-legend .legend-num").allTextContents();
+  await page.locator('.grade-step[data-id="B"]').click();
+  await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
+
+  await page.locator("#metric-tabs button[data-metric='pred_pd']").click();
+  await expect(page.locator("#map-subtitle")).toContainText("color = predicted PD");
+  const predData = await stepData();
+  expect(predData.map((step) => step.height)).not.toEqual(defaultData.map((step) => step.height));
+  expect(predData.map((step) => step.label)).not.toEqual(defaultData.map((step) => step.label));
+  expect(await page.locator("#map-legend .legend-num").allTextContents()).not.toEqual(defaultLegend);
+  const gradeB = PE.dimensions.grade.find((item) => item.id === "B");
+  await expect(page.locator('.grade-step[data-id="B"] .grade-step-rate')).toHaveText(pct(gradeB.pred_pd, 1));
+  await expect(page.locator('.grade-step[data-id="B"]')).toHaveClass(/is-selected/);
+  await page.locator('.grade-step[data-id="B"]').hover();
+  await expect(page.locator(".geo-tooltip")).toContainText("Predicted PD");
+  await expect(page.locator(".geo-tooltip")).not.toContainText("95% CI");
+
+  await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
+  await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
+  const elData = await stepData();
+  expect(elData.map((step) => step.height)).not.toEqual(predData.map((step) => step.height));
+  await expect(page.locator('.grade-step[data-id="B"] .grade-step-rate')).toHaveText(pct(gradeB.el_pct_ead, 1));
+  await expect(page.locator('.grade-step[data-id="B"]')).toHaveClass(/is-selected/);
+
+  await page.locator("#metric-tabs button[data-metric='default_rate']").click();
+  await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
+  const restored = await stepData();
+  expect(restored.map((step) => step.height)).toEqual(defaultData.map((step) => step.height));
+  expect(restored.map((step) => step.label)).toEqual(defaultData.map((step) => step.label));
+  expect(await page.locator("#map-legend .legend-num").allTextContents()).toEqual(defaultLegend);
+
+  for (const [width, height] of [[1100, 900], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#view=explorer&dim=grade&metric=el_pct_ead");
+    await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(overflow, `${width}px`).toBeLessThanOrEqual(1);
+  }
   await expectNoErrors(errors);
 });
 

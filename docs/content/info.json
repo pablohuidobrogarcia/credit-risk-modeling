@@ -181,13 +181,13 @@
   },
   "state-map": {
     "title": "US state map",
-    "text": "Each state is colored by its default rate; hatched = fewer than 500 loans. Click a state or use the small-states buttons.",
+    "text": "Each state is colored by {metric}; hatched = fewer than 500 loans. Click a state or use the small-states buttons.",
     "try": "Hover a small state and use its compact button to select it.",
     "term": "default"
   },
   "grade-staircase": {
     "title": "Grade risk staircase",
-    "text": "Step height and color show default rate by grade.",
+    "text": "Step height and color show {metric} by grade.",
     "try": "Compare grade A with grade F, then read the selection summary.",
     "term": "grade"
   },

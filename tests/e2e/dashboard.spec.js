@@ -1150,6 +1150,50 @@ test("explorer panels keep the State tab box geometry at 1360 and 1100", async (
   await expectNoErrors(errors);
 });
 
+test("resized explorer panels contain their content without clipping or horizontal scroll", async ({ page }) => {
+  const errors = await open(page);
+  const measure = () => page.evaluate(() => {
+    const selection = document.querySelector(".selection-part-a");
+    const list = document.querySelector(".rank-list");
+    return {
+      selectionClient: selection.clientHeight,
+      selectionScroll: selection.scrollHeight,
+      listClient: list.clientWidth,
+      listScroll: list.scrollWidth,
+      names: [...document.querySelectorAll(".rank-name")]
+        .filter((name) => name.scrollWidth > name.clientWidth + 1)
+        .map((name) => name.textContent.trim().slice(0, 40)),
+    };
+  });
+  const check = async (label) => {
+    const result = await measure();
+    expect(result.selectionScroll, `${label} selection height`).toBeLessThanOrEqual(result.selectionClient + 1);
+    expect(result.listScroll, `${label} ranked width`).toBeLessThanOrEqual(result.listClient + 1);
+    expect(result.names, `${label} truncated names`).toEqual([]);
+  };
+  for (const width of [1360, 1100]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#view=explorer");
+    await page.waitForTimeout(700);
+    for (const dim of ["Total", "State", "Grade", "Purpose", "Vintage", "Home ownership"]) {
+      await page.locator("#dimension-tabs button").filter({ hasText: dim }).click();
+      await page.waitForTimeout(200);
+      await check(`${width} ${dim}`);
+    }
+    await page.locator("#dimension-tabs button").filter({ hasText: "State" }).click();
+    await page.waitForTimeout(200);
+    await page.locator("#tile-map .tile[data-id='CA']").click();
+    await page.waitForTimeout(200);
+    await check(`${width} State CA`);
+    await page.locator("#dimension-tabs button").filter({ hasText: "Purpose" }).click();
+    await page.waitForTimeout(200);
+    await page.locator("#rank-list .rank-row").first().click();
+    await page.waitForTimeout(200);
+    await check(`${width} Purpose selected row`);
+  }
+  await expectNoErrors(errors);
+});
+
 test("all visible text keeps a readable contrast in light and dark", async ({ page }) => {
   const contrastViolations = async () => page.evaluate(() => {
     const parse = (value) => {

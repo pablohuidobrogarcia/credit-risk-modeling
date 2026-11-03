@@ -404,6 +404,34 @@ test("hero KPI cards use ribbon pastels with centered ink text", async ({ page }
   await expectNoErrors(errors);
 });
 
+test("hero KPI cards use resolved, non-redundant texts", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  const errors = await open(page);
+  const cards = page.locator(".kpi-strip .kpi-card");
+  const meta = PE.meta;
+  await expect(cards.nth(0).locator(".mini-label")).toHaveText("Loans analyzed");
+  await expect(cards.nth(0)).toContainText(`Resolved Lending Club loans, ${DATA.display.data_years} · ${pct(meta.default_rate_total, 1)} ended in default`);
+  await expect(cards.nth(1).locator(".mini-label")).toHaveText("Model accuracy (AUC)");
+  await expect(cards.nth(1)).toContainText(`about ${Math.round(DATA.pd.champion_auc * 100)}% of the time`);
+  await expect(cards.nth(1)).toContainText(`tested on ${DATA.display.oot_years} loans`);
+  await expect(cards.nth(2).locator(".mini-label")).toHaveText("Expected loss");
+  await expect(cards.nth(2)).toContainText(`of exposure: about ${DATA.display.el_amount} on average`);
+  await expect(cards.nth(3).locator(".mini-label")).toHaveText("Bad-year loss (VaR 99.9%)");
+  await expect(cards.nth(3)).toContainText("Exceeded once in 1,000 simulated years");
+  await expect(cards.nth(3).locator(".kpi-sub")).toContainText("$");
+  const heroText = await page.locator(".kpi-strip").innerText();
+  expect(heroText).not.toMatch(/\{[a-zA-Z0-9_]+\}/);
+  expect(heroText).not.toContain("Gini");
+  expect(heroText).not.toMatch(/rho|ρ/i);
+  expect(heroText).not.toContain("of EAD");
+  for (const [width, height] of [[1360, 900], [1100, 900], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(overflow, `${width}px`).toBeLessThanOrEqual(1);
+  }
+  await expectNoErrors(errors);
+});
+
 test("back and forward restore explorer state", async ({ page }) => {
   const errors = await open(page);
   await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').click();

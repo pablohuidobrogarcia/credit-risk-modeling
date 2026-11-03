@@ -30,10 +30,22 @@
     "term": "loan"
   },
   "kpi-loans": {
-    "title": "Resolved loans (2007–2018)",
+    "title": "Loans analyzed",
     "text": "This is the full analysis sample: {n_rows} loans with a final outcome anywhere in the 2007–2018 snapshot. It is not the same as the primary test window.",
     "try": "Compare it with the {n_oot} loans in the explorer below.",
     "term": "resolved-loan"
+  },
+  "kpi-auc": {
+    "title": "Model accuracy (AUC)",
+    "text": "AUC is the probability that a random defaulter ranks above a random non-defaulter. The champion score is fitted on 2010–2013 and tested on later loans; 0.5 is chance.",
+    "try": "Compare the champion with the benchmark in the Evidence table.",
+    "term": "auc"
+  },
+  "kpi-var": {
+    "title": "Bad-year loss (VaR 99.9%)",
+    "text": "VaR 99.9% is the simulated loss that 999 of 1,000 base-case years stay below. It is a tail quantile, not a worst case, and it depends on the Vasicek assumptions.",
+    "try": "Open Risk Lab and compare VaR 99.9% with ES 99.9%.",
+    "term": "var"
   },
   "kpi-observed": {
     "title": "Observed default rate",

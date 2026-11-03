@@ -591,14 +591,14 @@ function renderShell() {
   $("#hero-risk").onclick = () => setView("risk");
 
   countUp($("#kpi-loans"), D.data.n_rows, fmtInt);
-  $("#kpi-loans-sub").textContent = `All resolved loans in the ${disp.data_years || "2007–2018"} snapshot`;
+  $("#kpi-loans-sub").textContent = `Resolved Lending Club loans, ${disp.data_years || "2007-2018"} · ${fmtPct(meta.default_rate_total, 1)} ended in default`;
   countUp($("#kpi-auc"), D.pd.champion_auc, (v) => fmtNum(v, 4));
-  $("#kpi-auc-sub").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)} · ${disp.oot_years || "2014–2015"} OOT`;
+  $("#kpi-auc-sub").textContent = `Ranks a defaulter above a non-defaulter about ${Math.round(D.pd.champion_auc * 100)}% of the time · tested on ${disp.oot_years || "2014-2015"} loans`;
   countUp($("#kpi-el"), D.lgd.el_rate_oot, (v) => fmtPct(v, 2));
-  $("#kpi-el-sub").textContent = `${fmtMoney(D.lgd.expected_loss_oot)} of EAD`;
+  $("#kpi-el-sub").textContent = `of exposure: about ${fmtMoney(D.lgd.expected_loss_oot)} on average`;
   const stats = D.simulation.statistics;
   countUp($("#kpi-var"), stats["var_0.999_pct_ead"], (v) => fmtPct(v, 2));
-  $("#kpi-var-sub").textContent = `${fmtMoney(stats["var_0.999"])} · ρ = ${fmtNum(D.simulation.asset_correlation, 2)}`;
+  $("#kpi-var-sub").textContent = `Exceeded once in 1,000 simulated years · ${fmtMoney(stats["var_0.999"])}`;
 
   $$(".view-tab").forEach((tab) => {
     const on = tab.dataset.view === state.view;

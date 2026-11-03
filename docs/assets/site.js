@@ -225,6 +225,8 @@ function infoContext() {
     el_rate: fmtPct(meta.el_pct_ead, 2),
     min_n: fmtInt(meta.min_n),
     n_rows: fmtInt(D && D.data ? D.data.n_rows : null),
+    data_years: (D && D.display && D.display.data_years) || "2007–2018",
+    train_years: (D && D.display && D.display.train_years) || "2010–2013",
     champion_auc: fmtNum(D && D.pd ? D.pd.champion_auc : null, 4),
     window_immature_auc: (D && D.display && D.display.window_immature_auc) || "—",
     var999: fmtPct(stats["var_0.999_pct_ead"], 2),
@@ -990,7 +992,7 @@ function renderStateMap(host, items, meta) {
         <button type="button" class="map-zoom-btn map-zoom-reset" data-map-zoom="reset" aria-label="Reset zoom">reset</button>
       </div>
     </div>
-    <p class="map-zoom-hint" id="map-zoom-hint">Ctrl + scroll or use + / − to zoom, drag to move</p>
+    <p class="map-zoom-hint" id="map-zoom-hint">Ctrl + scroll or use + / − to zoom, drag to move ${infoButton("map-zoom", "Map zoom")}${infoButton("masked-states", "Masked states")}</p>
     <div class="state-small-strip" role="group" aria-label="Small states"></div>
     <div class="state-all-grid" role="group" aria-label="All states"></div>
     <div class="geo-tooltip" role="status" hidden></div>`;
@@ -1026,7 +1028,7 @@ function renderStateMap(host, items, meta) {
     return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(geoLabel(item, fullName))}">${esc(item.id)}</button>`;
   };
   const smallHost = $(".state-small-strip", host);
-  smallHost.innerHTML = SMALL_STATES.map((id) => byId.get(id)).filter(Boolean).map(chip).join("");
+  smallHost.innerHTML = SMALL_STATES.map((id) => byId.get(id)).filter(Boolean).map(chip).join("") + infoButton("small-states", "Small states");
   const allHost = $(".state-all-grid", host);
   allHost.innerHTML = items.slice().sort((a, b) => a.id.localeCompare(b.id)).map(chip).join("");
 
@@ -1129,7 +1131,7 @@ function renderTileMap(host, items, meta) {
   const lo = values.length ? Math.min(...values) : 0;
   const hi = values.length ? Math.max(...values) : 1;
   const dimLabel = state.dim === "total" ? "Portfolio" : dimMeta(state.dim).label;
-  $("#map-title").textContent = state.dim === "state" ? "US state tile map" : state.dim === "total" ? "Portfolio tile" : `${dimLabel} segment map`;
+  $("#map-title").textContent = state.dim === "state" ? "US state map" : state.dim === "total" ? "Portfolio tile" : `${dimLabel} segment map`;
   $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricMeta(state.metric).short.toLowerCase()}`;
   $("#map-metric-badge").textContent = metricMeta(state.metric).short;
 
@@ -1390,7 +1392,7 @@ function renderHowBuilt() {
 function renderExplorer() {
   if (!pe()) return;
   const meta = pe().meta;
-  $("#explorer-caption").textContent = "Pick a dimension, then a tile or a ranked row, to compare one segment with the portfolio.";
+  $("#explorer-caption").textContent = "Pick a dimension, then a segment or a ranked row, to compare one slice with the portfolio.";
   renderDimensionTabs();
   renderMetricTabs();
   const search = $("#segment-search");

@@ -1,25 +1,25 @@
 {
   "dimension-tabs": {
     "title": "Dimension tabs",
-    "text": "These tabs change the whole explorer. State shows a US tile map; other dimensions show one tile per segment. Every tab uses the same primary mature test window: {primary_window}, {n_oot} resolved loans.",
-    "try": "Switch to Grade, then click the tile with the highest expected loss.",
+    "text": "These tabs change the explorer. State shows the US map; Grade shows the A–G staircase; other dimensions show one tile per segment. Every tab uses the same primary test window: {primary_window}, {n_oot} resolved loans.",
+    "try": "Switch to Grade and click the step with the highest expected loss.",
     "term": "primary-window"
   },
   "metric-tabs": {
     "title": "Color metric",
-    "text": "The color metric decides how tiles and bars are ordered and colored. Observed default is what actually happened; predicted PD is the model's calibrated estimate; expected loss combines PD, LGD and EAD.",
+    "text": "The color metric orders and colors the map, staircase, tiles and ranked bars. Observed default is what happened; predicted PD is the calibrated model output; expected loss is PD × LGD × EAD, shown as a share of EAD.",
     "try": "Choose Predicted PD and compare the ranking with observed default.",
     "term": "pd"
   },
   "map": {
     "title": "Segment map",
-    "text": "Click a tile to see its details.",
+    "text": "State uses the US map; Grade uses the staircase; other dimensions use tiles. Click or tap a segment to link it to the ranked list and summary. Use the small-state buttons for compact states.",
     "try": "Select California and compare its 95% interval with a small state.",
     "term": "small-segment-masking"
   },
   "ranked-list": {
     "title": "Ranked segments",
-    "text": "This list sorts the same segments by the selected metric. Longer bars mean a higher value on that metric. A row and its map tile stay linked, so clicking either one selects the same segment.",
+    "text": "This list sorts the same segments by the selected metric. Longer bars mean a higher value. A row and its map shape or staircase step stay linked, so clicking either selects the same segment.",
     "try": "Click the top row, then use the browser Back button.",
     "term": "default"
   },
@@ -31,13 +31,13 @@
   },
   "kpi-loans": {
     "title": "Loans analyzed",
-    "text": "This is the full analysis sample: {n_rows} loans with a final outcome anywhere in the 2007–2018 snapshot. It is not the same as the primary test window.",
+    "text": "This is the full analysis sample: {n_rows} loans with a final outcome anywhere in the {data_years} snapshot. It is not the same as the primary test window.",
     "try": "Compare it with the {n_oot} loans in the explorer below.",
     "term": "resolved-loan"
   },
   "kpi-auc": {
     "title": "Model accuracy (AUC)",
-    "text": "AUC is the probability that a random defaulter ranks above a random non-defaulter. The champion score is fitted on 2010–2013 and tested on later loans; 0.5 is chance.",
+    "text": "AUC is the probability that a random defaulter ranks above a random non-defaulter. The champion score is fitted on {train_years} and tested on later loans; 0.5 is chance.",
     "try": "Compare the champion with the benchmark in the Evidence table.",
     "term": "auc"
   },
@@ -56,7 +56,7 @@
   "kpi-ci": {
     "title": "95% confidence interval",
     "text": "The Wilson interval shows the sampling uncertainty around the observed default rate. A small segment can have a wide interval even when its point estimate looks dramatic.",
-    "try": "Select a state with fewer than {min_n} loans and compare its interval width.",
+    "try": "Hover a hatched state to see its wide interval.",
     "term": "wilson-ci"
   },
   "kpi-pd": {
@@ -193,15 +193,33 @@
   },
   "state-map": {
     "title": "US state map",
-    "text": "Each state is colored by {metric}; hatched = fewer than 500 loans. Click a state or use the small-states buttons.",
-    "try": "Hover a small state and use its compact button to select it.",
+    "text": "Each state is colored by {metric}; hatched states have fewer than {min_n} loans and cannot be selected. Click a state or use the small-state buttons.",
+    "try": "Hover a hatched state and use its compact button to select a similar small state.",
     "term": "default"
   },
   "grade-staircase": {
     "title": "Grade risk staircase",
-    "text": "Step height and color show {metric} by grade.",
+    "text": "Step height and color show {metric} by grade. Click or tap a step to link it to the ranked list and summary.",
     "try": "Compare grade A with grade F, then read the selection summary.",
     "term": "grade"
+  },
+  "map-zoom": {
+    "title": "Map zoom",
+    "text": "Ctrl + scroll or pinch zooms between 1x and 6x. Drag to pan, double-click to zoom in, or use the +, − and reset buttons. With the map focused, + / − / 0 also work. Zoom resets when you leave State.",
+    "try": "Zoom into the northeast and select a small state.",
+    "term": "small-segment-masking"
+  },
+  "small-states": {
+    "title": "Small states",
+    "text": "Rhode Island, Delaware, DC, Connecticut, New Jersey, Maryland, Massachusetts, New Hampshire and Vermont are too small to read on the map reliably. The compact strip repeats them; each button selects the same segment as its map shape.",
+    "try": "Use the strip to select Rhode Island.",
+    "term": "small-segment-masking"
+  },
+  "masked-states": {
+    "title": "Masked states",
+    "text": "Hatching marks segments with fewer than {min_n} loans. Their rates are too noisy to rank, so they are not selectable and do not receive a fill color. Hover or focus a hatched state to read its count and interval.",
+    "try": "Hover Iowa and compare its interval with California.",
+    "term": "small-segment-masking"
   },
   "el-note": {
     "title": "Expected loss ranking",

@@ -186,6 +186,39 @@ test("state map follows the metric selector", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
+test("all info content resolves and every visible info button opens and closes", async ({ page }) => {
+  const INFO = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/info.json"), "utf8"));
+  const LEARN = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/learn.json"), "utf8"));
+  const texts = Object.values(INFO).map((entry) => entry.text);
+  expect(new Set(texts).size, "duplicate info text").toBe(texts.length);
+  expect(JSON.stringify({ INFO, LEARN })).not.toContain("How do we know?");
+
+  const errors = await open(page);
+  for (const view of ["explorer", "risk", "evidence", "learn"]) {
+    await page.locator(`#view-tab-${view}`).click();
+    await page.waitForTimeout(300);
+    expect(await page.locator("body").innerText()).not.toMatch(/\{[a-z0-9_]+\}/i);
+    const buttons = page.locator("[data-info]");
+    const count = await buttons.count();
+    for (let index = 0; index < count; index += 1) {
+      const button = buttons.nth(index);
+      if (!(await button.isVisible())) continue;
+      await button.click();
+      const popover = page.locator("#info-popover");
+      await expect(popover).toBeVisible();
+      expect(await popover.innerText()).not.toMatch(/\{[a-z0-9_]+\}/i);
+      await page.keyboard.press("Escape");
+      await expect(popover).toBeHidden();
+      await button.focus();
+      await page.keyboard.press("Enter");
+      await expect(popover).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(popover).toBeHidden();
+    }
+  }
+  await expectNoErrors(errors);
+});
+
 test("state subtitles, small-state strip and expected-loss note stay correct", async ({ page }) => {
   const errors = await open(page);
   const subtitle = page.locator("#map-subtitle");

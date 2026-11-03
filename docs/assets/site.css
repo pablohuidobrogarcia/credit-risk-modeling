@@ -485,7 +485,7 @@ button, input, select { font: inherit; color: inherit; }
 .map-panel #map-subtitle { min-height: 3.2em; }
 .map-panel #map-legend { min-height: 1.45rem; }
 .map-panel #map-note { min-height: 3.6em; }
-.state-map-wrap { position: relative; width: 100%; aspect-ratio: 960 / 600; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; touch-action: none; cursor: grab; }
+.state-map-wrap { position: relative; width: 100%; aspect-ratio: 960 / 600; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; cursor: grab; }
 .state-map-wrap:active { cursor: grabbing; }
 .state-map-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .us-map-svg { width: 100%; height: 100%; display: block; overflow: visible; }
@@ -500,6 +500,8 @@ button, input, select { font: inherit; color: inherit; }
 .map-zoom-btn:disabled { opacity: 0.45; cursor: default; }
 .map-zoom-reset { font-size: 0.66rem; font-weight: 700; }
 .map-zoom-hint { flex: 0 0 auto; margin: 0.3rem 0 0; color: var(--fg-soft); font-size: 0.7rem; line-height: 1.25; text-align: center; }
+.map-zoom-hint .info-btn { width: 16px; height: 16px; min-width: 16px; margin-left: 0.2rem; font-size: 0.58rem; vertical-align: middle; }
+@media (max-width: 1120px) { .map-panel #map-note { min-height: 60px; } }
 .us-map-svg .st {
   fill: var(--state-fill, var(--card-solid)); stroke: var(--surface); stroke-width: 1.2;
   stroke-linejoin: round; cursor: pointer; outline: none;
@@ -510,6 +512,8 @@ button, input, select { font: inherit; color: inherit; }
 .us-map-svg .st.is-hovered, .us-map-svg .st:focus-visible { stroke: var(--accent); stroke-width: 2; }
 .us-map-svg .st.is-selected { stroke: var(--accent); stroke-width: 2.5; }
 .state-small-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(42px, 1fr)); grid-auto-rows: 1fr; align-content: stretch; gap: 0.3rem; margin-top: 0.55rem; flex: 1 1 auto; min-height: 0; }
+.state-small-strip .info-btn { align-self: center; justify-self: center; width: 18px; height: 18px; min-width: 18px; font-size: 0.62rem; }
+
 .state-all-grid { display: none; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); gap: 0.3rem; margin-top: 0.55rem; }
 .state-chip {
   border: 1px solid var(--border); border-radius: 7px; padding: 0.34rem 0.15rem;
@@ -826,7 +830,7 @@ body.welcome-open { overflow: hidden; }
   .sim-controls { grid-template-columns: 1fr; }
   .cutoff-kpis { grid-template-columns: repeat(2, 1fr); }
   .map-scroll { overflow-x: hidden; }
-  .state-map-wrap, .state-small-strip { display: none; }
+  .state-map-wrap, .state-small-strip, .map-zoom-hint { display: none; }
   .state-all-grid { display: grid; }
   .state-visual { min-height: 0; }
   .grade-visual { min-height: 320px; }

@@ -9,7 +9,7 @@ const DATA_URL = "data.json";
 const PLOTLY_URL = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js";
 const PLOTLY_SRI = "sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7";
 const USE_TILE_MAP = false;
-const SMALL_STATES = ["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT", "HI", "AK"];
+const SMALL_STATES = ["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT"];
 
 const DIMENSIONS = [
   { id: "state", label: "State" },
@@ -207,6 +207,14 @@ function infoButton(id, label, extraClass = "") {
   return `<button type="button" class="info-btn ${extraClass}" data-info="${esc(id)}" aria-label="About: ${esc(label)}" aria-expanded="false" aria-controls="info-popover">i</button>`;
 }
 
+function lgdRangeLabel() {
+  const values = dimItems().map((item) => num(item.mean_lgd)).filter((value) => value != null);
+  if (!values.length) return fmtNum(pe() && pe().meta ? pe().meta.mean_lgd : null, 3);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  return hi - lo < 0.0005 ? fmtNum((lo + hi) / 2, 3) : `${fmtNum(lo, 3)}–${fmtNum(hi, 3)}`;
+}
+
 function infoContext() {
   const meta = pe() ? pe().meta : {};
   const stats = (D && D.simulation && D.simulation.statistics) || {};
@@ -223,6 +231,7 @@ function infoContext() {
     mean_pd: fmtPct(meta.mean_pd, 2),
     portfolio_ead: fmtMoney(meta.ead_total),
     realized_lgd: fmtNum(D && D.lgd ? D.lgd.realised_lgd_oot : null, 4),
+    lgd: lgdRangeLabel(),
     auc_gap: (D && D.display && D.display.auc_gap_vs_benchmark) || "—",
     rho_basel: (D && D.display && D.display.rho_basel) || "—",
     el_amount: fmtMoney(meta.el_amount),
@@ -778,7 +787,8 @@ function setGeoMeta(title, items, subtitle, captionId, fallbackCaption) {
   $("#map-title").textContent = title;
   $("#map-subtitle").textContent = subtitle;
   $("#map-metric-badge").textContent = metricMeta(state.metric).short;
-  $("#map-note").textContent = resolveInfoText((INFO[captionId] && INFO[captionId].text) || fallbackCaption);
+  const caption = state.metric === "el_pct_ead" && INFO["el-note"] ? INFO["el-note"] : INFO[captionId];
+  $("#map-note").textContent = resolveInfoText((caption && caption.text) || fallbackCaption);
 }
 
 function setGeoLegend(lo, hi) {
@@ -958,7 +968,7 @@ function bindMapZoom(host, svg) {
 function renderStateMap(host, items, meta) {
   const { lo, hi } = geoRange(items);
   setGeoMeta("US state map", items,
-    `${items.length} states and DC · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
+    `${items.filter((item) => item.id !== "DC").length} states and DC · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
     "state-map",
     "Each state is colored by the selected metric; hatched = fewer than 500 loans. Click a state or use the small-states buttons.");
   setGeoLegend(lo, hi);

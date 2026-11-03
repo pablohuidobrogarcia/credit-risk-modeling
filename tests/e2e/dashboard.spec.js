@@ -186,6 +186,38 @@ test("state map follows the metric selector", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
+test("state subtitles, small-state strip and expected-loss note stay correct", async ({ page }) => {
+  const errors = await open(page);
+  const subtitle = page.locator("#map-subtitle");
+  const note = page.locator("#map-note");
+  const panelHeight = () => page.locator(".map-panel").evaluate((element) => element.getBoundingClientRect().height);
+
+  await expect(subtitle).toContainText("50 states and DC");
+  await expect(subtitle).not.toContainText("51 states");
+  const stripIds = await page.locator("#tile-map .state-small-strip .state-chip").evaluateAll((nodes) => nodes.map((node) => node.dataset.id));
+  expect(stripIds).toEqual(["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT"]);
+
+  const before = await panelHeight();
+  await expect(note).not.toContainText("Expected loss is roughly");
+  await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
+  await page.waitForTimeout(200);
+  const lgd = PE.meta.mean_lgd.toFixed(3);
+  await expect(note).toHaveText(`Expected loss is roughly PD x the portfolio LGD (${lgd}), so it ranks segments almost like Predicted PD.`);
+  expect(await note.innerText()).not.toMatch(/\{[a-z0-9_]+\}/i);
+  await expect(subtitle).toContainText("color = expected loss");
+  await expect(subtitle).not.toContainText("51 states");
+  expect(Math.abs(before - await panelHeight())).toBeLessThanOrEqual(1);
+
+  await page.locator("#metric-tabs button[data-metric='default_rate']").click();
+  await expect(note).not.toContainText("Expected loss is roughly");
+  await page.locator("#dimension-tabs button[data-dim='grade']").click();
+  await page.waitForTimeout(200);
+  await expect(note).not.toContainText("Expected loss is roughly");
+  await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
+  await expect(note).toContainText(`portfolio LGD (${lgd})`);
+  await expectNoErrors(errors);
+});
+
 test("state map and grade staircase keep the same camera across metrics", async ({ page }) => {
   const errors = await open(page);
   const metrics = ["default_rate", "pred_pd", "el_pct_ead"];

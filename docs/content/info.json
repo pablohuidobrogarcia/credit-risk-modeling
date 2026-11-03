@@ -203,6 +203,12 @@
     "try": "Compare grade A with grade F, then read the selection summary.",
     "term": "grade"
   },
+  "el-note": {
+    "title": "Expected loss ranking",
+    "text": "Expected loss is roughly PD x the portfolio LGD ({lgd}), so it ranks segments almost like Predicted PD.",
+    "try": "Switch between Expected loss and Predicted PD and compare the order.",
+    "term": "el"
+  },
   "how-built": {
     "title": "How this was built",
     "text": "The main steps of the project, in order. Click a number to read what was done, why, and what was learned.",

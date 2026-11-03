@@ -185,6 +185,12 @@
     "try": "Hover a small state and use its compact button to select it.",
     "term": "default"
   },
+  "grade-staircase": {
+    "title": "Grade risk staircase",
+    "text": "Step height and color show default rate by grade.",
+    "try": "Compare grade A with grade F, then read the selection summary.",
+    "term": "grade"
+  },
   "how-built": {
     "title": "How this was built",
     "text": "The main steps of the project, in order. Click a number to read what was done, why, and what was learned.",

@@ -69,6 +69,7 @@ test("every dimension tab changes the whole explorer and the URL", async ({ page
     await expect(page).toHaveURL(new RegExp(`dim=${dim}`));
     const items = PE.dimensions[dim];
     if (dim === "state") await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(items.length);
+    else if (dim === "grade") await expect(page.locator("#tile-map .grade-step")).toHaveCount(items.length);
     else await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(items.length);
     await expect(page.locator("#rank-list .rank-row")).toHaveCount(items.length);
     if (dim !== "total") {
@@ -129,6 +130,35 @@ test("state map exposes small-state buttons and blocks masked states", async ({ 
   await page.setViewportSize({ width: 1100, height: 900 });
   await page.goto("/#view=explorer&dim=state");
   await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(51);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  await expectNoErrors(errors);
+});
+
+test("grade staircase renders A to G and selects a grade", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator('#dimension-tabs button[data-dim="grade"]').click();
+  const steps = page.locator(".grade-step");
+  await expect(steps).toHaveCount(7);
+  const ids = await steps.evaluateAll((elements) => elements.map((element) => element.dataset.id));
+  expect(ids).toEqual(["A", "B", "C", "D", "E", "F", "G"]);
+  const stepG = page.locator('.grade-step[data-id="G"]');
+  await expect(stepG).toHaveAttribute("aria-disabled", "true");
+  await expect(stepG).toHaveAttribute("tabindex", "-1");
+  const stepB = page.locator('.grade-step[data-id="B"]');
+  await stepB.hover();
+  await expect(page.locator(".geo-tooltip")).toContainText("Grade B");
+  await expect(page.locator(".geo-tooltip")).toContainText("95% CI");
+  await stepB.click();
+  await expect(page.locator("#summary-title")).toHaveText("B");
+  await expect(stepB).toHaveClass(/is-selected/);
+  await expect(page).toHaveURL(/sel=B/);
+  const before = page.url();
+  await stepG.click({ force: true });
+  expect(page.url()).toBe(before);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#view=explorer&dim=grade");
+  await expect(page.locator(".grade-step")).toHaveCount(7);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
   await expectNoErrors(errors);
@@ -808,12 +838,19 @@ test("deep links still select every view", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("keyboard navigation reaches state shapes and rows", async ({ page }) => {
+test("keyboard navigation reaches state shapes, grade steps and rows", async ({ page }) => {
   const errors = await open(page);
   const firstShape = page.locator('#tile-map .us-map-svg .st[data-state="AK"]');
   await firstShape.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#summary-title")).toHaveText("AK");
+  await page.locator('#dimension-tabs button[data-dim="grade"]').click();
+  const stepA = page.locator('.grade-step[data-id="A"]');
+  await stepA.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator('.grade-step[data-id="B"]')).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#summary-title")).toHaveText("B");
   await page.locator("#rank-list .rank-row").first().focus();
   await page.keyboard.press("ArrowDown");
   const rowFocus = await page.evaluate(() => document.activeElement?.getAttribute("data-id"));

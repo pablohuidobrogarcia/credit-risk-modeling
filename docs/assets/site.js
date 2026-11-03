@@ -849,16 +849,80 @@ function renderStateMap(host, items, meta) {
   }
 }
 
+function renderGradeStaircase(host, items, meta) {
+  const { lo, hi } = geoRange(items);
+  setGeoMeta("Grade risk staircase", items,
+    `${items.length} grades · ${meta.n_total.toLocaleString("en-US")} loans · color = observed default`,
+    "grade-staircase",
+    "Step height and color show default rate by grade.");
+  setGeoLegend(lo, hi);
+  host.className = "geo-visual grade-visual";
+  const ordered = items.slice().sort((a, b) => a.id.localeCompare(b.id));
+  const width = Math.max(320, Math.round(host.clientWidth || 560));
+  const height = Math.max(260, Math.round(host.clientHeight || 360));
+  const margin = 14;
+  const gap = 8;
+  const baseline = height - 38;
+  const top = 38;
+  const stepWidth = Math.max(28, (width - margin * 2 - gap * (ordered.length - 1)) / ordered.length);
+  const maxRate = Math.max(...ordered.map((item) => num(item.default_rate) || 0), 0.0001);
+  const maxHeight = baseline - top;
+
+  const groups = ordered.map((item, index) => {
+    const rate = num(item.default_rate) || 0;
+    const stepHeight = Math.max(22, 22 + (rate / maxRate) * (maxHeight - 22));
+    const selected = state.sel === item.id;
+    const raise = selected ? 6 : 0;
+    const x = margin + index * (stepWidth + gap);
+    const y = baseline - stepHeight - raise;
+    const cx = x + stepWidth / 2;
+    const bg = colorFor(rate, lo, hi);
+    const textColor = readableText(bg);
+    const cls = `grade-step${item.insufficient ? " is-masked" : ""}${selected ? " is-selected" : ""}`;
+    const fill = item.insufficient ? "url(#grade-hatch)" : bg;
+    const tabindex = item.insufficient ? -1 : 0;
+    return `<g class="${cls}" data-id="${esc(item.id)}" tabindex="${tabindex}" role="button">
+      <rect class="grade-step-face" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${stepWidth.toFixed(1)}" height="${stepHeight.toFixed(1)}" rx="7" style="fill:${fill}"></rect>
+      <text class="grade-step-letter" x="${cx.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle">${esc(item.id)}</text>
+      <text class="grade-step-rate" x="${cx.toFixed(1)}" y="${(y + 25).toFixed(1)}" text-anchor="middle" style="fill:${item.insufficient ? "var(--ink)" : textColor}">${fmtPct(rate, 1)}</text>
+      <text class="grade-step-n" x="${cx.toFixed(1)}" y="${(baseline + 24).toFixed(1)}" text-anchor="middle">n=${fmtInt(item.n)}</text>
+    </g>`;
+  }).join("");
+
+  host.innerHTML = `<svg class="grade-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Grade risk staircase">
+    <defs><pattern id="grade-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern></defs>
+    ${groups}
+  </svg><div class="geo-tooltip" role="status" hidden></div>`;
+
+  $$(".grade-step", host).forEach((step) => {
+    const item = ordered.find((entry) => entry.id === step.dataset.id);
+    if (!item) return;
+    bindGeoItem(host, step, item, `Grade ${item.id}`, !item.insufficient);
+    step.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      const steps = $$(".grade-step:not(.is-masked)", host);
+      const index = steps.indexOf(step);
+      const next = event.key === "ArrowRight" ? steps[index + 1] : steps[index - 1];
+      if (next) next.focus();
+    });
+  });
+}
+
 function renderMap() {
   const host = $("#tile-map");
   if (!host) return;
   const items = dimItems();
   const meta = pe().meta;
-  const geo = !USE_TILE_MAP && !US_MAP_FAILED && state.dim === "state";
+  const geo = !USE_TILE_MAP && !US_MAP_FAILED && (state.dim === "state" || state.dim === "grade");
   const panel = host.closest(".map-panel");
   if (panel) panel.classList.toggle("geo-mode", geo);
-  if (geo) {
+  if (geo && state.dim === "state") {
     renderStateMap(host, items, meta);
+    return;
+  }
+  if (geo && state.dim === "grade") {
+    renderGradeStaircase(host, items, meta);
     return;
   }
   renderTileMap(host, items, meta);

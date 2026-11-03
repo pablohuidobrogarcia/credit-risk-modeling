@@ -510,7 +510,18 @@ button, input, select { font: inherit; color: inherit; }
   background: var(--card-solid); color: var(--fg); font-size: 0.72rem; line-height: 1.35;
   box-shadow: var(--shadow-soft); pointer-events: none;
 }
-
+.grade-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.grade-svg text { font-family: var(--sans); }
+.grade-step { cursor: pointer; outline: none; }
+.grade-step-face { stroke: var(--surface); stroke-width: 1.2; vector-effect: non-scaling-stroke; transition: stroke 0.15s var(--ease), stroke-width 0.15s var(--ease); }
+.grade-step:hover .grade-step-face, .grade-step:focus-visible .grade-step-face { stroke: var(--accent); stroke-width: 2; }
+.grade-step.is-selected .grade-step-face { stroke: var(--accent); stroke-width: 2.5; }
+.grade-step.is-masked { cursor: not-allowed; }
+.grade-step.is-masked .grade-step-face { stroke: var(--border-strong); }
+.grade-step-letter { fill: var(--ink); font-size: 18px; font-weight: 800; }
+.grade-step-rate { font-size: 13px; font-weight: 800; }
+.grade-step-n { fill: var(--fg-soft); font-size: 11px; }
+.grade-step:focus-visible .grade-step-letter { fill: var(--accent); }
 
 /* ------------------------------------------------------------------ list */
 .list-panel { min-width: 0; }
@@ -802,6 +813,7 @@ body.welcome-open { overflow: hidden; }
   .state-map-wrap, .state-small-strip { display: none; }
   .state-all-grid { display: grid; }
   .state-visual { min-height: 0; }
+  .grade-visual { min-height: 320px; }
   .tilemap.state-grid { gap: 2px; min-width: 0; }
   .tile { border-radius: 5px; font-size: 0.42rem; }
   .tile.insufficient::after { width: 8px; height: 8px; font-size: 0.4rem; }

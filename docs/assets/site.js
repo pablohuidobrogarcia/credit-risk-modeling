@@ -70,6 +70,14 @@ let US_MAP_PROMISE = null;
 let US_MAP_FAILED = false;
 let plotlyTried = false;
 let sweepTimer = null;
+const MAP_WIDTH = 960;
+const MAP_HEIGHT = 600;
+const MAP_MAX_ZOOM = 6;
+let mapView = { scale: 1, x: 0, y: 0 };
+let mapPointers = new Map();
+let mapDrag = null;
+let mapPinch = null;
+let mapSuppressClick = false;
 
 /* ------------------------------------------------------------------ state */
 function readHash() {
@@ -788,6 +796,165 @@ function geoRange(items) {
   };
 }
 
+function resetMapView() {
+  mapView = { scale: 1, x: 0, y: 0 };
+  mapPointers = new Map();
+  mapDrag = null;
+  mapPinch = null;
+}
+
+function mapViewSize(scale = mapView.scale) {
+  return { w: MAP_WIDTH / scale, h: MAP_HEIGHT / scale };
+}
+
+function clampMapView() {
+  const { w, h } = mapViewSize();
+  mapView.x = clamp(mapView.x, 0, MAP_WIDTH - w);
+  mapView.y = clamp(mapView.y, 0, MAP_HEIGHT - h);
+}
+
+function applyMapView(svg) {
+  if (!svg) return;
+  const { w, h } = mapViewSize();
+  svg.setAttribute("viewBox", `${mapView.x.toFixed(3)} ${mapView.y.toFixed(3)} ${w.toFixed(3)} ${h.toFixed(3)}`);
+  const host = svg.closest("#tile-map");
+  if (!host) return;
+  const minus = host.querySelector('[data-map-zoom="out"]');
+  const plus = host.querySelector('[data-map-zoom="in"]');
+  const reset = host.querySelector('[data-map-zoom="reset"]');
+  if (minus) minus.disabled = mapView.scale <= 1.0001;
+  if (reset) reset.disabled = mapView.scale <= 1.0001;
+  if (plus) plus.disabled = mapView.scale >= MAP_MAX_ZOOM - 0.0001;
+}
+
+function zoomMapAt(svg, factor, clientX, clientY) {
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const { w, h } = mapViewSize();
+  const fx = clamp((clientX - rect.left) / rect.width, 0, 1);
+  const fy = clamp((clientY - rect.top) / rect.height, 0, 1);
+  const anchorX = mapView.x + fx * w;
+  const anchorY = mapView.y + fy * h;
+  const scale = clamp(mapView.scale * factor, 1, MAP_MAX_ZOOM);
+  if (Math.abs(scale - mapView.scale) < 1e-6) return;
+  const next = mapViewSize(scale);
+  mapView.scale = scale;
+  mapView.x = anchorX - fx * next.w;
+  mapView.y = anchorY - fy * next.h;
+  clampMapView();
+  applyMapView(svg);
+}
+
+function zoomMapCenter(svg, factor) {
+  const rect = svg.getBoundingClientRect();
+  zoomMapAt(svg, factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
+function bindMapZoom(host, svg) {
+  const wrap = $(".state-map-wrap", host);
+  if (!wrap) return;
+  applyMapView(svg);
+  $$(".map-zoom-btn", host).forEach((button) => {
+    button.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = button.dataset.mapZoom;
+      if (action === "in") zoomMapCenter(svg, 1.45);
+      else if (action === "out") zoomMapCenter(svg, 1 / 1.45);
+      else { resetMapView(); applyMapView(svg); }
+    };
+  });
+
+  wrap.setAttribute("tabindex", "0");
+  wrap.setAttribute("aria-label", "US state map. Use plus and minus to zoom, 0 to reset, or drag to move.");
+  wrap.addEventListener("keydown", (event) => {
+    if (["+", "="].includes(event.key)) { event.preventDefault(); zoomMapCenter(svg, 1.45); }
+    else if (["-", "_"].includes(event.key)) { event.preventDefault(); zoomMapCenter(svg, 1 / 1.45); }
+    else if (event.key === "0") { event.preventDefault(); resetMapView(); applyMapView(svg); }
+  });
+  wrap.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    zoomMapAt(svg, event.deltaY < 0 ? 1.18 : 1 / 1.18, event.clientX, event.clientY);
+  }, { passive: false });
+  wrap.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    zoomMapAt(svg, 1.5, event.clientX, event.clientY);
+  });
+  wrap.addEventListener("click", (event) => {
+    if (!mapSuppressClick) return;
+    event.preventDefault();
+    event.stopPropagation();
+    mapSuppressClick = false;
+  }, true);
+
+  const pointerDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  wrap.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".map-zoom")) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    mapPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (mapPointers.size === 1) {
+      mapDrag = { startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false, captured: false };
+    } else if (mapPointers.size === 2) {
+      const [a, b] = [...mapPointers.values()];
+      mapDrag = null;
+      mapPinch = { distance: pointerDistance(a, b), scale: mapView.scale };
+      mapPointers.forEach((_point, id) => {
+        try { wrap.setPointerCapture(id); } catch (err) { /* pointer already gone */ }
+      });
+    }
+  });
+  wrap.addEventListener("pointermove", (event) => {
+    if (!mapPointers.has(event.pointerId)) return;
+    mapPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const rect = svg.getBoundingClientRect();
+    if (mapPointers.size >= 2 && mapPinch) {
+      const [a, b] = [...mapPointers.values()];
+      const midpointX = (a.x + b.x) / 2;
+      const midpointY = (a.y + b.y) / 2;
+      const target = clamp(mapPinch.scale * (pointerDistance(a, b) / mapPinch.distance), 1, MAP_MAX_ZOOM);
+      zoomMapAt(svg, target / mapView.scale, midpointX, midpointY);
+      mapDrag = { startX: midpointX, startY: midpointY, lastX: midpointX, lastY: midpointY, moved: true };
+      return;
+    }
+    if (!mapDrag || !rect.width || !rect.height) return;
+    const dx = event.clientX - mapDrag.lastX;
+    const dy = event.clientY - mapDrag.lastY;
+    if (Math.hypot(event.clientX - mapDrag.startX, event.clientY - mapDrag.startY) > 4) {
+      mapDrag.moved = true;
+      if (!mapDrag.captured) {
+        try { wrap.setPointerCapture(event.pointerId); } catch (err) { /* pointer already gone */ }
+        mapDrag.captured = true;
+      }
+    }
+    mapView.x -= dx * (mapViewSize().w / rect.width);
+    mapView.y -= dy * (mapViewSize().h / rect.height);
+    clampMapView();
+    applyMapView(svg);
+    mapDrag.lastX = event.clientX;
+    mapDrag.lastY = event.clientY;
+  });
+  const finishPointer = (event) => {
+    if (!mapPointers.has(event.pointerId)) return;
+    try { wrap.releasePointerCapture(event.pointerId); } catch (err) { /* not captured */ }
+    mapPointers.delete(event.pointerId);
+    if (mapPointers.size < 2) mapPinch = null;
+    if (mapPointers.size === 0) {
+      if (mapDrag && mapDrag.moved) {
+        mapSuppressClick = true;
+        setTimeout(() => { mapSuppressClick = false; }, 250);
+      }
+      mapDrag = null;
+    } else if (mapPointers.size === 1) {
+      const point = [...mapPointers.values()][0];
+      mapDrag = { startX: point.x, startY: point.y, lastX: point.x, lastY: point.y, moved: false };
+    }
+  };
+  wrap.addEventListener("pointerup", finishPointer);
+  wrap.addEventListener("pointercancel", finishPointer);
+}
+
 function renderStateMap(host, items, meta) {
   const { lo, hi } = geoRange(items);
   setGeoMeta("US state map", items,
@@ -805,10 +972,19 @@ function renderStateMap(host, items, meta) {
   }
 
   const svg = US_MAP_SVG.replace(/<svg([^>]*)>/, (match, attrs) => `<svg${attrs} class="us-map-svg" preserveAspectRatio="xMidYMid meet"><defs><pattern id="state-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern></defs>`);
-  host.innerHTML = `<div class="state-map-wrap">${svg}</div>
+  host.innerHTML = `<div class="state-map-wrap">
+      ${svg}
+      <div class="map-zoom" role="group" aria-label="Map zoom controls">
+        <button type="button" class="map-zoom-btn" data-map-zoom="in" aria-label="Zoom in">+</button>
+        <button type="button" class="map-zoom-btn" data-map-zoom="out" aria-label="Zoom out">−</button>
+        <button type="button" class="map-zoom-btn map-zoom-reset" data-map-zoom="reset" aria-label="Reset zoom">reset</button>
+      </div>
+    </div>
+    <p class="map-zoom-hint" id="map-zoom-hint">Ctrl + scroll or use + / − to zoom, drag to move</p>
     <div class="state-small-strip" role="group" aria-label="Small states"></div>
     <div class="state-all-grid" role="group" aria-label="All states"></div>
     <div class="geo-tooltip" role="status" hidden></div>`;
+  bindMapZoom(host, $(".us-map-svg", host));
 
   const paths = $$(".us-map-svg .st", host);
   const names = {};
@@ -920,6 +1096,7 @@ function renderGradeStaircase(host, items, meta) {
 function renderMap() {
   const host = $("#tile-map");
   if (!host) return;
+  if (state.dim !== "state") resetMapView();
   const items = dimItems();
   const meta = pe().meta;
   const geo = !USE_TILE_MAP && !US_MAP_FAILED && (state.dim === "state" || state.dim === "grade");

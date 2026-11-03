@@ -186,6 +186,116 @@ test("state map follows the metric selector", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
+test("state map and grade staircase keep the same camera across metrics", async ({ page }) => {
+  const errors = await open(page);
+  const metrics = ["default_rate", "pred_pd", "el_pct_ead"];
+  const measure = () => page.evaluate(() => {
+    const box = (selector) => {
+      const rect = document.querySelector(selector).getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    };
+    const svg = document.querySelector(".us-map-svg, .grade-svg");
+    return {
+      svg: box(svg.matches(".us-map-svg") ? ".us-map-svg" : ".grade-svg"),
+      legend: box("#map-legend"),
+      panel: box(".map-panel"),
+      viewBox: svg.getAttribute("viewBox"),
+    };
+  });
+  const compare = (first, next, label) => {
+    for (const key of ["x", "y", "width", "height"]) {
+      expect(Math.abs(first.svg[key] - next.svg[key]), `${label} svg ${key}`).toBeLessThanOrEqual(1);
+      expect(Math.abs(first.legend[key] - next.legend[key]), `${label} legend ${key}`).toBeLessThanOrEqual(1);
+      expect(Math.abs(first.panel[key] - next.panel[key]), `${label} panel ${key}`).toBeLessThanOrEqual(1);
+    }
+    expect(first.viewBox).toBe(next.viewBox);
+  };
+  for (const width of [1360, 1100]) {
+    await page.setViewportSize({ width, height: 950 });
+    for (const dim of ["state", "grade"]) {
+      await page.goto(`/#view=explorer&dim=${dim}`);
+      await page.waitForTimeout(500);
+      await page.locator("#metric-tabs button[data-metric='default_rate']").click();
+      await page.waitForTimeout(150);
+      const first = await measure();
+      for (const metric of metrics.slice(1)) {
+        await page.locator(`#metric-tabs button[data-metric='${metric}']`).click();
+        await page.waitForTimeout(150);
+        compare(first, await measure(), `${width} ${dim} ${metric}`);
+      }
+    }
+  }
+  await expectNoErrors(errors);
+});
+
+test("state map zoom, pan and keyboard controls work", async ({ page }) => {
+  const errors = await open(page);
+  const svg = page.locator(".us-map-svg").first();
+  const viewBox = () => svg.getAttribute("viewBox");
+  const initial = await viewBox();
+  await page.locator('[data-map-zoom="in"]').click();
+  const zoomed = await viewBox();
+  expect(zoomed).not.toBe(initial);
+  await page.locator('[data-map-zoom="reset"]').click();
+  expect(await viewBox()).toBe(initial);
+
+  await page.locator(".state-map-wrap").focus();
+  await page.keyboard.press("+");
+  expect(await viewBox()).not.toBe(initial);
+  await page.keyboard.press("0");
+  expect(await viewBox()).toBe(initial);
+
+  const mapBox = await svg.boundingBox();
+  await page.mouse.move(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2);
+  await page.mouse.wheel(0, -160);
+  await page.waitForTimeout(120);
+  expect(await viewBox()).toBe(initial);
+  await page.locator(".state-map-wrap").evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    element.dispatchEvent(new WheelEvent("wheel", {
+      deltaY: -160,
+      ctrlKey: true,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+      bubbles: true,
+      cancelable: true,
+    }));
+  });
+  await page.waitForTimeout(120);
+  const ctrlZoomed = await viewBox();
+  expect(ctrlZoomed).not.toBe(initial);
+
+  await page.locator('[data-map-zoom="reset"]').click();
+  const ca = page.locator('.st[data-state="CA"]');
+  await ca.click();
+  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await page.locator('[data-map-zoom="in"]').click();
+  const beforeDrag = await viewBox();
+  const caBox = await ca.boundingBox();
+  await page.mouse.move(caBox.x + caBox.width / 2, caBox.y + caBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(caBox.x + caBox.width / 2 + 28, caBox.y + caBox.height / 2 + 14, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  expect(await viewBox()).not.toBe(beforeDrag);
+  await expect(page.locator("#summary-title")).toHaveText("CA");
+
+  await page.locator("#metric-tabs button[data-metric='pred_pd']").click();
+  await page.waitForTimeout(200);
+  expect(await viewBox()).not.toBe(initial);
+  await page.locator('.st[data-state="ND"]').click({ force: true });
+  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await page.locator('#tile-map .state-small-strip .state-chip[data-id="MA"]').click();
+  await expect(page.locator("#summary-title")).toHaveText("MA");
+
+  await page.locator("#dimension-tabs button[data-dim='grade']").click();
+  await page.waitForTimeout(200);
+  await page.locator("#dimension-tabs button[data-dim='state']").click();
+  await page.waitForTimeout(500);
+  expect(await viewBox()).toBe(initial);
+  await expectNoErrors(errors);
+});
+
 test("grade staircase renders A to G and selects a grade", async ({ page }) => {
   const errors = await open(page);
   await page.locator('#dimension-tabs button[data-dim="grade"]').click();

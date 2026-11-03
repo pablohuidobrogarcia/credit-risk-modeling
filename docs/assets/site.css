@@ -476,6 +476,42 @@ button, input, select { font: inherit; color: inherit; }
 .legend-swatch { width: 14px; height: 14px; border-radius: 4px; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fg-soft) 55%, transparent) 0 3px, color-mix(in srgb, var(--fg-soft) 20%, transparent) 3px 6px); }
 .legend-num { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--fg); }
 
+/* ---------------------------------------------------------- geo visuals */
+.map-panel.geo-mode .map-scroll { flex: 1 1 auto; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; overflow: hidden; }
+.geo-visual { position: relative; width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.geo-loading { color: var(--fg-muted); font-size: 0.84rem; margin: auto; }
+.hatch-bg { fill: var(--bg-deep); }
+.hatch-line { stroke: var(--border-strong); stroke-width: 2; }
+.state-map-wrap { width: 100%; aspect-ratio: 960 / 600; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.us-map-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.us-map-svg .st {
+  fill: var(--state-fill, var(--card-solid)); stroke: var(--surface); stroke-width: 1.2;
+  stroke-linejoin: round; cursor: pointer; outline: none;
+  transition: fill 0.15s var(--ease), stroke 0.15s var(--ease), stroke-width 0.15s var(--ease);
+  vector-effect: non-scaling-stroke;
+}
+.us-map-svg .st.is-masked { fill: url(#state-hatch); cursor: not-allowed; }
+.us-map-svg .st.is-hovered, .us-map-svg .st:focus-visible { stroke: var(--accent); stroke-width: 2; }
+.us-map-svg .st.is-selected { stroke: var(--accent); stroke-width: 2.5; }
+.state-small-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(42px, 1fr)); grid-auto-rows: 1fr; align-content: stretch; gap: 0.3rem; margin-top: 0.55rem; flex: 1 1 auto; min-height: 0; }
+.state-all-grid { display: none; grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); gap: 0.3rem; margin-top: 0.55rem; }
+.state-chip {
+  border: 1px solid var(--border); border-radius: 7px; padding: 0.34rem 0.15rem;
+  background: var(--state-fill, var(--card-solid)); color: var(--ink);
+  font-size: 0.68rem; font-weight: 800; line-height: 1; cursor: pointer;
+}
+.state-chip:hover, .state-chip:focus-visible, .state-chip.is-hovered { outline: 2px solid var(--accent); outline-offset: 1px; }
+.state-chip.is-selected { outline: 2.5px solid var(--accent); outline-offset: 1px; }
+.state-chip.is-masked { background: repeating-linear-gradient(135deg, var(--bg-deep) 0 4px, color-mix(in srgb, var(--border-strong) 55%, var(--bg-deep)) 4px 8px); color: var(--fg-muted); cursor: not-allowed; }
+.geo-tooltip {
+  position: absolute; top: 0.45rem; left: 50%; transform: translateX(-50%);
+  z-index: 6; max-width: min(92%, 440px); padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--card-solid); color: var(--fg); font-size: 0.72rem; line-height: 1.35;
+  box-shadow: var(--shadow-soft); pointer-events: none;
+}
+
+
 /* ------------------------------------------------------------------ list */
 .list-panel { min-width: 0; }
 .rank-list { max-height: 640px; overflow: auto; padding-right: 0.2rem; scrollbar-width: thin; }
@@ -722,6 +758,8 @@ body.welcome-open { overflow: hidden; }
   .how-built-panel, .map-panel, .selection-part-a, .list-panel, .selection-part-b {
     height: auto; min-height: 0; max-height: none; flex: 0 0 auto;
   }
+  .map-panel.geo-mode .map-scroll { overflow: visible; }
+  .geo-visual { height: auto; min-height: 300px; }
 }
   .summary-kpis { grid-template-columns: repeat(3, 1fr); }
   .risk-kpis { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -761,6 +799,9 @@ body.welcome-open { overflow: hidden; }
   .sim-controls { grid-template-columns: 1fr; }
   .cutoff-kpis { grid-template-columns: repeat(2, 1fr); }
   .map-scroll { overflow-x: hidden; }
+  .state-map-wrap, .state-small-strip { display: none; }
+  .state-all-grid { display: grid; }
+  .state-visual { min-height: 0; }
   .tilemap.state-grid { gap: 2px; min-width: 0; }
   .tile { border-radius: 5px; font-size: 0.42rem; }
   .tile.insufficient::after { width: 8px; height: 8px; font-size: 0.4rem; }

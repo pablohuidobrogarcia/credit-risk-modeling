@@ -36,7 +36,7 @@ async function open(page, { blockCdn = false, keepWelcome = false, url = "/" } =
   });
   await page.goto(url);
   await expect(page.locator("#app-content")).toBeVisible();
-  await expect(page.locator("#tile-map .tile").first()).toBeVisible();
+  await expect(page.locator("#tile-map .tile:visible, #tile-map .us-map-svg .st:visible, #tile-map .state-chip:visible").first()).toBeVisible();
   await page.waitForTimeout(700);
   if (!keepWelcome && await page.locator("#welcome-start").isVisible().catch(() => false)) {
     await page.locator("#welcome-start").click();
@@ -54,7 +54,7 @@ async function expectNoErrors(errors) {
 test("loads the linked explorer without console or page errors", async ({ page }) => {
   const errors = await open(page);
   await expect(page.locator("#summary-title")).toHaveText("Portfolio");
-  await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(PE.dimensions.state.length);
+  await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(PE.dimensions.state.length);
   await expect(page.locator("#rank-list .rank-row")).toHaveCount(PE.dimensions.state.length);
   await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(PE.dimensions.total[0].default_rate));
   await expectNoErrors(errors);
@@ -68,7 +68,8 @@ test("every dimension tab changes the whole explorer and the URL", async ({ page
     await expect(button).toHaveAttribute("aria-selected", "true");
     await expect(page).toHaveURL(new RegExp(`dim=${dim}`));
     const items = PE.dimensions[dim];
-    await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(items.length);
+    if (dim === "state") await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(items.length);
+    else await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(items.length);
     await expect(page.locator("#rank-list .rank-row")).toHaveCount(items.length);
     if (dim !== "total") {
       await expect(page.locator("#summary-title")).toHaveText("Portfolio");
@@ -87,18 +88,63 @@ test("single-valued Term dimension is hidden and the hash falls back safely", as
   await expectNoErrors(errors);
 });
 
-test("every state tile selects the linked list row, summary and hash", async ({ page }) => {
+test("every selectable state shape selects the linked list row, summary and hash", async ({ page }) => {
   test.setTimeout(120_000);
   const errors = await open(page);
   const states = PE.dimensions.state;
-  for (const item of states) {
-    await page.locator(`#tile-map .tile[data-id="${item.id}"]`).click();
-    await expect(page.locator(`#tile-map .tile[data-id="${item.id}"]`)).toHaveClass(/selected/);
+  for (const item of states.filter((entry) => !entry.insufficient)) {
+    await page.locator(`#tile-map .us-map-svg .st[data-state="${item.id}"]`).evaluate((element) => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await expect(page.locator(`#tile-map .us-map-svg .st[data-state="${item.id}"]`)).toHaveClass(/is-selected/);
     await expect(page.locator(`#rank-list .rank-row[data-id="${item.id}"]`)).toHaveAttribute("aria-current", "true");
     await expect(page.locator("#summary-title")).toHaveText(item.name);
     await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(item.default_rate));
     await expect(page).toHaveURL(new RegExp(`sel=${item.id}`));
   }
+  await expectNoErrors(errors);
+});
+
+test("state map exposes small-state buttons and blocks masked states", async ({ page }) => {
+  const errors = await open(page);
+  const selectable = page.locator("#tile-map .us-map-svg .st:not(.is-masked)");
+  const masked = page.locator("#tile-map .us-map-svg .st.is-masked");
+  await expect(selectable).toHaveCount(47);
+  await expect(masked).toHaveCount(4);
+  const maskedIowa = page.locator('#tile-map .us-map-svg .st[data-state="IA"]');
+  await expect(maskedIowa).toHaveAttribute("aria-disabled", "true");
+  await expect(maskedIowa).toHaveAttribute("tabindex", "-1");
+  const before = page.url();
+  await maskedIowa.click({ force: true });
+  expect(page.url()).toBe(before);
+  await maskedIowa.hover();
+  await expect(page.locator(".geo-tooltip")).toContainText("n < 500, masked");
+
+  const rhodeIsland = page.locator('.state-small-strip .state-chip[data-id="RI"]');
+  await rhodeIsland.hover();
+  await expect(page.locator('.us-map-svg .st[data-state="RI"]')).toHaveClass(/is-hovered/);
+  await rhodeIsland.click();
+  await expect(page.locator("#summary-title")).toHaveText("RI");
+  await expect(page.locator('.us-map-svg .st[data-state="RI"]')).toHaveClass(/is-selected/);
+  await expect(rhodeIsland).toHaveClass(/is-selected/);
+  await expect(page).toHaveURL(/sel=RI/);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.goto("/#view=explorer&dim=state");
+  await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(51);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  await expectNoErrors(errors);
+});
+
+test("state map switches to a full state-button grid at 390px", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await open(page);
+  await expect(page.locator(".state-map-wrap")).toBeHidden();
+  await expect(page.locator(".state-all-grid")).toBeVisible();
+  await expect(page.locator(".state-all-grid .state-chip")).toHaveCount(51);
+  await page.locator('.state-all-grid .state-chip[data-id="CA"]').click();
+  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page).toHaveURL(/sel=CA/);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
   await expectNoErrors(errors);
 });
 
@@ -120,32 +166,32 @@ test("every ranked row selects the linked tile and summary", async ({ page }) =>
 
 test("metric tabs recolor the map and re-sort the list", async ({ page }) => {
   const errors = await open(page);
-  const firstTile = page.locator("#tile-map .tile[data-id='CA']");
-  const before = await firstTile.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await page.locator('#dimension-tabs button[data-dim="purpose"]').click();
+  const tile = page.locator('#tile-map .tile[data-id="debt_consolidation"]');
+  const before = await tile.evaluate((el) => getComputedStyle(el).backgroundColor);
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(page).toHaveURL(/metric=el_pct_ead/);
-  const after = await firstTile.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const after = await tile.evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(after).not.toBe(before);
   const firstRow = page.locator("#rank-list .rank-row").first();
   const topId = await firstRow.getAttribute("data-id");
-  const topItem = PE.dimensions.state.find((x) => x.id === topId);
+  const topItem = PE.dimensions.purpose.find((x) => x.id === topId);
   await expect(firstRow.locator(".rank-value")).toHaveText(pct(topItem.el_pct_ead));
   await expectNoErrors(errors);
 });
 
-test("map hover shows no tooltip and clicking still updates the linked details", async ({ page }) => {
+test("state map hover shows a tooltip and clicking updates the linked details", async ({ page }) => {
   const errors = await open(page);
-  await expect(page.locator("#map-tooltip")).toHaveCount(0);
-  await expect(page.locator(".map-tooltip")).toHaveCount(0);
-  const tile = page.locator("#tile-map .tile[data-id='CA']");
-  const label = await tile.getAttribute("aria-label");
-  expect(label).toContain("CA");
+  const state = page.locator('#tile-map .us-map-svg .st[data-state="CA"]');
+  const label = await state.getAttribute("aria-label");
+  expect(label).toContain("California");
   expect(label).toContain("n=");
-  await tile.hover();
-  await page.waitForTimeout(150);
-  await expect(page.locator(".map-tooltip")).toHaveCount(0);
-  await expect(page.locator("#map-tooltip")).toHaveCount(0);
-  await tile.click();
+  expect(label).toContain("95% CI");
+  await state.hover();
+  await expect(page.locator(".geo-tooltip")).toBeVisible();
+  await expect(page.locator(".geo-tooltip")).toContainText("California");
+  await expect(page.locator(".geo-tooltip")).toContainText("95% CI");
+  await state.click();
   await expect(page.locator("#summary-title")).toHaveText("CA");
   await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(PE.dimensions.state.find((x) => x.id === "CA").default_rate));
   await expect(page).toHaveURL(/sel=CA/);
@@ -175,7 +221,7 @@ test("removed header pill, hero note and insight chips stay out of the DOM", asy
   await expect(page.locator("#insight-chips")).toHaveCount(0);
   await expect(page.locator(".chip-row")).toHaveCount(0);
   await expect(page.locator("#how-built-panel")).toBeVisible();
-  await page.locator("#tile-map .tile[data-id='CA']").click();
+  await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').click();
   await expect(page.locator("#summary-title")).toHaveText("CA");
   await expectNoErrors(errors);
 });
@@ -228,9 +274,9 @@ test("hero KPI cards use ribbon pastels with centered ink text", async ({ page }
 
 test("back and forward restore explorer state", async ({ page }) => {
   const errors = await open(page);
-  await page.locator("#tile-map .tile[data-id='CA']").click();
+  await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').click();
   await expect(page).toHaveURL(/sel=CA/);
-  await page.locator("#tile-map .tile[data-id='NY']").click();
+  await page.locator('#tile-map .us-map-svg .st[data-state="NY"]').click();
   await expect(page).toHaveURL(/sel=NY/);
   await page.goBack();
   await expect(page).toHaveURL(/sel=CA/);
@@ -762,13 +808,12 @@ test("deep links still select every view", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("keyboard navigation reaches tiles and rows", async ({ page }) => {
+test("keyboard navigation reaches state shapes and rows", async ({ page }) => {
   const errors = await open(page);
-  const firstTile = page.locator("#tile-map .tile[data-id='AK']");
-  await firstTile.focus();
-  await page.keyboard.press("ArrowRight");
-  const focused = await page.evaluate(() => document.activeElement?.getAttribute("data-id"));
-  expect(focused).not.toBe("AK");
+  const firstShape = page.locator('#tile-map .us-map-svg .st[data-state="AK"]');
+  await firstShape.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#summary-title")).toHaveText("AK");
   await page.locator("#rank-list .rank-row").first().focus();
   await page.keyboard.press("ArrowDown");
   const rowFocus = await page.evaluate(() => document.activeElement?.getAttribute("data-id"));
@@ -1139,13 +1184,10 @@ test("explorer panels keep the State tab box geometry at 1360 and 1100", async (
     }
     await page.locator("#dimension-tabs button").filter({ hasText: "State" }).click();
     await page.waitForTimeout(300);
-    const masked = page.locator("#tile-map .tile.insufficient").first();
-    if (await masked.count()) {
-      await masked.click();
-      await page.waitForTimeout(300);
-      const boxes = await readBoxes();
-      boxes.forEach((box, index) => expect(box.height).toBeCloseTo(state[index].height, 0));
-    }
+    await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').click();
+    await page.waitForTimeout(300);
+    const boxes = await readBoxes();
+    boxes.forEach((box, index) => expect(box.height).toBeCloseTo(state[index].height, 0));
   }
   await expectNoErrors(errors);
 });
@@ -1182,7 +1224,7 @@ test("resized explorer panels contain their content without clipping or horizont
     }
     await page.locator("#dimension-tabs button").filter({ hasText: "State" }).click();
     await page.waitForTimeout(200);
-    await page.locator("#tile-map .tile[data-id='CA']").click();
+    await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').click();
     await page.waitForTimeout(200);
     await check(`${width} State CA`);
     await page.locator("#dimension-tabs button").filter({ hasText: "Purpose" }).click();
@@ -1295,7 +1337,7 @@ test("reduced motion keeps count-ups instant and turns the sweep into one step",
   await page.locator("#play-rho").click();
   await expect(page.locator("#play-rho")).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#rho-output")).not.toHaveText("â€”");
-  const duration = await page.evaluate(() => getComputedStyle(document.querySelector(".tile")).transitionDuration);
+  const duration = await page.evaluate(() => getComputedStyle(document.querySelector(".us-map-svg .st")).transitionDuration);
   expect(parseFloat(duration)).toBeLessThan(0.01);
   await expectNoErrors(errors);
 });

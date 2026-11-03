@@ -179,6 +179,12 @@
     "try": "Find the approximate cutoff where the bad rate rises sharply.",
     "term": "cutoff"
   },
+  "state-map": {
+    "title": "US state map",
+    "text": "Each state is colored by its default rate; hatched = fewer than 500 loans. Click a state or use the small-states buttons.",
+    "try": "Hover a small state and use its compact button to select it.",
+    "term": "default"
+  },
   "how-built": {
     "title": "How this was built",
     "text": "The main steps of the project, in order. Click a number to read what was done, why, and what was learned.",

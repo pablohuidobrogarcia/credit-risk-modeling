@@ -8,6 +8,8 @@
 const DATA_URL = "data.json";
 const PLOTLY_URL = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js";
 const PLOTLY_SRI = "sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7";
+const USE_TILE_MAP = false;
+const SMALL_STATES = ["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT", "HI", "AK"];
 
 const DIMENSIONS = [
   { id: "state", label: "State" },
@@ -63,6 +65,9 @@ const state = {
 
 let D = null;
 let PLOTLY = null;
+let US_MAP_SVG = null;
+let US_MAP_PROMISE = null;
+let US_MAP_FAILED = false;
 let plotlyTried = false;
 let sweepTimer = null;
 
@@ -674,10 +679,192 @@ const STATE_POSITIONS = {
   HI: [0, 6], TX: [4, 6], FL: [9, 6],
 };
 
+function selectExplorerItem(item) {
+  if (!item || item.insufficient) return;
+  state.sel = state.sel === item.id ? null : item.id;
+  commit({ push: true });
+}
+
+function geoLabel(item, fullName) {
+  const masked = item.insufficient ? `; n < ${fmtInt(pe().meta.min_n)}, masked` : "";
+  return `${fullName}: n=${fmtInt(item.n)}, default ${fmtPct(item.default_rate, 2)} (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)})${masked}`;
+}
+
+function showGeoTooltip(host, text) {
+  const tip = host.querySelector(".geo-tooltip");
+  if (!tip) return;
+  tip.textContent = text;
+  tip.hidden = false;
+}
+
+function hideGeoTooltip(host) {
+  const tip = host.querySelector(".geo-tooltip");
+  if (tip) tip.hidden = true;
+}
+
+function highlightGeo(host, id, on) {
+  $$(`[data-id="${CSS.escape(id)}"]`, host).forEach((node) => node.classList.toggle("is-hovered", on));
+}
+
+function bindGeoItem(host, element, item, fullName, selectable = true) {
+  const label = geoLabel(item, fullName);
+  element.dataset.id = item.id;
+  element.classList.toggle("is-selected", state.sel === item.id);
+  element.setAttribute("aria-label", label);
+  if (selectable) {
+    element.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+    element.addEventListener("click", (event) => {
+      event.preventDefault();
+      selectExplorerItem(item);
+    });
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectExplorerItem(item);
+      }
+    });
+  } else {
+    element.setAttribute("aria-disabled", "true");
+    element.setAttribute("tabindex", "-1");
+  }
+  const show = () => {
+    element.classList.add("is-hovered");
+    highlightGeo(host, item.id, true);
+    showGeoTooltip(host, label);
+  };
+  const hide = () => {
+    element.classList.remove("is-hovered");
+    highlightGeo(host, item.id, false);
+    hideGeoTooltip(host);
+  };
+  element.addEventListener("mouseenter", show);
+  element.addEventListener("mouseleave", hide);
+  element.addEventListener("focus", show);
+  element.addEventListener("blur", hide);
+}
+
+function loadUsMap() {
+  if (US_MAP_SVG || US_MAP_FAILED) return Promise.resolve(US_MAP_SVG);
+  if (!US_MAP_PROMISE) {
+    US_MAP_PROMISE = fetch("assets/us-map.svg", { cache: "no-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`us-map.svg ${response.status}`);
+        return response.text();
+      })
+      .then((text) => { US_MAP_SVG = text; return text; })
+      .catch(() => { US_MAP_FAILED = true; return null; });
+  }
+  return US_MAP_PROMISE;
+}
+
+function setGeoMeta(title, items, subtitle, captionId, fallbackCaption) {
+  const meta = pe().meta;
+  $("#map-title").textContent = title;
+  $("#map-subtitle").textContent = subtitle;
+  $("#map-metric-badge").textContent = "Observed default";
+  $("#map-note").textContent = resolveInfoText((INFO[captionId] && INFO[captionId].text) || fallbackCaption);
+}
+
+function setGeoLegend(lo, hi) {
+  const meta = pe().meta;
+  $("#map-legend").innerHTML = `<span class="legend-num">${fmtPct(lo, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${fmtPct(hi, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
+}
+
+function geoRange(items) {
+  const eligible = items.filter((item) => !item.insufficient && num(item.default_rate) != null);
+  const values = eligible.map((item) => item.default_rate);
+  return {
+    eligible,
+    lo: values.length ? Math.min(...values) : 0,
+    hi: values.length ? Math.max(...values) : 1,
+  };
+}
+
+function renderStateMap(host, items, meta) {
+  const { eligible, lo, hi } = geoRange(items);
+  setGeoMeta("US state map", items,
+    `${items.length} states and DC · ${meta.n_total.toLocaleString("en-US")} loans · color = observed default`,
+    "state-map",
+    "Each state is colored by its default rate; hatched = fewer than 500 loans. Click a state or use the small-states buttons.");
+  setGeoLegend(lo, hi);
+  host.className = "geo-visual state-visual";
+  if (!US_MAP_SVG) {
+    host.innerHTML = `<p class="geo-loading">Loading state map…</p>`;
+    loadUsMap().then(() => {
+      if (state.view === "explorer" && state.dim === "state") renderMap();
+    });
+    return;
+  }
+
+  const svg = US_MAP_SVG.replace(/<svg([^>]*)>/, (match, attrs) => `<svg${attrs} class="us-map-svg" preserveAspectRatio="xMidYMid meet"><defs><pattern id="state-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern></defs>`);
+  host.innerHTML = `<div class="state-map-wrap">${svg}</div>
+    <div class="state-small-strip" role="group" aria-label="Small states"></div>
+    <div class="state-all-grid" role="group" aria-label="All states"></div>
+    <div class="geo-tooltip" role="status" hidden></div>`;
+
+  const paths = $$(".us-map-svg .st", host);
+  const names = {};
+  paths.forEach((path) => { names[path.dataset.state] = path.getAttribute("aria-label") || path.dataset.state; });
+  const byId = new Map(items.map((item) => [item.id, item]));
+  paths.forEach((path) => {
+    const item = byId.get(path.dataset.state);
+    if (!item) { path.style.display = "none"; return; }
+    const fullName = names[path.dataset.state] || item.name;
+    path.dataset.id = item.id;
+    if (item.insufficient) {
+      path.classList.add("is-masked");
+      path.setAttribute("role", "button");
+      bindGeoItem(host, path, item, fullName, false);
+      return;
+    }
+    path.style.setProperty("--state-fill", colorFor(item.default_rate, lo, hi));
+    path.setAttribute("tabindex", "0");
+    path.setAttribute("role", "button");
+    bindGeoItem(host, path, item, fullName, true);
+  });
+
+  const chip = (item) => {
+    const fullName = names[item.id] || item.name;
+    if (item.insufficient) {
+      return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(geoLabel(item, fullName))}">${esc(item.id)}</button>`;
+    }
+    const bg = colorFor(item.default_rate, lo, hi);
+    return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(geoLabel(item, fullName))}">${esc(item.id)}</button>`;
+  };
+  const smallHost = $(".state-small-strip", host);
+  smallHost.innerHTML = SMALL_STATES.map((id) => byId.get(id)).filter(Boolean).map(chip).join("");
+  const allHost = $(".state-all-grid", host);
+  allHost.innerHTML = items.slice().sort((a, b) => a.id.localeCompare(b.id)).map(chip).join("");
+
+  $$(".state-chip", host).forEach((button) => {
+    const item = byId.get(button.dataset.id);
+    if (!item) return;
+    const fullName = names[item.id] || item.name;
+    bindGeoItem(host, button, item, fullName, !item.insufficient);
+  });
+
+  if (state.sel) {
+    const selected = host.querySelector(`.us-map-svg .st[data-state="${CSS.escape(state.sel)}"]`);
+    if (selected) selected.parentNode.appendChild(selected);
+  }
+}
+
 function renderMap() {
   const host = $("#tile-map");
+  if (!host) return;
   const items = dimItems();
   const meta = pe().meta;
+  const geo = !USE_TILE_MAP && !US_MAP_FAILED && state.dim === "state";
+  const panel = host.closest(".map-panel");
+  if (panel) panel.classList.toggle("geo-mode", geo);
+  if (geo) {
+    renderStateMap(host, items, meta);
+    return;
+  }
+  renderTileMap(host, items, meta);
+}
+
+function renderTileMap(host, items, meta) {
   const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
   const values = eligible.map((item) => item[state.metric]);
   const lo = values.length ? Math.min(...values) : 0;

@@ -41,6 +41,33 @@ const ILLUSTRATED_MAPS = {
   home_ownership: { file: "home_ownership_credit_risk.svg", className: "home-ownership-map" },
   purpose: { file: "loan_purpose_honeycomb.svg", className: "purpose-map" },
 };
+const MAP_NOTES = {
+  state: {
+    default_rate: "Hover for the state name; the fill is observed default, and hatched states have too few loans to rank. Selection holds the exact numbers.",
+    pred_pd: "Hover for the state name; the fill is the model's predicted PD, not the realized default rate. Hatched states are too small to rank.",
+    el_pct_ead: "Hover for the state name; the fill is expected loss as a share of EAD, combining PD and LGD. Hatched states are too small to rank.",
+  },
+  grade: {
+    default_rate: "Step height and color show observed default by grade. Hover for the grade; select a step to link the ranked list and Selection.",
+    pred_pd: "Step height and color show the model's predicted PD by grade. Compare the steps with observed default; select one for the linked numbers.",
+    el_pct_ead: "Step height and color show expected loss as a share of EAD by grade. PD and LGD both shape this view; select a step to inspect it.",
+  },
+  purpose: {
+    default_rate: "Hover a category for its name; the fill is observed default. Select a category to link the ranked list and read its numbers in Selection.",
+    pred_pd: "Hover a category for its name; the fill is predicted PD, so the order can differ from observed default. Select one to read its numbers.",
+    el_pct_ead: "Hover a category for its name; the fill is expected loss as a share of EAD. Select a category to see how PD and LGD combine.",
+  },
+  vintage: {
+    default_rate: "Each tile is a vintage, filled by observed default. Select a year to compare that cohort with the portfolio in Selection.",
+    pred_pd: "Each tile is a vintage, filled by the model's predicted PD. Select a year to see how model risk differs from the realized default rate.",
+    el_pct_ead: "Each tile is a vintage, filled by expected loss as a share of EAD. Select a year to inspect the PD and LGD combination.",
+  },
+  home_ownership: {
+    default_rate: "Hover a category for its name; the fill is observed default. Select Rent, Own, Mortgage or Any to read the linked numbers in Selection.",
+    pred_pd: "Hover a category for its name; the fill is predicted PD, the model's view rather than the realized rate. Select a card to inspect it.",
+    el_pct_ead: "Hover a category for its name; the fill is expected loss as a share of EAD. Select a card to see the PD and LGD behind it.",
+  },
+};
 const SURFACE_METRICS = {
   "var_0.999": "VaR 99.9%",
   "es_0.999": "ES 99.9%",
@@ -197,6 +224,10 @@ function metricMeta(id) {
 }
 function metricColorLabel() {
   return metricMeta(state.metric).short.replace(/^./, (char) => char.toLowerCase());
+}
+function mapNote(dim = state.dim, metric = state.metric) {
+  const notes = MAP_NOTES[dim];
+  return (notes && notes[metric]) || "";
 }
 function metricValue(item, metric = state.metric) {
   return num(item ? item[metric] : null);
@@ -834,17 +865,16 @@ function loadIllustratedMap(dim) {
   return ILLUSTRATED_PROMISES[dim];
 }
 
-function setGeoMeta(title, items, subtitle, captionId, fallbackCaption) {
+function setGeoMeta(title, subtitle, note) {
   $("#map-title").textContent = title;
   $("#map-subtitle").textContent = subtitle;
   $("#map-metric-badge").textContent = metricMeta(state.metric).short;
-  const caption = state.metric === "el_pct_ead" && INFO["el-note"] ? INFO["el-note"] : INFO[captionId];
-  $("#map-note").textContent = resolveInfoText((caption && caption.text) || fallbackCaption);
+  $("#map-note").textContent = note;
 }
 
-function setGeoLegend(lo, hi) {
+function setGeoLegend(lo, hi, showHatch = true) {
   const meta = pe().meta;
-  $("#map-legend").innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
+  $("#map-legend").innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span>${showHatch ? `<span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>` : ""}`;
 }
 
 function geoRange(items) {
@@ -1018,10 +1048,9 @@ function bindMapZoom(host, svg) {
 
 function renderStateMap(host, items, meta) {
   const { lo, hi } = geoRange(items);
-  setGeoMeta("US state map", items,
+  setGeoMeta("US state map",
     `${items.filter((item) => item.id !== "DC").length} states and District of Columbia · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
-    "state-map",
-    "Each state is colored by the selected metric; hatched = fewer than 500 loans. Hovering shows only the state name; select it to see the numbers in Selection.");
+    mapNote());
   setGeoLegend(lo, hi);
   host.className = "geo-visual state-visual";
   if (!US_MAP_SVG) {
@@ -1097,10 +1126,9 @@ function renderStateMap(host, items, meta) {
 
 function renderGradeStaircase(host, items, meta) {
   const { lo, hi } = geoRange(items);
-  setGeoMeta("Grade risk staircase", items,
+  setGeoMeta("Grade risk staircase",
     `${items.length} grades · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
-    "grade-staircase",
-    "Step height and color show the selected metric by grade. Hovering shows only the grade; select it to see the numbers in Selection.");
+    mapNote());
   setGeoLegend(lo, hi);
   host.className = "geo-visual grade-visual";
   const ordered = items.slice().sort((a, b) => a.id.localeCompare(b.id));
@@ -1164,8 +1192,8 @@ function renderIllustratedMap(host, items, meta, config) {
   $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricLabel}`;
   $("#map-metric-badge").textContent = metricMeta(state.metric).short;
   $("#map-legend").hidden = false;
-  setGeoLegend(lo, hi);
-  $("#map-note").textContent = "Hover a category for its name; select it to see the numbers in Selection.";
+  setGeoLegend(lo, hi, false);
+  $("#map-note").textContent = mapNote();
 
   host.className = `tilemap illustrated-map ${config.className}`;
   const svg = ILLUSTRATED_SVGS[dim];
@@ -1183,10 +1211,6 @@ function renderIllustratedMap(host, items, meta, config) {
     root.classList.add("segment-svg");
     root.setAttribute("role", "group");
     root.setAttribute("aria-label", `${dimLabel} segment map`);
-    const ns = "http://www.w3.org/2000/svg";
-    const defs = document.createElementNS(ns, "defs");
-    defs.innerHTML = '<pattern id="illustrated-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern>';
-    root.insertBefore(defs, root.firstChild);
   }
   const byId = new Map(items.map((item) => [String(item.id).toLowerCase(), item]));
   $$("[data-category]", host).forEach((node) => {
@@ -1202,8 +1226,8 @@ function renderIllustratedMap(host, items, meta, config) {
     node.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
     node.classList.toggle("is-selected", state.sel === item.id);
     const bgNode = node.querySelector(".bg");
-    const fill = item.insufficient ? "url(#illustrated-hatch)" : colorFor(num(item[state.metric]), lo, hi);
-    const textColor = item.insufficient ? palette().fg : readableText(fill);
+    const fill = colorFor(num(item[state.metric]), lo, hi);
+    const textColor = readableText(fill);
     if (bgNode) bgNode.style.fill = fill;
     $$("text", node).forEach((text) => { text.style.fill = textColor; });
     $$(".ic", node).forEach((icon) => { icon.style.color = textColor; icon.style.stroke = textColor; });
@@ -1288,7 +1312,7 @@ function renderTileMap(host, items, meta) {
   const legend = $("#map-legend");
   legend.innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
   const mobileHint = window.matchMedia && window.matchMedia("(max-width: 700px)").matches ? " On phones, the ranked list is the main touch interface; the map is a compact overview." : "";
-  $("#map-note").textContent = "Hover a segment for its name; select it to see the numbers in Selection. Click a tile to link the list and summary." + mobileHint;
+  $("#map-note").textContent = mapNote() + mobileHint;
   if (state.sel) {
     const selected = host.querySelector(`[data-id="${CSS.escape(state.sel)}"]`);
     if (selected) selected.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1338,6 +1362,7 @@ function renderList() {
   let items = dimItems().filter((item) => !query || itemName(item).toLowerCase().includes(query) || item.id.toLowerCase().includes(query));
   items = items.slice().sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0));
   const maxValue = items.reduce((max, item) => Math.max(max, num(item[state.metric]) || 0), 0);
+  const { lo, hi } = geoRange(dimItems());
   const all = dimItems();
   $("#list-count").textContent = query ? `${items.length} of ${all.length} segments match "${state.search}"` : `${all.length} segment${all.length === 1 ? "" : "s"} in this view`;
   $("#sort-pill").textContent = `Sorted by ${metricMeta(state.metric).short.toLowerCase()}`;
@@ -1353,6 +1378,7 @@ function renderList() {
     if (state.sel === item.id) row.setAttribute("aria-current", "true");
     const value = num(item[state.metric]);
     const width = maxValue > 0 ? clamp((value / maxValue) * 100, 0, 100) : 0;
+    row.style.setProperty("--rank-color", colorFor(value, lo, hi));
     row.innerHTML = `
       <span class="rank-name">${esc(itemName(item))}${item.insufficient ? `<span class="smalln">small n</span>` : ""}</span>
       <span class="rank-value">${metricText(value, state.metric, 2)}</span>

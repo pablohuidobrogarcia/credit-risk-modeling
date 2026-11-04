@@ -240,7 +240,7 @@ test("all info content resolves and every visible info button opens and closes",
   await expectNoErrors(errors);
 });
 
-test("state subtitles, small-state strip and expected-loss note stay correct", async ({ page }) => {
+test("state subtitles, small-state strip and metric-specific note stay correct", async ({ page }) => {
   const errors = await open(page);
   const subtitle = page.locator("#map-subtitle");
   const note = page.locator("#map-note");
@@ -256,11 +256,10 @@ test("state subtitles, small-state strip and expected-loss note stay correct", a
 
   const before = await panelHeight();
   const beforeStrip = await stripHeight();
-  await expect(note).not.toContainText("Expected loss is roughly");
+  await expect(note).toContainText("observed default");
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await page.waitForTimeout(200);
-  const lgd = PE.meta.mean_lgd.toFixed(3);
-  await expect(note).toHaveText(`Expected loss is roughly PD x the portfolio LGD (${lgd}), so it ranks segments almost like Predicted PD.`);
+  await expect(note).toHaveText("Hover for the state name; the fill is expected loss as a share of EAD, combining PD and LGD. Hatched states are too small to rank.");
   expect(await note.innerText()).not.toMatch(/\{[a-z0-9_]+\}/i);
   await expect(subtitle).toContainText("color = expected loss");
   await expect(subtitle).not.toContainText("51 states");
@@ -268,12 +267,13 @@ test("state subtitles, small-state strip and expected-loss note stay correct", a
   expect(Math.abs(beforeStrip - await stripHeight())).toBeLessThanOrEqual(1);
 
   await page.locator("#metric-tabs button[data-metric='default_rate']").click();
-  await expect(note).not.toContainText("Expected loss is roughly");
+  await expect(note).toContainText("observed default");
+  await expect(note).not.toContainText("expected loss as a share");
   await page.locator("#dimension-tabs button[data-dim='grade']").click();
   await page.waitForTimeout(200);
-  await expect(note).not.toContainText("Expected loss is roughly");
+  await expect(note).toContainText("Step height");
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
-  await expect(note).toContainText(`portfolio LGD (${lgd})`);
+  await expect(note).toHaveText("Step height and color show expected loss as a share of EAD by grade. PD and LGD both shape this view; select a step to inspect it.");
   await expectNoErrors(errors);
 });
 
@@ -600,6 +600,46 @@ test("purpose and home ownership maps use their supplied SVGs and stay linked", 
     await expect(page).toHaveURL(new RegExp(`sel=${id}`));
     await expect(page.locator("#summary-title")).toHaveText(PE.dimensions[dim].find((x) => x.id === id).name);
   }
+  await expectNoErrors(errors);
+});
+
+test("ranked segment bars use the same metric colors as their maps", async ({ page }) => {
+  const errors = await open(page);
+  const cases = [
+    ["state", "CA", '#tile-map .us-map-svg .st[data-state="CA"]'],
+    ["grade", "B", '#tile-map .grade-step[data-id="B"] .grade-step-face'],
+    ["purpose", "debt_consolidation", '#tile-map.purpose-map [data-id="debt_consolidation"] .bg'],
+    ["vintage", "2014", '#tile-map .tile[data-id="2014"]'],
+    ["home_ownership", "MORTGAGE", '#tile-map.home-ownership-map [data-id="MORTGAGE"] .bg'],
+  ];
+  for (const [dim, id, mapSelector] of cases) {
+    await page.goto(`/#view=explorer&dim=${dim}`);
+    await page.waitForTimeout(450);
+    const mapColor = await page.locator(mapSelector).evaluate((el) => {
+      const style = getComputedStyle(el);
+      return el instanceof SVGElement ? style.fill : style.backgroundColor;
+    });
+    const barColor = await page.locator(`#rank-list .rank-row[data-id="${id}"] .rank-bar span`).evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(barColor, `${dim} ranked bar`).toBe(mapColor);
+  }
+  await expectNoErrors(errors);
+});
+
+test("map notes are tailored to each dimension and metric", async ({ page }) => {
+  const errors = await open(page);
+  const notes = new Map();
+  for (const dim of ["state", "grade", "purpose", "vintage", "home_ownership"]) {
+    await page.goto(`/#view=explorer&dim=${dim}`);
+    await page.waitForTimeout(350);
+    for (const metric of ["default_rate", "pred_pd", "el_pct_ead"]) {
+      await page.locator(`#metric-tabs button[data-metric="${metric}"]`).click();
+      await page.waitForTimeout(120);
+      notes.set(`${dim}/${metric}`, (await page.locator("#map-note").innerText()).trim());
+    }
+  }
+  expect(notes.size).toBe(15);
+  expect(new Set(notes.values()).size).toBe(15);
+  for (const note of notes.values()) expect(note.length).toBeGreaterThan(40);
   await expectNoErrors(errors);
 });
 

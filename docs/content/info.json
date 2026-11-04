@@ -71,12 +71,6 @@
     "try": "Find a segment where predicted PD sits outside the interval.",
     "term": "calibration"
   },
-  "score-distribution": {
-    "title": "Score distribution",
-    "text": "The bars count test-window loans by scorecard score for the selected segment. Higher scores mean lower risk. The shape matters: two segments with the same average can have very different tails.",
-    "try": "Compare the distribution of a high-loss grade with the portfolio.",
-    "term": "score"
-  },
   "risk-rho": {
     "title": "Asset correlation (ρ)",
     "text": "ρ controls how much loans move together through the systematic factor. A higher ρ makes defaults cluster in bad years and pushes the tail of the loss distribution up.",

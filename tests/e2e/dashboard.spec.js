@@ -650,9 +650,64 @@ test("selection block keeps one size across every tab at 1360, 1100 and 390", as
       expect(next.scrollHeight, `${width} ${dim} content`).toBeLessThanOrEqual(next.clientHeight + 1);
     }
     if (width >= 1100) {
-      const bottoms = await page.evaluate(() => [...document.querySelectorAll(".explorer-column")].slice(1).map((column) => column.getBoundingClientRect().bottom));
-      expect(Math.abs(bottoms[0] - bottoms[1]), `${width} column bottoms`).toBeLessThanOrEqual(2);
+      const alignment = await page.evaluate(() => {
+        const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+        return {
+          mapBottom: box(".map-panel").bottom,
+          listBottom: box(".list-panel").bottom,
+          howBottom: box(".how-built-panel").bottom,
+          selectionBottom: box(".selection-part-a").bottom,
+        };
+      });
+      expect(Math.abs(alignment.mapBottom - alignment.listBottom), `${width} top-row bottoms`).toBeLessThanOrEqual(2);
+      expect(Math.abs(alignment.howBottom - alignment.selectionBottom), `${width} column bottoms`).toBeLessThanOrEqual(2);
     }
+  }
+  await expectNoErrors(errors);
+});
+
+test("explorer removed the score distribution and enlarges Selection type", async ({ page }) => {
+  const errors = await open(page);
+  await page.setViewportSize({ width: 1360, height: 900 });
+  await page.goto("/#view=explorer&dim=state&sel=AL");
+  await page.waitForTimeout(600);
+
+  await expect(page.locator("#view-explorer #score-hist, #view-explorer [id*='score-distribution'], #view-explorer .selection-part-b")).toHaveCount(0);
+  await expect(page.locator("#view-explorer")).not.toContainText(/score distribution/i);
+
+  const type = await page.evaluate(() => {
+    const selection = document.querySelector(".selection-part-a");
+    const size = (selector, root = selection) => parseFloat(getComputedStyle(root.querySelector(selector)).fontSize);
+    return {
+      name: size("#summary-title"),
+      activeValue: size(".selection-metric-row.is-active .selection-metric-value"),
+      otherValues: [...selection.querySelectorAll(".selection-metric-row:not(.is-active) .selection-metric-value")]
+        .map((el) => parseFloat(getComputedStyle(el).fontSize)),
+      labels: [...selection.querySelectorAll(".selection-metric-label")].map((el) => parseFloat(getComputedStyle(el).fontSize)),
+      context: parseFloat(getComputedStyle(selection.querySelector(".selection-context")).fontSize),
+      compare: size(".selection-metric-compare"),
+      rank: size(".selection-metric-rank"),
+      ci: size(".selection-ci"),
+      model: size("#summary-model-check"),
+    };
+  });
+  expect(type.name).toBeGreaterThanOrEqual(28);
+  expect(type.activeValue).toBeGreaterThanOrEqual(28);
+  expect(type.otherValues).toHaveLength(2);
+  for (const value of type.otherValues) expect(value).toBeGreaterThanOrEqual(24);
+  for (const label of type.labels) expect(label).toBeGreaterThanOrEqual(14);
+  expect(type.context).toBeGreaterThanOrEqual(14);
+  expect(type.compare).toBeGreaterThanOrEqual(13);
+  expect(type.rank).toBeGreaterThanOrEqual(13);
+  expect(type.ci).toBeGreaterThanOrEqual(13);
+  expect(type.model).toBeGreaterThanOrEqual(14);
+
+  for (const width of [1360, 1100, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#view=explorer&dim=state&sel=AL");
+    await page.waitForTimeout(400);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(overflow, `${width}px horizontal overflow`).toBeLessThanOrEqual(1);
   }
   await expectNoErrors(errors);
 });
@@ -1673,7 +1728,7 @@ test("no unresolved placeholders appear in popovers, glossary or explorer panels
 
 test("explorer panels keep the State tab box geometry at 1360 and 1100", async ({ page }) => {
   const errors = await open(page);
-  const selectors = [".how-built-panel", ".map-panel", ".selection-part-a", ".list-panel", ".selection-part-b"];
+  const selectors = [".how-built-panel", ".map-panel", ".selection-part-a", ".list-panel"];
   const readBoxes = () => page.evaluate((sels) => sels.map((selector) => {
     const rect = document.querySelector(selector).getBoundingClientRect();
     return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };

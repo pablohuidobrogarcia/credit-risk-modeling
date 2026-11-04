@@ -358,7 +358,6 @@ const STATIC_INFO = [
   ["#map-title", "map", "Segment map", "after"],
   ["#how-built-title", "how-built", "How this was built", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
-  ["#score-hist-caption", "score-distribution", "Score distribution", "after"],
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
   ["#play-rho", "play-rho", "Play rho sweep", "after"],
   ["#risk-gauge", "gauge", "VaR gauge", "after"],
@@ -596,10 +595,6 @@ function selectedItem() {
 }
 function summaryItem() { return selectedItem() || totalItem(); }
 function minN() { return (pe() && pe().meta && pe().meta.min_n) || 500; }
-function histFor(dim, id) {
-  const h = pe() && pe().score_histograms;
-  return h && (h[`${dim}:${id}`] || h["total:total"]);
-}
 
 /* ------------------------------------------------------------------ shell */
 function renderShell() {
@@ -1287,9 +1282,6 @@ function renderSummary() {
   }).join("");
 
   $(".selection-model-check").innerHTML = `<span id="summary-model-check" data-testid="summary-model-check">${esc(selectionModelCheck(item))}</span>${infoButton("model-check", "Model check")}`;
-
-  const hist = histFor(state.dim, item.id);
-  renderScoreHist($("#score-hist"), hist, pe().meta.score_bins, `${isSelected ? item.name : "Portfolio"} · score distribution`, null);
 }
 
 function renderScoreHist(host, hist, bins, caption, markerValue) {
@@ -1316,8 +1308,6 @@ function renderScoreHist(host, hist, bins, caption, markerValue) {
   const fig = host.closest("figure");
   const cap = fig && fig.querySelector("figcaption");
   if (cap) cap.textContent = caption;
-  const selCap = $("#score-hist-caption");
-  if (selCap && host.id === "score-hist") selCap.textContent = caption;
 }
 
 let howBuiltOpenStep = 1;
@@ -1404,15 +1394,6 @@ function renderExplorer() {
       clearTimeout(timer);
       timer = setTimeout(() => { writeHash(false); renderList(); }, 120);
     });
-  }
-
-  const scoreHost = $("#score-hist");
-  if (scoreHost && !scoreHost.__observed) {
-    scoreHost.__observed = true;
-    const resizeObserver = new ResizeObserver(() => {
-      if (state.view === "explorer") renderSummary();
-    });
-    resizeObserver.observe(scoreHost);
   }
 
   renderMap();

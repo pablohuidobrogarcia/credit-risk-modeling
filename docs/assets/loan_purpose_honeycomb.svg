@@ -1,10 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 432" width="800" height="432" class="loan-purpose-honeycomb" font-family="Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 432" width="800" height="432" class="loan-purpose-honeycomb" font-family="Helvetica, Arial, sans-serif">
   <defs>
-    <radialGradient id="bgGrad" cx="50%" cy="50%" r="75%">
-      <stop offset="0" stop-color="#16213e"/>
-      <stop offset="1" stop-color="#080c18"/>
-    </radialGradient>
-
     <polygon id="hexshape" points="0,-78 67.5,-39 67.5,39 0,78 -67.5,39 -67.5,-39"/>
 
     <!-- Iconos: heredan trazo/relleno del elemento que los usa -->
@@ -86,46 +81,44 @@
 
   <style>
     .loan-purpose-honeycomb .hex { cursor: pointer; outline: none; }
-    .loan-purpose-honeycomb .hex .bg { fill: #f8f9fc; stroke: var(--c); stroke-width: 3; transition: fill .15s, stroke-width .15s; }
-    .loan-purpose-honeycomb .hex .ic { color: var(--c); stroke: var(--c); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-    .loan-purpose-honeycomb .hex .lbl { font-size: 12px; font-weight: 700; fill: #1f2937; text-anchor: middle; letter-spacing: .3px; }
-    .loan-purpose-honeycomb .hex:hover .bg, .loan-purpose-honeycomb .hex:focus .bg { fill: var(--c); stroke-width: 5; }
-    .loan-purpose-honeycomb .hex:hover .ic, .loan-purpose-honeycomb .hex:focus .ic { color: #080c18; stroke: #080c18; }
-    .loan-purpose-honeycomb .hex:hover .lbl, .loan-purpose-honeycomb .hex:focus .lbl { fill: #080c18; }
+    .loan-purpose-honeycomb .hex .bg { fill: transparent; stroke: #000000; stroke-width: 3; transition: fill .15s, stroke-width .15s; }
+    .loan-purpose-honeycomb .hex .ic { color: #000000; stroke: #000000; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .loan-purpose-honeycomb .hex .lbl { font-size: 12px; font-weight: 700; fill: #000000; text-anchor: middle; letter-spacing: .3px; }
+    .loan-purpose-honeycomb .hex:hover .bg, .loan-purpose-honeycomb .hex:focus .bg { fill: rgba(0,0,0,0.08); stroke-width: 5; }
   </style>
 
   <rect width="800" height="432" fill="#ffffff"/>
 
   <!-- ============ FILA 1 ============ -->
-  <a href="#small_business" id="small_business" data-category="small_business"><g class="hex" style="--c:#ffb703" transform="translate(108 90)">
+  <a href="#small_business" id="small_business" data-category="small_business"><g class="hex" transform="translate(108 90)">
     <title>Small Business</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-small_business" class="ic" transform="translate(0 -24)"/>
     <text class="lbl" y="22"><tspan x="0">Small</tspan><tspan x="0" dy="15">Business</tspan></text>
   </g></a>
 
-  <a href="#renewable_energy" id="renewable_energy" data-category="renewable_energy"><g class="hex" style="--c:#12b886" transform="translate(254 90)">
+  <a href="#renewable_energy" id="renewable_energy" data-category="renewable_energy"><g class="hex" transform="translate(254 90)">
     <title>Renewable Energy</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-renewable_energy" class="ic" transform="translate(0 -24)"/>
     <text class="lbl" y="22"><tspan x="0">Renewable</tspan><tspan x="0" dy="15">Energy</tspan></text>
   </g></a>
 
-  <a href="#house" id="house" data-category="house"><g class="hex" style="--c:#4cc9f0" transform="translate(400 90)">
+  <a href="#house" id="house" data-category="house"><g class="hex" transform="translate(400 90)">
     <title>House</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-house" class="ic" transform="translate(0 -20)"/>
     <text class="lbl" y="34"><tspan x="0">House</tspan></text>
   </g></a>
 
-  <a href="#moving" id="moving" data-category="moving"><g class="hex" style="--c:#ff7a59" transform="translate(546 90)">
+  <a href="#moving" id="moving" data-category="moving"><g class="hex" transform="translate(546 90)">
     <title>Moving</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-moving" class="ic" transform="translate(0 -20)"/>
     <text class="lbl" y="34"><tspan x="0">Moving</tspan></text>
   </g></a>
 
-  <a href="#medical" id="medical" data-category="medical"><g class="hex" style="--c:#ff4d6d" transform="translate(692 90)">
+  <a href="#medical" id="medical" data-category="medical"><g class="hex" transform="translate(692 90)">
     <title>Medical</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-medical" class="ic" transform="translate(0 -20)"/>
@@ -133,28 +126,28 @@
   </g></a>
 
   <!-- ============ FILA 2 ============ -->
-  <a href="#other" id="other" data-category="other"><g class="hex" style="--c:#8795a8" transform="translate(181 216)">
+  <a href="#other" id="other" data-category="other"><g class="hex" transform="translate(181 216)">
     <title>Other</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-other" class="ic" transform="translate(0 -20)"/>
     <text class="lbl" y="34"><tspan x="0">Other</tspan></text>
   </g></a>
 
-  <a href="#vacation" id="vacation" data-category="vacation"><g class="hex" style="--c:#f5b700" transform="translate(327 216)">
+  <a href="#vacation" id="vacation" data-category="vacation"><g class="hex" transform="translate(327 216)">
     <title>Vacation</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-vacation" class="ic" transform="translate(0 -22)"/>
     <text class="lbl" y="34"><tspan x="0">Vacation</tspan></text>
   </g></a>
 
-  <a href="#debt_consolidation" id="debt_consolidation" data-category="debt_consolidation"><g class="hex" style="--c:#b388ff" transform="translate(473 216)">
+  <a href="#debt_consolidation" id="debt_consolidation" data-category="debt_consolidation"><g class="hex" transform="translate(473 216)">
     <title>Debt Consolidation</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-debt_consolidation" class="ic" transform="translate(0 -24)"/>
     <text class="lbl" y="22"><tspan x="0">Debt</tspan><tspan x="0" dy="15">Consolidation</tspan></text>
   </g></a>
 
-  <a href="#major_purchase" id="major_purchase" data-category="major_purchase"><g class="hex" style="--c:#f78fb3" transform="translate(619 216)">
+  <a href="#major_purchase" id="major_purchase" data-category="major_purchase"><g class="hex" transform="translate(619 216)">
     <title>Major Purchase</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-major_purchase" class="ic" transform="translate(0 -24)"/>
@@ -162,35 +155,35 @@
   </g></a>
 
   <!-- ============ FILA 3 ============ -->
-  <a href="#home_improvement" id="home_improvement" data-category="home_improvement"><g class="hex" style="--c:#f4a261" transform="translate(108 342)">
+  <a href="#home_improvement" id="home_improvement" data-category="home_improvement"><g class="hex" transform="translate(108 342)">
     <title>Home Improvement</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-home_improvement" class="ic" transform="translate(0 -24)"/>
     <text class="lbl" y="22"><tspan x="0">Home</tspan><tspan x="0" dy="15">Improvement</tspan></text>
   </g></a>
 
-  <a href="#car" id="car" data-category="car"><g class="hex" style="--c:#4895ef" transform="translate(254 342)">
+  <a href="#car" id="car" data-category="car"><g class="hex" transform="translate(254 342)">
     <title>Car</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-car" class="ic" transform="translate(0 -20)"/>
     <text class="lbl" y="34"><tspan x="0">Car</tspan></text>
   </g></a>
 
-  <a href="#credit_card" id="credit_card" data-category="credit_card"><g class="hex" style="--c:#0ca678" transform="translate(400 342)">
+  <a href="#credit_card" id="credit_card" data-category="credit_card"><g class="hex" transform="translate(400 342)">
     <title>Credit Card</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-credit_card" class="ic" transform="translate(0 -24)"/>
     <text class="lbl" y="22"><tspan x="0">Credit</tspan><tspan x="0" dy="15">Card</tspan></text>
   </g></a>
 
-  <a href="#wedding" id="wedding" data-category="wedding"><g class="hex" style="--c:#ff85c0" transform="translate(546 342)">
+  <a href="#wedding" id="wedding" data-category="wedding"><g class="hex" transform="translate(546 342)">
     <title>Wedding</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-wedding" class="ic" transform="translate(0 -20)"/>
     <text class="lbl" y="34"><tspan x="0">Wedding</tspan></text>
   </g></a>
 
-  <a href="#educational" id="educational" data-category="educational"><g class="hex" style="--c:#6fa84a" transform="translate(692 342)">
+  <a href="#educational" id="educational" data-category="educational"><g class="hex" transform="translate(692 342)">
     <title>Educational</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-educational" class="ic" transform="translate(0 -20)"/>

@@ -1155,19 +1155,16 @@ function renderGradeStaircase(host, items, meta) {
 function renderIllustratedMap(host, items, meta, config) {
   const dim = state.dim;
   const dimLabel = dimMeta(dim).label;
-  const colorized = dim !== "home_ownership";
   const metricLabel = metricMeta(state.metric).short.toLowerCase();
   const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
   const values = eligible.map((item) => num(item[state.metric]));
   const lo = values.length ? Math.min(...values) : 0;
   const hi = values.length ? Math.max(...values) : 1;
   $("#map-title").textContent = `${dimLabel} segment map`;
-  $("#map-subtitle").textContent = colorized
-    ? `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricLabel}`
-    : `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · category view`;
-  $("#map-metric-badge").textContent = colorized ? metricMeta(state.metric).short : "Category view";
-  $("#map-legend").hidden = !colorized;
-  if (colorized) setGeoLegend(lo, hi);
+  $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricLabel}`;
+  $("#map-metric-badge").textContent = metricMeta(state.metric).short;
+  $("#map-legend").hidden = false;
+  setGeoLegend(lo, hi);
   $("#map-note").textContent = "Hover a category for its name; select it to see the numbers in Selection.";
 
   host.className = `tilemap illustrated-map ${config.className}`;
@@ -1206,11 +1203,15 @@ function renderIllustratedMap(host, items, meta, config) {
     node.classList.toggle("is-selected", state.sel === item.id);
     const bgNode = node.querySelector(".bg");
     const fill = item.insufficient ? "url(#illustrated-hatch)" : colorFor(num(item[state.metric]), lo, hi);
-    const textColor = colorized && !item.insufficient ? readableText(fill) : palette().fg;
-    if (bgNode) bgNode.style.fill = colorized ? fill : palette().surface;
+    const textColor = item.insufficient ? palette().fg : readableText(fill);
+    if (bgNode) bgNode.style.fill = fill;
     $$("text", node).forEach((text) => { text.style.fill = textColor; });
     $$(".ic", node).forEach((icon) => { icon.style.color = textColor; icon.style.stroke = textColor; });
     $$("g[stroke]", node).forEach((group) => { group.style.stroke = textColor; });
+    $$('[fill="#000000"], [fill="black"]', node).forEach((el) => { el.style.fill = textColor; });
+    $$('[stroke="#000000"], [stroke="black"]', node).forEach((el) => { el.style.stroke = textColor; });
+    $$('[fill="#ffffff"], [fill="white"]', node).forEach((el) => { if (el.tagName.toLowerCase() === "text") el.style.fill = fill; });
+    $$('[stroke="#ffffff"], [stroke="white"]', node).forEach((el) => { el.style.stroke = fill; });
     const activate = () => {
       state.sel = state.sel === item.id ? null : item.id;
       commit({ push: true });

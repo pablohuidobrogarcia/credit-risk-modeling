@@ -192,8 +192,7 @@ test("state map follows the metric selector", async ({ page }) => {
 
   await page.locator("#metric-tabs button[data-metric='default_rate']").click();
   await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
-  await page.waitForTimeout(250);
-  expect(await fills()).toEqual(defaultFills);
+  await expect.poll(() => fills(), { timeout: 3000 }).toEqual(defaultFills);
   expect(await legend()).toEqual(defaultLegend);
   expect(await chipFill()).toBe(defaultChip);
   await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
@@ -584,20 +583,17 @@ test("purpose and home ownership maps use their supplied SVGs and stay linked", 
     await expect(page.locator(`#tile-map.${className} .segment-svg`)).toBeVisible();
     await expect(page.locator(`#tile-map.${className} [data-id]`)).toHaveCount(PE.dimensions[dim].length);
     await expect(page.locator("#map-note")).toContainText("Hover a category for its name");
+    await expect(page.locator("#map-legend")).toBeVisible();
+    await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
     if (dim === "home_ownership") {
-      await expect(page.locator("#map-legend")).toBeHidden();
-      await expect(page.locator("#map-subtitle")).toContainText("category view");
       const fill = await page.locator(`#tile-map.${className} [data-id="MORTGAGE"] .bg`).evaluate((el) => getComputedStyle(el).fill);
-      expect(fill).toBe("rgb(255, 255, 255)");
+      expect(fill).not.toBe("rgb(255, 255, 255)");
       const howBuiltLabel = await page.locator("#how-built-picture text.label").first().evaluate((el) => {
         const style = getComputedStyle(el);
         return { fontSize: style.fontSize, fontFamily: style.fontFamily };
       });
       expect(howBuiltLabel.fontSize).toBe("12px");
       expect(howBuiltLabel.fontFamily.toLowerCase()).not.toContain("helvetica");
-    } else {
-      await expect(page.locator("#map-legend")).toBeVisible();
-      await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
     }
     await page.locator(`#tile-map.${className} [data-id="${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`dim=${dim}`));

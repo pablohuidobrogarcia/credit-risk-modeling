@@ -1,5 +1,7 @@
 # Information-box inventory
 
+> **Implementation status:** all REMOVE, SHORTEN and MERGE recommendations below are applied in the current `explorer-cleanup` worktree. The tables remain the pre-change audit.
+
 Report-only audit for `explorer-cleanup`. No information box was changed in Part C. Scope: every visible explanatory box, popover, hint, subtitle, caption, welcome text, empty/error state, Learn guide card and glossary term. Numbers were resolved from `docs/data.json` in the default State/Total context; the `{metric}` placeholder resolves to “observed default”. Word counts include the title, body, “Try this” and “Learn more” label for popovers, or the full text for static boxes.
 
 ## A. Main inventory

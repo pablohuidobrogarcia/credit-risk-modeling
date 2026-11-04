@@ -706,8 +706,8 @@ button, input, select { font: inherit; color: inherit; }
 .evidence-columns { display: grid; grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr); gap: 0.8rem; align-items: start; }
 .evidence-column { display: flex; flex-direction: column; gap: 0.8rem; min-width: 0; }
 @media (min-width: 1001px) {
-  .evidence-column:first-child { align-self: stretch; }
-  .evidence-column:first-child > .panel:last-child { flex: 1 1 auto; }
+  .evidence-column { align-self: stretch; }
+  .evidence-column > .panel:last-child { flex: 1 1 auto; }
 }
 .evidence-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; margin: 0.8rem 0; }
 .note-copy { color: var(--fg-muted); font-size: 0.86rem; margin: 0.6rem 0; }

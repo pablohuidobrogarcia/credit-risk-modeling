@@ -304,7 +304,7 @@ test("State tab shows full state names everywhere and keeps the strip height fix
     }
   };
   checkNoCodes(await page.locator("#view-explorer").innerText(), "State tab");
-  for (const id of ["map", "small-states", "masked-states"]) {
+  for (const id of ["dimension-tabs", "small-states", "masked-states"]) {
     await page.locator(`[data-info="${id}"]`).first().click();
     await expect(page.locator("#info-popover")).toBeVisible();
     checkNoCodes(await page.locator("#info-popover").innerText(), `${id} popover`);
@@ -1050,8 +1050,8 @@ test("clicking the surface does not move the linked sliders", async ({ page }) =
 test("surface copy says it does not change the sliders", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
-  await expect(page.locator("#surface-sub")).toContainText("Rotate/zoom");
-  await expect(page.locator("#surface-sub")).toContainText("sliders stay");
+  await expect(page.locator("#surface-sub")).not.toContainText("Rotate/zoom");
+  await expect(page.locator("#surface-sub")).toContainText("outlined marker is the base case");
   await page.locator('.info-btn[data-info="surface"]').click();
   await expect(page.locator("#info-popover")).toContainText("does not change the sliders");
   await page.keyboard.press("Escape");
@@ -1506,10 +1506,10 @@ test("every info button maps to content and opens one popover at a time", async 
   }
   await page.locator("#view-tab-explorer").click();
   await page.waitForTimeout(300);
-  const mapButton = page.locator('[data-info="map"]').first();
-  await mapButton.click();
+  const firstButton = page.locator('[data-info="dimension-tabs"]').first();
+  await firstButton.click();
   await expect(page.locator("#info-popover")).toBeVisible();
-  await expect(mapButton).toHaveAttribute("aria-expanded", "true");
+  await expect(firstButton).toHaveAttribute("aria-expanded", "true");
   const popBox = await page.locator("#info-popover").boundingBox();
   expect(popBox.x).toBeGreaterThanOrEqual(0);
   expect(popBox.y).toBeGreaterThanOrEqual(0);
@@ -1519,18 +1519,18 @@ test("every info button maps to content and opens one popover at a time", async 
   const second = page.locator('[data-info="metric-tabs"]').first();
   await second.click();
   await expect(second).toHaveAttribute("aria-expanded", "true");
-  await expect(mapButton).toHaveAttribute("aria-expanded", "false");
+  await expect(firstButton).toHaveAttribute("aria-expanded", "false");
   await page.keyboard.press("Escape");
   await expect(page.locator("#info-popover")).toBeHidden();
   await expect(second).toBeFocused();
-  await mapButton.click();
+  await firstButton.click();
   await page.locator("#summary-title").click();
   await expect(page.locator("#info-popover")).toBeHidden();
-  await mapButton.focus();
+  await firstButton.focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#info-popover")).toBeVisible();
   await page.keyboard.press("Escape");
-  await mapButton.focus();
+  await firstButton.focus();
   await page.keyboard.press("Space");
   await expect(page.locator("#info-popover")).toBeVisible();
   await page.keyboard.press("Escape");
@@ -1550,10 +1550,42 @@ test("every info button maps to content and opens one popover at a time", async 
   await expectNoErrors(errors);
 });
 
+test("inventory recommendations removed the orphaned boxes and shortened the kept copy", async ({ page }) => {
+  const INFO = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/info.json"), "utf8"));
+  const errors = await open(page);
+  for (const id of ["map", "kpi-auc", "kpi-var", "sim-annual_inc", "sim-home_ownership", "sim-breakdown", "how-built"]) {
+    expect(INFO[id], `${id} should be removed`).toBeUndefined();
+  }
+  expect(INFO["dimension-tabs"].text).not.toContain("These tabs change the explorer");
+  expect(INFO["dimension-tabs"].text).toContain("{primary_window}");
+  expect(INFO["ranked-list"].text).not.toContain("Longer bars");
+  expect(INFO["risk-lgd"].text).not.toContain("can be combined");
+  expect(INFO["play-rho"].text).not.toContain("reduced motion");
+  expect(INFO["gauge"].text).not.toContain("Monte Carlo");
+  expect(INFO["surface"].text).not.toContain("Drag to rotate");
+  expect(INFO["surface"].text).toContain("does not change the sliders");
+  expect(INFO["surface-metric"].text).not.toContain("Switch the vertical axis");
+  expect(INFO["sim-dti"].text).not.toContain("Monthly debt payments divided");
+  expect(INFO["sim-purpose"].text).not.toContain("The reason the borrower gave");
+  expect(INFO["state-map"].text).not.toContain("colored by");
+  expect(INFO["small-states"].text).not.toContain("Rhode Island, Delaware");
+
+  await expect(page.locator('[data-info="map"], [data-info="how-built"], [data-info="sim-annual_inc"], [data-info="sim-home_ownership"]')).toHaveCount(0);
+  await expect(page.locator("#how-built-sub, #sim-score-note, #sim-gini-foot")).toHaveCount(0);
+  await expect(page.locator("#view-evidence")).not.toContainText("Findings about discrimination");
+  await expect(page.locator("#view-learn .section-lead")).not.toContainText("Plain-English definitions");
+
+  await page.locator("#view-tab-risk").click();
+  await page.waitForTimeout(400);
+  await expect(page.locator("#cutoff-kpis .sub").first()).toHaveText("Share accepted.");
+  await expect(page.locator("#cutoff-kpis .sub").nth(1)).toHaveText("Defaults among approved.");
+  await expectNoErrors(errors);
+});
+
 test("info popovers work on mobile and do not overflow 390px", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = await open(page);
-  await page.locator('[data-info="map"]').first().click();
+  await page.locator('[data-info="dimension-tabs"]').first().click();
   await expect(page.locator("#info-popover")).toBeVisible();
   const box = await page.locator("#info-popover").boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
@@ -1660,7 +1692,7 @@ test("Learn guide cards use ribbon pastels with ink text and white buttons", asy
 
 test("info Learn more and glossary See it links resolve", async ({ page }) => {
   const errors = await open(page);
-  await page.locator('[data-info="map"]').first().click();
+  await page.locator('[data-info="small-states"]').first().click();
   await expect(page.locator("#info-popover .info-learn")).toBeVisible();
   await page.locator("#info-popover .info-learn").click();
   await expect(page.locator("#view-learn")).toBeVisible();

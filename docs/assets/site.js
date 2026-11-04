@@ -368,8 +368,6 @@ const STATIC_INFO = [
   ["#dimension-tabs", "dimension-tabs", "Dimension tabs", "after"],
   ["#metric-tabs", "metric-tabs", "Color metric", "after"],
   ["#segment-search", "filter", "Filter segments", "after"],
-  ["#map-title", "map", "Segment map", "after"],
-  ["#how-built-title", "how-built", "How this was built", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
   ["#play-rho", "play-rho", "Play rho sweep", "after"],
@@ -1543,7 +1541,7 @@ function renderGauge(value) {
     <text class="scale" x="212" y="119" text-anchor="end">${Math.round(max * 100)}%</text>
   </svg>`;
   const caption = $("#gauge-caption");
-  if (caption) caption.textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale. The gauge is descriptive; it does not imply a limit.`;
+  if (caption) caption.textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale.`;
 }
 
 function drawLossChart(hist, scenario) {
@@ -1609,7 +1607,7 @@ function drawSurface() {
   const p = palette();
   const base = surf.base_case;
   const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
-  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText} Rotate/zoom; sliders stay.`;
+  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText}`;
   if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
   const matrix = surfaceMatrix(state.surfaceMetric);
   if (!matrix) return;
@@ -1806,7 +1804,7 @@ function setupSimulator() {
     const optionHtml = options.map((opt) => `<option value="${esc(opt.key)}">${esc(opt.label)}${opt.share ? ` — ${(opt.share * 100).toFixed(1)}% of test window` : ""}</option>`).join("");
     wrap.innerHTML = `
       <div class="sim-ctrl-head">
-        <label for="${id}">${esc(label)} ${infoButton(`sim-${variable}`, label)}</label>
+        <label for="${id}">${esc(label)} ${INFO[`sim-${variable}`] ? infoButton(`sim-${variable}`, label) : ""}</label>
         <output class="sim-contrib" id="sim-contrib-${variable}">—</output>
       </div>
       ${numeric
@@ -1910,11 +1908,9 @@ function renderSimulator() {
   countUp($("#sim-score"), score, (v) => String(Math.round(v)));
   countUp($("#sim-pd"), pd, (v) => fmtPct(v, 2));
   countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}%`);
-  $("#sim-score-note").textContent = "";
   $("#sim-pd-note").textContent = `About ${Math.round(pd * 100)} out of 100 similar applicants default; the portfolio average is ${fmtPct(portfolioRate, 2)}.`;
   $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the ${testYears} test window.`;
   $("#sim-gini").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)}`;
-  $("#sim-gini-foot").textContent = fmtNum(D.pd.champion_gini, 4);
   renderScoreHist($("#sim-hist"), hist, bins, "Test-window score distribution", score);
   const minScore = Number(bins[0] || typicalScore);
   const maxScore = Number(bins[bins.length - 1] || minScore + 1);
@@ -1964,10 +1960,10 @@ function renderCutoff() {
   const overall = total ? (badAbove + badBelow) / total : 0;
   $("#cutoff-sub").textContent = `At cutoff ${Math.round(cutoff)}, ${fmtPct(approval, 1)} of applicants are approved; ${fmtPct(badApproved, 1)} of approved loans default, versus ${fmtPct(overall, 2)} overall. Approve everyone: ${fmtPct(overall, 2)} bad rate.`;
   const defs = [
-    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1), "Share of applicants accepted."],
-    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1), "Defaults among approved loans."],
-    ["Approved good", goodAbove, "cut-good", fmtInt, "Good loans kept by the cutoff."],
-    ["Approved bad", badAbove, "cut-bad-n", fmtInt, "Bad loans kept by the cutoff."],
+    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1), "Share accepted."],
+    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1), "Defaults among approved."],
+    ["Approved good", goodAbove, "cut-good", fmtInt, "Good loans kept."],
+    ["Approved bad", badAbove, "cut-bad-n", fmtInt, "Bad loans kept."],
   ];
   const host = $("#cutoff-kpis");
   host.innerHTML = defs.map(([label, , key, , meaning]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="${key}">—</p><p class="sub">${esc(meaning)}</p></div>`).join("");

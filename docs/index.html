@@ -116,7 +116,6 @@
             <div class="panel-head">
               <div>
                 <h3 id="how-built-title">How this was built</h3>
-                <p class="panel-sub" id="how-built-sub">Click a number</p>
               </div>
             </div>
             <!-- Reference artwork: docs/assets/process-ribbon.svg -->
@@ -349,7 +348,7 @@
             </div>
             <div class="sim-controls" id="sim-controls"></div>
             <div class="sim-outputs">
-              <div><p class="mini-label">Score</p><p class="sim-value" id="sim-score">—</p><p class="sub" id="sim-score-note">Higher score = lower risk</p></div>
+              <div><p class="mini-label">Score</p><p class="sim-value" id="sim-score">—</p></div>
               <div><p class="mini-label">Implied PD</p><p class="sim-value" id="sim-pd">—</p><p class="sub" id="sim-pd-note">—</p></div>
               <div><p class="mini-label">Percentile</p><p class="sim-value" id="sim-pct">—</p><p class="sub" id="sim-pct-note">—</p></div>
             </div>
@@ -359,7 +358,6 @@
               <summary>Why this score?</summary>
               <div id="sim-breakdown"></div>
             </details>
-            <p class="panel-foot">Gini <span id="sim-gini-foot">—</span>.</p>
           </section>
 
           <section class="panel" aria-labelledby="cutoff-title">
@@ -449,7 +447,6 @@
 
             <section class="panel limitations-panel">
               <h3>What did not work, and limitations</h3>
-              <p class="note-copy">Findings about discrimination, LGD, calibration and the forecast are reported next to their tables above.</p>
               <ul class="limitations" id="limitations-list"><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li><li>Clustering is weakly separated: silhouette 0.1840, stability ARI 0.9566, and k-means separates the default rate by only 0.54 pp.</li></ul>
               <p class="note-copy" id="segments-note"></p>
             </section>
@@ -465,7 +462,7 @@
           <div>
             <p class="eyebrow">Learn</p>
             <h2>Start here: a 5-minute guide</h2>
-            <p class="section-lead">Plain-English definitions, the project's own examples and a link from every term back to the widget that uses it. This dashboard is a descriptive view over historical Lending Club data, not a lending decision system, forecast or causal model; segment differences are correlations, not causal effects.</p>
+            <p class="section-lead">This dashboard is a descriptive view over historical Lending Club data, not a lending decision system, forecast or causal model; segment differences are correlations, not causal effects.</p>
           </div>
         </div>
         <div class="guide-grid" id="learn-guide"></div>

@@ -24,7 +24,7 @@
       "caveat": "Averages can hide segment-level miscalibration.",
       "visual": "predicted",
       "visual_label": "100 loans",
-      "visual_note": "Observed minus predicted: +{gap_pp} pp"
+      "visual_note": "Fill = observed; outline = predicted. Observed minus predicted: +{gap_pp} pp"
     },
     {
       "id": "expected-loss",

@@ -389,7 +389,7 @@ function bindInfoDelegation() {
 
 const STATIC_INFO = [
   ["#dimension-tabs", "dimension-tabs", "Dimension tabs", "after"],
-  ["#metric-tabs", "metric-tabs", "Color metric", "after"],
+  ["#map-title", "map", "Segment map", "after"],
   ["#segment-search", "filter", "Filter segments", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
@@ -1313,9 +1313,9 @@ function renderSummary() {
   $("#summary-context").innerHTML = `<span>Loans <strong data-testid="summary-loans">${fmtInt(item.n)}</strong></span><span>Share of EAD <strong data-testid="summary-ead-share">${fmtPct(item.ead_share, 1)}</strong></span>`;
 
   const rows = [
-    { metric: "default_rate", label: "Observed default", info: "kpi-observed", testid: "summary-default-rate" },
-    { metric: "pred_pd", label: "Predicted PD", info: "kpi-pd", testid: "summary-pred-pd" },
-    { metric: "el_pct_ead", label: "Expected loss (% of EAD)", info: "kpi-el", testid: "summary-el" },
+    { metric: "default_rate", label: "Observed default", testid: "summary-default-rate" },
+    { metric: "pred_pd", label: "Predicted PD", testid: "summary-pred-pd" },
+    { metric: "el_pct_ead", label: "Expected loss (% of EAD)", testid: "summary-el" },
   ];
   const host = $("#summary-kpis");
   host.innerHTML = rows.map((row) => {
@@ -1324,7 +1324,7 @@ function renderSummary() {
     const rank = showCompare ? metricRank(item, row.metric) : null;
     const active = state.metric === row.metric;
     return `<div class="selection-metric-row${active ? " is-active" : ""}" data-row-metric="${row.metric}">
-      <div class="selection-metric-label"><span>${esc(row.label)}</span>${infoButton(row.info, row.label)}</div>
+      <div class="selection-metric-label"><span>${esc(row.label)}</span></div>
       <div class="selection-metric-value" data-testid="${row.testid}">${metricText(value, row.metric, 2)}</div>
       ${row.metric === "default_rate" ? `<div class="selection-ci">95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)} ${infoButton("kpi-ci", "95% confidence interval")}</div>` : ""}
       ${showCompare ? `<div class="selection-metric-compare"><span class="selection-metric-diff">${signedPp(diff)} vs portfolio</span><span class="selection-metric-rank">${rank ? `#${rank.rank} of ${rank.total}` : "—"}</span></div>` : ""}

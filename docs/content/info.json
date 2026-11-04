@@ -5,11 +5,11 @@
     "try": "Switch to Grade and click the step with the highest expected loss.",
     "term": "primary-window"
   },
-  "metric-tabs": {
-    "title": "Color metric",
-    "text": "The color metric orders and colors the map, staircase, tiles and ranked bars. Observed default is what happened; predicted PD is the calibrated model output; expected loss is PD × LGD × EAD, shown as a share of EAD.",
-    "try": "Choose Predicted PD and compare the ranking with observed default.",
-    "term": "pd"
+  "map": {
+    "title": "Segment map",
+    "text": "State uses the US map; Grade uses the staircase; other dimensions use tiles. Click or tap a segment to link it to the ranked list and summary. Use the small-state buttons for compact states.",
+    "try": "Select California and compare its 95% interval with a small state.",
+    "term": "small-segment-masking"
   },
   "ranked-list": {
     "title": "Ranked segments",
@@ -23,29 +23,11 @@
     "try": "Type California, then clear the box.",
     "term": "loan"
   },
-  "kpi-observed": {
-    "title": "Observed default rate",
-    "text": "The share of loans in the segment that ended as Charged Off or Default. This is a descriptive historical rate, not a causal effect and not a forecast.",
-    "try": "Select a segment and compare its rate with the portfolio rate of {default_rate_oot}.",
-    "term": "default"
-  },
   "kpi-ci": {
     "title": "95% confidence interval",
     "text": "The Wilson interval shows the sampling uncertainty around the observed default rate. A small segment can have a wide interval even when its point estimate looks dramatic.",
     "try": "Select a small state and compare its interval with the portfolio in Selection.",
     "term": "wilson-ci"
-  },
-  "kpi-pd": {
-    "title": "Predicted PD",
-    "text": "The mean calibrated probability of default for the segment. It is a model output on the mature test window, not the observed default rate; the two can differ.",
-    "try": "Switch between Observed default and Predicted PD and watch the ranking move.",
-    "term": "pd"
-  },
-  "kpi-el": {
-    "title": "Expected loss % of EAD",
-    "text": "Expected loss is PD × LGD, expressed as a share of exposure. It turns a probability into an average loss estimate. The portfolio total is reconciled to the headline EL rate of {el_rate}.",
-    "try": "Compare the selected segment with the portfolio total.",
-    "term": "el"
   },
   "model-check": {
     "title": "Model check",

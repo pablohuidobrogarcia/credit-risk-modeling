@@ -1674,7 +1674,7 @@ test("every info button maps to content and opens one popover at a time", async 
   expect(popBox.x + popBox.width).toBeLessThanOrEqual(1360);
   expect(popBox.y + popBox.height).toBeLessThanOrEqual(1000);
   await expect(page.locator("#info-popover .info-close")).toBeFocused();
-  const second = page.locator('[data-info="metric-tabs"]').first();
+  const second = page.locator('[data-info="filter"]').first();
   await second.click();
   await expect(second).toHaveAttribute("aria-expanded", "true");
   await expect(firstButton).toHaveAttribute("aria-expanded", "false");
@@ -1711,9 +1711,10 @@ test("every info button maps to content and opens one popover at a time", async 
 test("inventory recommendations removed the orphaned boxes and shortened the kept copy", async ({ page }) => {
   const INFO = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/info.json"), "utf8"));
   const errors = await open(page);
-  for (const id of ["map", "kpi-auc", "kpi-var", "sim-annual_inc", "sim-home_ownership", "sim-breakdown", "how-built"]) {
+  for (const id of ["kpi-auc", "kpi-var", "sim-annual_inc", "sim-home_ownership", "sim-breakdown", "how-built", "metric-tabs", "kpi-observed", "kpi-pd", "kpi-el"]) {
     expect(INFO[id], `${id} should be removed`).toBeUndefined();
   }
+  expect(INFO["map"], "map info should stay available").toBeTruthy();
   expect(INFO["dimension-tabs"].text).not.toContain("These tabs change the explorer");
   expect(INFO["dimension-tabs"].text).toContain("{primary_window}");
   expect(INFO["ranked-list"].text).not.toContain("Longer bars");
@@ -1728,7 +1729,7 @@ test("inventory recommendations removed the orphaned boxes and shortened the kep
   expect(INFO["state-map"].text).not.toContain("colored by");
   expect(INFO["small-states"].text).not.toContain("Rhode Island, Delaware");
 
-  await expect(page.locator('[data-info="map"], [data-info="how-built"], [data-info="sim-annual_inc"], [data-info="sim-home_ownership"]')).toHaveCount(0);
+  await expect(page.locator('[data-info="how-built"], [data-info="sim-annual_inc"], [data-info="sim-home_ownership"], [data-info="metric-tabs"], [data-info="kpi-observed"], [data-info="kpi-pd"], [data-info="kpi-el"]')).toHaveCount(0);
   await expect(page.locator("#how-built-sub, #sim-score-note, #sim-gini-foot")).toHaveCount(0);
   await expect(page.locator("#view-evidence")).not.toContainText("Findings about discrimination");
   await expect(page.locator("#view-learn .section-lead")).not.toContainText("Plain-English definitions");
@@ -1737,6 +1738,28 @@ test("inventory recommendations removed the orphaned boxes and shortened the kep
   await page.waitForTimeout(400);
   await expect(page.locator("#cutoff-kpis .sub").first()).toHaveText("Share accepted.");
   await expect(page.locator("#cutoff-kpis .sub").nth(1)).toHaveText("Defaults among approved.");
+  await expectNoErrors(errors);
+});
+
+test("metric definition info boxes are removed while map and interval help remain", async ({ page }) => {
+  const INFO = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/info.json"), "utf8"));
+  const errors = await open(page);
+  for (const id of ["metric-tabs", "kpi-observed", "kpi-pd", "kpi-el"]) {
+    expect(INFO[id], `${id} should be removed`).toBeUndefined();
+  }
+  await expect(page.locator('#metric-tabs .info-btn, #metric-tabs + .info-btn, [data-info="metric-tabs"]')).toHaveCount(0);
+  await expect(page.locator(".selection-metric-label .info-btn, [data-info='kpi-observed'], [data-info='kpi-pd'], [data-info='kpi-el']")).toHaveCount(0);
+  await expect(page.locator('[data-info="kpi-ci"]')).toBeVisible();
+  await expect(page.locator('[data-info="model-check"]')).toBeVisible();
+  await expect(page.locator('[data-info="map"]')).toBeVisible();
+  await expect(page.locator('[data-info="map-zoom"]')).toBeVisible();
+  await expect(page.locator('[data-info="small-states"]')).toBeVisible();
+  await expect(page.locator('[data-info="masked-states"]')).toBeVisible();
+  await expect(page.locator("#map-note")).toContainText("state name");
+  await expect(page.locator("#view-explorer")).not.toContainText(/info icon/i);
+  await page.locator("#dimension-tabs button[data-dim='grade']").click();
+  await page.waitForTimeout(250);
+  await expect(page.locator("#map-note")).toContainText("Step height");
   await expectNoErrors(errors);
 });
 

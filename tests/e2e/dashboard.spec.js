@@ -541,6 +541,82 @@ test("explorer visuals expose only the segment name on hover and focus", async (
   await expectNoErrors(errors);
 });
 
+test("selection block shows one context row, three metric rows and a model check", async ({ page }) => {
+  const errors = await open(page);
+  const selection = page.locator(".selection-part-a");
+  const item = PE.dimensions.state.find((entry) => entry.id === "AL");
+  const total = PE.dimensions.total[0];
+  await page.locator('#tile-map .us-map-svg .st[data-state="AL"]').click();
+  await expect(page.locator("#summary-title")).toHaveText("AL");
+  await expect(selection.locator("#summary-subtitle, #summary-gap, .eyebrow")).toHaveCount(0);
+  await expect(selection.locator('[data-testid="summary-loans"]')).toHaveText(item.n.toLocaleString("en-US"));
+  await expect(selection.locator('[data-testid="summary-ead-share"]')).toHaveText(pct(item.ead_share, 1));
+  const contextText = await selection.locator(".selection-context").innerText();
+  expect(contextText.match(/Loans/g)?.length).toBe(1);
+  expect(contextText.match(/Share of EAD/g)?.length).toBe(1);
+
+  const rows = selection.locator(".selection-metric-row");
+  await expect(rows).toHaveCount(3);
+  await expect(selection.locator(".selection-metric-label > span")).toHaveText(["Observed default", "Predicted PD", "Expected loss (% of EAD)"]);
+  await expect(selection.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(item.default_rate));
+  await expect(selection.locator('[data-testid="summary-pred-pd"]')).toHaveText(pct(item.pred_pd));
+  await expect(selection.locator('[data-testid="summary-el"]')).toHaveText(pct(item.el_pct_ead));
+  await expect(selection.locator(".selection-ci")).toContainText(`95% CI ${pct(item.ci_low)}–${pct(item.ci_high)}`);
+
+  const rank = (metric) => {
+    const peers = PE.dimensions.state
+      .filter((entry) => !entry.insufficient && Number.isFinite(entry[metric]))
+      .sort((a, b) => b[metric] - a[metric]);
+    return peers.findIndex((entry) => entry.id === item.id) + 1;
+  };
+  for (const metric of ["default_rate", "pred_pd", "el_pct_ead"]) {
+    const row = selection.locator(`[data-row-metric="${metric}"]`);
+    const diff = (item[metric] - total[metric]) * 100;
+    await expect(row.locator(".selection-metric-diff")).toHaveText(`${diff >= 0 ? "+" : ""}${diff.toFixed(2)} pp vs portfolio`);
+    await expect(row.locator(".selection-metric-rank")).toHaveText(`#${rank(metric)} of 47`);
+  }
+  await expect(selection.locator('[data-row-metric="default_rate"]')).toHaveClass(/is-active/);
+  const before = await selection.locator("#summary-kpis").innerText();
+  await page.locator("#metric-tabs button[data-metric='pred_pd']").click();
+  await expect(selection.locator('[data-row-metric="pred_pd"]')).toHaveClass(/is-active/);
+  await expect(selection.locator('[data-row-metric="default_rate"]')).not.toHaveClass(/is-active/);
+  expect(await selection.locator("#summary-kpis").innerText()).toBe(before);
+
+  const expectedCheck = (() => {
+    const observed = pct(item.default_rate);
+    const predicted = pct(item.pred_pd);
+    if (item.pred_pd < item.ci_low) {
+      return `Model check: observed ${observed} vs predicted ${predicted}: the model underestimates risk by ${(Math.abs(item.default_rate - item.pred_pd) * 100).toFixed(2)} pp (predicted PD is outside the 95% CI).`;
+    }
+    if (item.pred_pd > item.ci_high) {
+      return `Model check: observed ${observed} vs predicted ${predicted}: the model overestimates risk by ${(Math.abs(item.default_rate - item.pred_pd) * 100).toFixed(2)} pp (predicted PD is outside the 95% CI).`;
+    }
+    return `Model check: observed ${observed} vs predicted ${predicted}: predicted PD is within the 95% CI.`;
+  })();
+  await expect(selection.locator('[data-testid="summary-model-check"]')).toHaveText(expectedCheck);
+  await expect(selection.locator('[data-info="model-check"]')).toBeVisible();
+
+  await page.locator("#dimension-tabs button[data-dim='total']").click();
+  await expect(page.locator("#summary-title")).toHaveText("Total portfolio");
+  await expect(selection.locator(".selection-metric-row")).toHaveCount(3);
+  await expect(selection.locator(".selection-metric-diff, .selection-metric-rank")).toHaveCount(0);
+  await expect(selection.locator('[data-testid="summary-model-check"]')).toBeVisible();
+  await expect(selection.locator('[data-row-metric="pred_pd"]')).toHaveClass(/is-active/);
+  await expectNoErrors(errors);
+});
+
+test("model check reports an inside-CI segment", async ({ page }) => {
+  const errors = await open(page);
+  const item = PE.dimensions.state.find((entry) => entry.id === "HI");
+  await page.goto(`/#view=explorer&dim=state&sel=${item.id}`);
+  await page.waitForTimeout(500);
+  await expect(page.locator("#summary-title")).toHaveText("HI");
+  await expect(page.locator('[data-testid="summary-model-check"]')).toHaveText(
+    `Model check: observed ${pct(item.default_rate)} vs predicted ${pct(item.pred_pd)}: predicted PD is within the 95% CI.`
+  );
+  await expectNoErrors(errors);
+});
+
 test("search filters the ranked list and clears safely", async ({ page }) => {
   const errors = await open(page);
   const input = page.locator("#segment-search");

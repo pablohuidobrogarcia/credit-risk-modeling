@@ -29,12 +29,6 @@
     "try": "Type CA, then clear the box.",
     "term": "loan"
   },
-  "kpi-loans": {
-    "title": "Loans analyzed",
-    "text": "This is the full analysis sample: {n_rows} loans with a final outcome anywhere in the {data_years} snapshot. It is not the same as the primary test window.",
-    "try": "Compare it with the {n_oot} loans in the explorer below.",
-    "term": "resolved-loan"
-  },
   "kpi-auc": {
     "title": "Model accuracy (AUC)",
     "text": "AUC is the probability that a random defaulter ranks above a random non-defaulter. The champion score is fitted on {train_years} and tested on later loans; 0.5 is chance.",
@@ -71,11 +65,11 @@
     "try": "Compare the selected segment with the portfolio total.",
     "term": "el"
   },
-  "kpi-ead": {
-    "title": "EAD share",
-    "text": "Exposure at default is the loan amount at risk. EAD share shows how much of the portfolio's exposure sits in this segment; a high default rate in a tiny segment may matter less than a small rate in a large one.",
-    "try": "Find the segment with the largest EAD share.",
-    "term": "ead"
+  "model-check": {
+    "title": "Model check",
+    "text": "Compares the model's predicted PD with the observed default of this segment. Outside the interval means the model is miscalibrated here.",
+    "try": "Find a segment where predicted PD sits outside the interval.",
+    "term": "calibration"
   },
   "score-distribution": {
     "title": "Score distribution",

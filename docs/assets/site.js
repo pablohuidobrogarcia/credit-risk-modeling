@@ -1232,46 +1232,61 @@ function renderList() {
   });
 }
 
+function metricRank(item, metric) {
+  const peers = dimItems()
+    .filter((entry) => !entry.insufficient && num(entry[metric]) != null)
+    .sort((a, b) => (num(b[metric]) || 0) - (num(a[metric]) || 0));
+  const index = peers.findIndex((entry) => entry.id === item.id);
+  return index >= 0 ? { rank: index + 1, total: peers.length } : null;
+}
+
+function signedPp(diff) {
+  const value = diff * 100;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)} pp`;
+}
+
+function selectionModelCheck(item) {
+  const observed = fmtPct(item.default_rate, 2);
+  const predicted = fmtPct(item.pred_pd, 2);
+  const gap = Math.abs((num(item.default_rate) || 0) - (num(item.pred_pd) || 0)) * 100;
+  if (num(item.pred_pd) < num(item.ci_low)) {
+    return `Model check: observed ${observed} vs predicted ${predicted}: the model underestimates risk by ${gap.toFixed(2)} pp (predicted PD is outside the 95% CI).`;
+  }
+  if (num(item.pred_pd) > num(item.ci_high)) {
+    return `Model check: observed ${observed} vs predicted ${predicted}: the model overestimates risk by ${gap.toFixed(2)} pp (predicted PD is outside the 95% CI).`;
+  }
+  return `Model check: observed ${observed} vs predicted ${predicted}: predicted PD is within the 95% CI.`;
+}
+
 function renderSummary() {
   const item = summaryItem();
   if (!item) return;
   const total = totalItem();
   const isSelected = state.dim !== "total" && !!selectedItem();
-  $("#summary-title").textContent = isSelected ? item.name : "Portfolio";
-  $("#summary-subtitle").textContent = isSelected
-    ? `${dimMeta(state.dim).label} segment · ${fmtInt(item.n)} loans · ${fmtPct(item.ead_share, 1)} of EAD`
-    : "All segments in the primary mature test window.";
+  const showCompare = isSelected;
+  $("#summary-title").textContent = state.dim === "total" ? "Total portfolio" : isSelected ? item.name : "Portfolio";
+  $("#summary-context").innerHTML = `<span>Loans <strong data-testid="summary-loans">${fmtInt(item.n)}</strong></span><span>Share of EAD <strong data-testid="summary-ead-share">${fmtPct(item.ead_share, 1)}</strong></span>`;
 
-  const kpis = [
-    { label: "Loans", value: item.n, format: fmtInt, testid: "summary-loans", info: "kpi-loans" },
-    { label: "Observed default", value: item.default_rate, format: (v) => fmtPct(v, 2), testid: "summary-default-rate", info: "kpi-observed", sub: `95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)}` },
-    { label: "Predicted PD", value: item.pred_pd, format: (v) => fmtPct(v, 2), testid: "summary-pred-pd", info: "kpi-pd" },
-    { label: "EL % of EAD", value: item.el_pct_ead, format: (v) => fmtPct(v, 2), testid: "summary-el", info: "kpi-el" },
-    { label: "EAD share", value: item.ead_share, format: (v) => fmtPct(v, 1), testid: "summary-ead-share", info: "kpi-ead" },
+  const rows = [
+    { metric: "default_rate", label: "Observed default", info: "kpi-observed", testid: "summary-default-rate" },
+    { metric: "pred_pd", label: "Predicted PD", info: "kpi-pd", testid: "summary-pred-pd" },
+    { metric: "el_pct_ead", label: "Expected loss (% of EAD)", info: "kpi-el", testid: "summary-el" },
   ];
   const host = $("#summary-kpis");
-  host.innerHTML = kpis.map((kpi) => `<div class="summary-kpi"><p class="mini-label">${esc(kpi.label)} ${infoButton(kpi.info, kpi.label)}</p><p class="value" data-testid="${kpi.testid}">—</p>${kpi.sub ? `<p class="sub">${esc(kpi.sub)} ${infoButton("kpi-ci", "95% confidence interval")}</p>` : ""}</div>`).join("");
-  kpis.forEach((kpi) => {
-    const el = host.querySelector(`[data-testid="${kpi.testid}"]`);
-    countUp(el, kpi.value, kpi.format);
-  });
+  host.innerHTML = rows.map((row) => {
+    const value = num(item[row.metric]);
+    const diff = showCompare && total ? value - (num(total[row.metric]) || 0) : null;
+    const rank = showCompare ? metricRank(item, row.metric) : null;
+    const active = state.metric === row.metric;
+    return `<div class="selection-metric-row${active ? " is-active" : ""}" data-row-metric="${row.metric}">
+      <div class="selection-metric-label"><span>${esc(row.label)}</span>${infoButton(row.info, row.label)}</div>
+      <div class="selection-metric-value" data-testid="${row.testid}">${metricText(value, row.metric, 2)}</div>
+      ${row.metric === "default_rate" ? `<div class="selection-ci">95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)} ${infoButton("kpi-ci", "95% confidence interval")}</div>` : ""}
+      ${showCompare ? `<div class="selection-metric-compare"><span class="selection-metric-diff">${signedPp(diff)} vs portfolio</span><span class="selection-metric-rank">${rank ? `#${rank.rank} of ${rank.total}` : "—"}</span></div>` : ""}
+    </div>`;
+  }).join("");
 
-  const gapHost = $("#summary-gap");
-  const sourceDim = state.dim === "total" ? "state" : state.dim;
-  const peers = dimItems(sourceDim).filter((x) => !x.insufficient && num(x[state.metric]) != null);
-  const highest = peers.slice().sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0))[0];
-  const lowest = peers.slice().sort((a, b) => (num(a[state.metric]) || 0) - (num(b[state.metric]) || 0))[0];
-  let html = "";
-  if (isSelected && total) {
-    const diff = (num(item[state.metric]) || 0) - (num(total[state.metric]) || 0);
-    const direction = diff >= 0 ? "above" : "below";
-    html += `<strong>${esc(item.name)}</strong> is <strong>${Math.abs(diff * 100).toFixed(2)} pp ${direction}</strong> the portfolio on ${esc(metricMeta(state.metric).short.toLowerCase())}. `;
-  }
-  if (highest && lowest) {
-    const dimLabel = state.dim === "total" ? "states" : `${dimMeta(sourceDim).label.toLowerCase()} segments`;
-    html += `Highest ${dimLabel}: <strong>${esc(highest.name)} (${metricText(highest[state.metric], state.metric, 1)})</strong>. Lowest: <strong>${esc(lowest.name)} (${metricText(lowest[state.metric], state.metric, 1)})</strong>.`;
-  }
-  gapHost.innerHTML = html || "Select a segment to compare it with the portfolio.";
+  $(".selection-model-check").innerHTML = `<span id="summary-model-check" data-testid="summary-model-check">${esc(selectionModelCheck(item))}</span>${infoButton("model-check", "Model check")}`;
 
   const hist = histFor(state.dim, item.id);
   renderScoreHist($("#score-hist"), hist, pe().meta.score_bins, `${isSelected ? item.name : "Portfolio"} · score distribution`, null);

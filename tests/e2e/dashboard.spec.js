@@ -909,7 +909,7 @@ test("portfolio folder content and layout hold at 1360, 1100 and 390 with reduce
   await expectNoErrors(errors);
 });
 
-test("explorer removed the score distribution and enlarges Selection type", async ({ page }) => {
+test("explorer removed the score distribution and keeps Selection numbers compact", async ({ page }) => {
   const errors = await open(page);
   await page.setViewportSize({ width: 1360, height: 900 });
   await page.goto("/#view=explorer&dim=state&sel=AL");
@@ -935,9 +935,10 @@ test("explorer removed the score distribution and enlarges Selection type", asyn
     };
   });
   expect(type.name).toBeGreaterThanOrEqual(28);
-  expect(type.activeValue).toBeGreaterThanOrEqual(28);
+  expect(type.activeValue).toBeGreaterThanOrEqual(18);
+  expect(type.activeValue).toBeLessThanOrEqual(22);
   expect(type.otherValues).toHaveLength(2);
-  for (const value of type.otherValues) expect(value).toBeGreaterThanOrEqual(24);
+  for (const value of type.otherValues) expect(value).toBeCloseTo(type.activeValue, 2);
   for (const label of type.labels) expect(label).toBeGreaterThanOrEqual(14);
   expect(type.context).toBeGreaterThanOrEqual(14);
   expect(type.compare).toBeGreaterThanOrEqual(13);

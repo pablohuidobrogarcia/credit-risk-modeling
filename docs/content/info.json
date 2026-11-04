@@ -1,16 +1,4 @@
 {
-  "dimension-tabs": {
-    "title": "Dimension tabs",
-    "text": "State shows the US map; Grade shows the A–G staircase; other dimensions show one tile per segment. Every tab uses the same primary test window: {primary_window}, {n_oot} resolved loans.",
-    "try": "Switch to Grade and click the step with the highest expected loss.",
-    "term": "primary-window"
-  },
-  "map": {
-    "title": "Segment map",
-    "text": "State uses the US map; Grade uses the staircase; other dimensions use tiles. Click or tap a segment to link it to the ranked list and summary. Use the small-state buttons for compact states.",
-    "try": "Select California and compare its 95% interval with a small state.",
-    "term": "small-segment-masking"
-  },
   "ranked-list": {
     "title": "Ranked segments",
     "text": "A row and its map shape or staircase step stay linked, so clicking either selects the same segment.",

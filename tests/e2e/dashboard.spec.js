@@ -25,7 +25,7 @@ async function childBoxes(locator) {
   });
 }
 
-async function open(page, { blockCdn = false, keepWelcome = false, url = "/" } = {}) {
+async function open(page, { blockCdn = false, keepWelcome = false, url = "/", dim = "state" } = {}) {
   const errors = [];
   page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
   page.on("console", (msg) => {
@@ -41,7 +41,6 @@ async function open(page, { blockCdn = false, keepWelcome = false, url = "/" } =
   });
   await page.goto(url);
   await expect(page.locator("#app-content")).toBeVisible();
-  await expect(page.locator("#tile-map .tile:visible, #tile-map .us-map-svg .st:visible, #tile-map .state-chip:visible").first()).toBeVisible();
   await page.waitForTimeout(700);
   if (!keepWelcome && await page.locator("#welcome-start").isVisible().catch(() => false)) {
     await page.locator("#welcome-start").click();
@@ -49,6 +48,14 @@ async function open(page, { blockCdn = false, keepWelcome = false, url = "/" } =
     await page.locator("#view-tab-explorer").click();
     await expect(page.locator("#view-explorer")).toBeVisible();
   }
+  if (dim && !keepWelcome && await page.locator("#view-explorer").isVisible().catch(() => false)) {
+    const tab = page.locator(`#dimension-tabs button[data-dim="${dim}"]`);
+    if (await tab.isVisible().catch(() => false) && await tab.getAttribute("aria-selected") !== "true") {
+      await tab.click();
+      await page.waitForTimeout(200);
+    }
+  }
+  await expect(page.locator("#tile-map .tile:visible, #tile-map .us-map-svg .st:visible, #tile-map .state-chip:visible, #total-panel:visible").first()).toBeVisible();
   return errors;
 }
 
@@ -56,12 +63,17 @@ async function expectNoErrors(errors) {
   expect(errors, errors.join("\n")).toEqual([]);
 }
 
-test("loads the linked explorer without console or page errors", async ({ page }) => {
-  const errors = await open(page);
-  await expect(page.locator("#summary-title")).toHaveText("Portfolio");
-  await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(PE.dimensions.state.length);
-  await expect(page.locator("#rank-list .rank-row")).toHaveCount(PE.dimensions.state.length);
-  await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(PE.dimensions.total[0].default_rate));
+test("loads the linked explorer on Total by default without console or page errors", async ({ page }) => {
+  const errors = await open(page, { dim: null });
+  await expect(page.locator('#dimension-tabs button[data-dim="total"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(/dim=total/);
+  await expect(page.locator("#total-panel")).toBeVisible();
+  await expect(page.locator("#total-folder-caption")).toHaveText("Open the portfolio folder");
+  await expect(page.locator("#total-tab-guide")).toContainText("State");
+  await expect(page.locator("#total-tab-guide")).toContainText("Home ownership");
+  for (const selector of [".map-panel", ".list-panel", ".selection-part-a"]) {
+    await expect(page.locator(selector)).toBeHidden();
+  }
   await expectNoErrors(errors);
 });
 
@@ -310,7 +322,7 @@ test("State tab shows full state names everywhere and keeps the strip height fix
     }
   };
   checkNoCodes(await page.locator("#view-explorer").innerText(), "State tab");
-  for (const id of ["dimension-tabs", "small-states", "masked-states"]) {
+  for (const id of ["map-zoom", "small-states", "masked-states"]) {
     await page.locator(`[data-info="${id}"]`).first().click();
     await expect(page.locator("#info-popover")).toBeVisible();
     checkNoCodes(await page.locator("#info-popover").innerText(), `${id} popover`);
@@ -740,16 +752,16 @@ test("selection block keeps one size across every tab at 1360, 1100 and 390", as
 
 test("Total tab is one folder view and preserves the metric selector state", async ({ page }) => {
   const errors = await open(page);
-  const meta = PE.meta;
   await page.locator("#dimension-tabs button[data-dim='total']").click();
   await page.waitForTimeout(350);
   await expect(page.locator("#total-panel")).toBeVisible();
   await expect(page.locator("#total-folder-button")).toBeVisible();
   await expect(page.locator("#total-folder-caption")).toHaveText("Open the portfolio folder");
-  await expect(page.locator('[data-testid="total-observed"]')).toHaveText(pct(meta.default_rate_total));
-  await expect(page.locator('[data-testid="total-predicted"]')).toHaveText(pct(meta.mean_pd));
-  await expect(page.locator('[data-testid="total-el"]')).toHaveText(pct(meta.el_pct_ead));
-  await expect(page.locator("#total-scope")).toHaveText(`${meta.n_total.toLocaleString("en-US")} loans, ${meta.years.join("-")} test window, ${meta.term}-month term`);
+  await expect(page.locator("#total-tab-guide")).toContainText("Total");
+  for (const tab of ["State", "Grade", "Purpose", "Vintage", "Home ownership"]) {
+    await expect(page.locator("#total-tab-guide")).toContainText(tab);
+  }
+  await expect(page.locator("#total-tab-guide article")).toHaveCount(6);
   for (const selector of [".map-panel", ".list-panel", ".selection-part-a", "#metric-tabs", "#segment-search"]) {
     await expect(page.locator(selector)).toBeHidden();
   }
@@ -1664,7 +1676,7 @@ test("every info button maps to content and opens one popover at a time", async 
   }
   await page.locator("#view-tab-explorer").click();
   await page.waitForTimeout(300);
-  const firstButton = page.locator('[data-info="dimension-tabs"]').first();
+  const firstButton = page.locator('[data-info="ranked-list"]').first();
   await firstButton.click();
   await expect(page.locator("#info-popover")).toBeVisible();
   await expect(firstButton).toHaveAttribute("aria-expanded", "true");
@@ -1711,12 +1723,9 @@ test("every info button maps to content and opens one popover at a time", async 
 test("inventory recommendations removed the orphaned boxes and shortened the kept copy", async ({ page }) => {
   const INFO = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/content/info.json"), "utf8"));
   const errors = await open(page);
-  for (const id of ["kpi-auc", "kpi-var", "sim-annual_inc", "sim-home_ownership", "sim-breakdown", "how-built", "metric-tabs", "kpi-observed", "kpi-pd", "kpi-el"]) {
+  for (const id of ["kpi-auc", "kpi-var", "sim-annual_inc", "sim-home_ownership", "sim-breakdown", "how-built", "metric-tabs", "kpi-observed", "kpi-pd", "kpi-el", "dimension-tabs", "map"]) {
     expect(INFO[id], `${id} should be removed`).toBeUndefined();
   }
-  expect(INFO["map"], "map info should stay available").toBeTruthy();
-  expect(INFO["dimension-tabs"].text).not.toContain("These tabs change the explorer");
-  expect(INFO["dimension-tabs"].text).toContain("{primary_window}");
   expect(INFO["ranked-list"].text).not.toContain("Longer bars");
   expect(INFO["risk-lgd"].text).not.toContain("can be combined");
   expect(INFO["play-rho"].text).not.toContain("reduced motion");
@@ -1751,7 +1760,6 @@ test("metric definition info boxes are removed while map and interval help remai
   await expect(page.locator(".selection-metric-label .info-btn, [data-info='kpi-observed'], [data-info='kpi-pd'], [data-info='kpi-el']")).toHaveCount(0);
   await expect(page.locator('[data-info="kpi-ci"]')).toBeVisible();
   await expect(page.locator('[data-info="model-check"]')).toBeVisible();
-  await expect(page.locator('[data-info="map"]')).toBeVisible();
   await expect(page.locator('[data-info="map-zoom"]')).toBeVisible();
   await expect(page.locator('[data-info="small-states"]')).toBeVisible();
   await expect(page.locator('[data-info="masked-states"]')).toBeVisible();
@@ -1766,7 +1774,7 @@ test("metric definition info boxes are removed while map and interval help remai
 test("info popovers work on mobile and do not overflow 390px", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const errors = await open(page);
-  await page.locator('[data-info="dimension-tabs"]').first().click();
+  await page.locator('[data-info="filter"]').first().click();
   await expect(page.locator("#info-popover")).toBeVisible();
   const box = await page.locator("#info-popover").boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
@@ -2189,6 +2197,8 @@ test("reduced motion keeps count-ups instant and turns the sweep into one step",
   const welcomeDuration = await page.locator("#welcome-dialog").evaluate((el) => getComputedStyle(el).animationDuration);
   expect(parseFloat(welcomeDuration)).toBeLessThan(0.01);
   await page.locator("#welcome-start").click();
+  await page.locator("#view-tab-explorer").click();
+  await page.locator('#dimension-tabs button[data-dim="state"]').click();
   await page.locator("#view-tab-risk").click();
   await page.locator("#play-rho").click();
   await expect(page.locator("#play-rho")).toHaveAttribute("aria-pressed", "false");

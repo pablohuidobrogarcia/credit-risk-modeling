@@ -97,7 +97,7 @@ function readHash() {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const read = (key, fallback) => (params.has(key) ? params.get(key) : fallback);
   state.view = ["explorer", "risk", "evidence", "learn"].includes(read("view", "explorer")) ? read("view", "explorer") : "explorer";
-  state.dim = read("dim", "state");
+  state.dim = read("dim", "total");
   state.metric = read("metric", "default_rate");
   state.sel = read("sel", null);
   state.search = read("q", "");
@@ -388,8 +388,6 @@ function bindInfoDelegation() {
 }
 
 const STATIC_INFO = [
-  ["#dimension-tabs", "dimension-tabs", "Dimension tabs", "after"],
-  ["#map-title", "map", "Segment map", "after"],
   ["#segment-search", "filter", "Filter segments", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
@@ -1436,12 +1434,7 @@ function mountFolderArt() {
 }
 
 function renderTotalPanel() {
-  const meta = pe().meta;
   mountFolderArt();
-  $("#total-observed").textContent = fmtPct(meta.default_rate_total, 2);
-  $("#total-predicted").textContent = fmtPct(meta.mean_pd, 2);
-  $("#total-el").textContent = fmtPct(meta.el_pct_ead, 2);
-  $("#total-scope").textContent = `${fmtInt(meta.n_total)} loans, ${meta.years.join("-")} test window, ${meta.term}-month term`;
 }
 
 function renderExplorer() {
@@ -1454,7 +1447,7 @@ function renderExplorer() {
   $(".map-panel").hidden = isTotal;
   $(".list-panel").hidden = isTotal;
   $(".selection-part-a").hidden = isTotal;
-  $("#explorer-caption").textContent = "Pick a dimension, then a segment or a ranked row, to compare one slice with the portfolio.";
+  $("#explorer-caption").textContent = "Pick a dimension to compare one slice with the portfolio.";
   renderDimensionTabs();
   renderMetricTabs();
   if (isTotal) {

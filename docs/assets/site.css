@@ -392,7 +392,7 @@ button, input, select { font: inherit; color: inherit; }
   appearance: none; border: 1px solid transparent; background: transparent; color: var(--fg);
   border-radius: calc(var(--radius) - 4px); padding: 0.35rem;
   display: flex; flex-direction: column; align-items: center; gap: 0.55rem;
-  width: min(100%, 680px); max-width: 100%; cursor: pointer;
+  width: min(100%, 380px); max-width: 100%; cursor: pointer;
 }
 .total-folder-button:hover, .total-folder-button:focus-visible {
   border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
@@ -403,18 +403,13 @@ button, input, select { font: inherit; color: inherit; }
 .total-folder-art svg { display: block; width: 100%; height: auto; }
 .total-folder-caption { color: var(--fg-muted); font-size: 0.9rem; font-weight: 750; }
 .total-folder-button:hover .total-folder-caption, .total-folder-button:focus-visible .total-folder-caption { color: var(--fg); }
-.total-headlines { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; width: min(100%, 780px); }
-.total-headline {
-  border: 1px solid var(--border); border-top: 4px solid var(--sheet-color);
-  border-radius: 14px; padding: 0.6rem 0.8rem; background: var(--card-solid); min-width: 0;
+.total-tab-guide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.7rem; width: min(100%, 780px); }
+.total-tab-note {
+  border: 1px solid var(--border); border-radius: 12px; padding: 0.5rem 0.7rem;
+  background: color-mix(in srgb, var(--card-solid) 62%, transparent); min-width: 0;
 }
-.total-sheet-1 { --sheet-color: var(--lilac); }
-.total-sheet-2 { --sheet-color: var(--periwinkle); }
-.total-sheet-3 { --sheet-color: var(--sky); }
-.total-headline-label { display: block; color: var(--fg-muted); font-size: 0.72rem; font-weight: 750; line-height: 1.2; }
-.total-headline-value { display: block; margin-top: 0.18rem; font-family: var(--serif); font-size: clamp(1.2rem, 2.1vw, 1.6rem); font-variant-numeric: tabular-nums; line-height: 1.1; }
-.total-headline-unit { display: block; color: var(--fg-soft); font-size: 0.68rem; margin-top: 0.1rem; }
-.total-scope { margin: 0; color: var(--fg-soft); font-size: 0.8rem; text-align: center; }
+.total-tab-note strong { display: block; color: var(--fg); font-size: 0.78rem; line-height: 1.2; }
+.total-tab-note span { display: block; margin-top: 0.15rem; color: var(--fg-muted); font-size: 0.74rem; line-height: 1.35; }
 .total-folder-art #sheet-1, .total-folder-art #sheet-2, .total-folder-art #sheet-3 {
   transform-box: fill-box; transform-origin: 50% 100%;
   transition: transform 260ms var(--ease);
@@ -508,6 +503,7 @@ body.folder-open { overflow: hidden; }
   .folder-visual { order: -1; }
 }
 @media (max-width: 700px) {
+  .total-tab-guide { grid-template-columns: 1fr; }
   .folder-card { width: 100%; max-height: calc(100dvh - 0.8rem); padding: 0.9rem; }
   .folder-tabs { gap: 0.3rem; }
   .folder-tab { font-size: 0.7rem; padding: 0.36rem 0.58rem; }

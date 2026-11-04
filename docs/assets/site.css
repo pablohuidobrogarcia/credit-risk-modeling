@@ -735,8 +735,6 @@ body.folder-open { overflow: hidden; }
 .grade-step.is-masked { cursor: not-allowed; }
 .grade-step.is-masked .grade-step-face { stroke: var(--border-strong); }
 .grade-step-letter { fill: var(--ink); font-size: 18px; font-weight: 800; }
-.grade-step-rate { font-size: 13px; font-weight: 800; }
-.grade-step-n { fill: var(--fg-soft); font-size: 11px; }
 .grade-step:focus-visible .grade-step-letter { fill: var(--accent); }
 
 /* ------------------------------------------------------------------ list */

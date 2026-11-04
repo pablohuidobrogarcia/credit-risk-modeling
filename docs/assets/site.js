@@ -1123,15 +1123,12 @@ function renderGradeStaircase(host, items, meta) {
     const y = baseline - stepHeight - raise;
     const cx = x + stepWidth / 2;
     const bg = colorFor(value, lo, hi);
-    const textColor = readableText(bg);
     const cls = `grade-step${item.insufficient ? " is-masked" : ""}${selected ? " is-selected" : ""}`;
     const fill = item.insufficient ? "url(#grade-hatch)" : bg;
     const tabindex = item.insufficient ? -1 : 0;
     return `<g class="${cls}" data-id="${esc(item.id)}" tabindex="${tabindex}" role="button">
       <rect class="grade-step-face" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${stepWidth.toFixed(1)}" height="${stepHeight.toFixed(1)}" rx="7" style="fill:${fill}"></rect>
       <text class="grade-step-letter" x="${cx.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle">${esc(item.id)}</text>
-      <text class="grade-step-rate" x="${cx.toFixed(1)}" y="${(y + 25).toFixed(1)}" text-anchor="middle" style="fill:${item.insufficient ? "var(--ink)" : textColor}">${metricText(value, state.metric, 1)}</text>
-      <text class="grade-step-n" x="${cx.toFixed(1)}" y="${(baseline + 24).toFixed(1)}" text-anchor="middle">n=${fmtInt(item.n)}</text>
     </g>`;
   }).join("");
 
@@ -1158,17 +1155,20 @@ function renderGradeStaircase(host, items, meta) {
 function renderIllustratedMap(host, items, meta, config) {
   const dim = state.dim;
   const dimLabel = dimMeta(dim).label;
+  const colorized = dim !== "home_ownership";
   const metricLabel = metricMeta(state.metric).short.toLowerCase();
   const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
   const values = eligible.map((item) => num(item[state.metric]));
   const lo = values.length ? Math.min(...values) : 0;
   const hi = values.length ? Math.max(...values) : 1;
   $("#map-title").textContent = `${dimLabel} segment map`;
-  $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricLabel}`;
-  $("#map-metric-badge").textContent = metricMeta(state.metric).short;
-  $("#map-legend").hidden = false;
-  setGeoLegend(lo, hi);
-  $("#map-note").textContent = "Select a category to link the ranked list and Selection.";
+  $("#map-subtitle").textContent = colorized
+    ? `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricLabel}`
+    : `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · category view`;
+  $("#map-metric-badge").textContent = colorized ? metricMeta(state.metric).short : "Category view";
+  $("#map-legend").hidden = !colorized;
+  if (colorized) setGeoLegend(lo, hi);
+  $("#map-note").textContent = "Hover a category for its name; select it to see the numbers in Selection.";
 
   host.className = `tilemap illustrated-map ${config.className}`;
   const svg = ILLUSTRATED_SVGS[dim];
@@ -1206,8 +1206,8 @@ function renderIllustratedMap(host, items, meta, config) {
     node.classList.toggle("is-selected", state.sel === item.id);
     const bgNode = node.querySelector(".bg");
     const fill = item.insufficient ? "url(#illustrated-hatch)" : colorFor(num(item[state.metric]), lo, hi);
-    const textColor = item.insufficient ? palette().fg : readableText(fill);
-    if (bgNode) bgNode.style.fill = fill;
+    const textColor = colorized && !item.insufficient ? readableText(fill) : palette().fg;
+    if (bgNode) bgNode.style.fill = colorized ? fill : palette().surface;
     $$("text", node).forEach((text) => { text.style.fill = textColor; });
     $$(".ic", node).forEach((icon) => { icon.style.color = textColor; icon.style.stroke = textColor; });
     $$("g[stroke]", node).forEach((group) => { group.style.stroke = textColor; });

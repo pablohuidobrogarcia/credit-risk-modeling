@@ -486,10 +486,10 @@ test("grade staircase follows the metric selector", async ({ page }) => {
   const stepData = () => page.locator(".grade-step").evaluateAll((elements) => elements.map((step) => ({
     id: step.dataset.id,
     height: Math.round(step.querySelector(".grade-step-face").getBoundingClientRect().height * 100) / 100,
-    label: step.querySelector(".grade-step-rate").textContent,
     fill: getComputedStyle(step.querySelector(".grade-step-face")).fill,
   })));
   const defaultData = await stepData();
+  await expect(page.locator(".grade-step-rate, .grade-step-n")).toHaveCount(0);
   const defaultLegend = await page.locator("#map-legend .legend-num").allTextContents();
   await page.locator('.grade-step[data-id="B"]').click();
   await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
@@ -498,10 +498,7 @@ test("grade staircase follows the metric selector", async ({ page }) => {
   await expect(page.locator("#map-subtitle")).toContainText("color = predicted PD");
   const predData = await stepData();
   expect(predData.map((step) => step.height)).not.toEqual(defaultData.map((step) => step.height));
-  expect(predData.map((step) => step.label)).not.toEqual(defaultData.map((step) => step.label));
   expect(await page.locator("#map-legend .legend-num").allTextContents()).not.toEqual(defaultLegend);
-  const gradeB = PE.dimensions.grade.find((item) => item.id === "B");
-  await expect(page.locator('.grade-step[data-id="B"] .grade-step-rate')).toHaveText(pct(gradeB.pred_pd, 1));
   await expect(page.locator('.grade-step[data-id="B"]')).toHaveClass(/is-selected/);
   await page.locator('.grade-step[data-id="B"]').hover();
   await expect(page.locator(".geo-tooltip")).toHaveText("Grade B");
@@ -510,14 +507,12 @@ test("grade staircase follows the metric selector", async ({ page }) => {
   await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
   const elData = await stepData();
   expect(elData.map((step) => step.height)).not.toEqual(predData.map((step) => step.height));
-  await expect(page.locator('.grade-step[data-id="B"] .grade-step-rate')).toHaveText(pct(gradeB.el_pct_ead, 1));
   await expect(page.locator('.grade-step[data-id="B"]')).toHaveClass(/is-selected/);
 
   await page.locator("#metric-tabs button[data-metric='default_rate']").click();
   await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
   const restored = await stepData();
   expect(restored.map((step) => step.height)).toEqual(defaultData.map((step) => step.height));
-  expect(restored.map((step) => step.label)).toEqual(defaultData.map((step) => step.label));
   expect(await page.locator("#map-legend .legend-num").allTextContents()).toEqual(defaultLegend);
 
   for (const [width, height] of [[1100, 900], [390, 844]]) {
@@ -588,15 +583,21 @@ test("purpose and home ownership maps use their supplied SVGs and stay linked", 
     await page.locator(`#dimension-tabs button[data-dim="${dim}"]`).click();
     await expect(page.locator(`#tile-map.${className} .segment-svg`)).toBeVisible();
     await expect(page.locator(`#tile-map.${className} [data-id]`)).toHaveCount(PE.dimensions[dim].length);
-    await expect(page.locator("#map-legend")).toBeVisible();
-    await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
+    await expect(page.locator("#map-note")).toContainText("Hover a category for its name");
     if (dim === "home_ownership") {
+      await expect(page.locator("#map-legend")).toBeHidden();
+      await expect(page.locator("#map-subtitle")).toContainText("category view");
+      const fill = await page.locator(`#tile-map.${className} [data-id="MORTGAGE"] .bg`).evaluate((el) => getComputedStyle(el).fill);
+      expect(fill).toBe("rgb(255, 255, 255)");
       const howBuiltLabel = await page.locator("#how-built-picture text.label").first().evaluate((el) => {
         const style = getComputedStyle(el);
         return { fontSize: style.fontSize, fontFamily: style.fontFamily };
       });
       expect(howBuiltLabel.fontSize).toBe("12px");
       expect(howBuiltLabel.fontFamily.toLowerCase()).not.toContain("helvetica");
+    } else {
+      await expect(page.locator("#map-legend")).toBeVisible();
+      await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
     }
     await page.locator(`#tile-map.${className} [data-id="${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`dim=${dim}`));

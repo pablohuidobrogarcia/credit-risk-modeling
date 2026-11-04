@@ -73,13 +73,19 @@ test("every dimension tab changes the whole explorer and the URL", async ({ page
     await expect(button).toHaveAttribute("aria-selected", "true");
     await expect(page).toHaveURL(new RegExp(`dim=${dim}`));
     const items = PE.dimensions[dim];
+    if (dim === "total") {
+      await expect(page.locator("#total-panel")).toBeVisible();
+      await expect(page.locator(".map-panel")).toBeHidden();
+      await expect(page.locator(".list-panel")).toBeHidden();
+      await expect(page.locator(".selection-part-a")).toBeHidden();
+      await expect(page.locator("#metric-tabs")).toBeHidden();
+      continue;
+    }
     if (dim === "state") await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(items.length);
     else if (dim === "grade") await expect(page.locator("#tile-map .grade-step")).toHaveCount(items.length);
     else await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(items.length);
     await expect(page.locator("#rank-list .rank-row")).toHaveCount(items.length);
-    if (dim !== "total") {
-      await expect(page.locator("#summary-title")).toHaveText("Portfolio");
-    }
+    await expect(page.locator("#summary-title")).toHaveText("Portfolio");
   }
   await expectNoErrors(errors);
 });
@@ -669,13 +675,6 @@ test("selection block shows one context row, three metric rows and a model check
   })();
   await expect(selection.locator('[data-testid="summary-model-check"]')).toHaveText(expectedCheck);
   await expect(selection.locator('[data-info="model-check"]')).toBeVisible();
-
-  await page.locator("#dimension-tabs button[data-dim='total']").click();
-  await expect(page.locator("#summary-title")).toHaveText("Total portfolio");
-  await expect(selection.locator(".selection-metric-row")).toHaveCount(3);
-  await expect(selection.locator(".selection-metric-diff, .selection-metric-rank")).toHaveCount(0);
-  await expect(selection.locator('[data-testid="summary-model-check"]')).toBeVisible();
-  await expect(selection.locator('[data-row-metric="pred_pd"]')).toHaveClass(/is-active/);
   await expectNoErrors(errors);
 });
 
@@ -694,7 +693,6 @@ test("model check reports an inside-CI segment", async ({ page }) => {
 test("selection block keeps one size across every tab at 1360, 1100 and 390", async ({ page }) => {
   const errors = await open(page);
   const cases = [
-    ["total", null],
     ["grade", "B"],
     ["purpose", "moving"],
     ["vintage", "2014"],
@@ -737,6 +735,68 @@ test("selection block keeps one size across every tab at 1360, 1100 and 390", as
       expect(Math.abs(alignment.howBottom - alignment.selectionBottom), `${width} column bottoms`).toBeLessThanOrEqual(2);
     }
   }
+  await expectNoErrors(errors);
+});
+
+test("Total tab is one folder view and preserves the metric selector state", async ({ page }) => {
+  const errors = await open(page);
+  const meta = PE.meta;
+  await page.locator("#dimension-tabs button[data-dim='total']").click();
+  await page.waitForTimeout(350);
+  await expect(page.locator("#total-panel")).toBeVisible();
+  await expect(page.locator("#total-folder-button")).toBeVisible();
+  await expect(page.locator("#total-folder-caption")).toHaveText("Open the portfolio folder");
+  await expect(page.locator('[data-testid="total-observed"]')).toHaveText(pct(meta.default_rate_total));
+  await expect(page.locator('[data-testid="total-predicted"]')).toHaveText(pct(meta.mean_pd));
+  await expect(page.locator('[data-testid="total-el"]')).toHaveText(pct(meta.el_pct_ead));
+  await expect(page.locator("#total-scope")).toHaveText(`${meta.n_total.toLocaleString("en-US")} loans, ${meta.years.join("-")} test window, ${meta.term}-month term`);
+  for (const selector of [".map-panel", ".list-panel", ".selection-part-a", "#metric-tabs", "#segment-search"]) {
+    await expect(page.locator(selector)).toBeHidden();
+  }
+  await expect(page.locator("#summary-title")).toBeHidden();
+
+  await page.locator("#dimension-tabs button[data-dim='state']").click();
+  await page.waitForTimeout(250);
+  await page.locator("#metric-tabs button[data-metric='pred_pd']").click();
+  await page.locator("#dimension-tabs button[data-dim='total']").click();
+  await page.waitForTimeout(250);
+  await expect(page).toHaveURL(/metric=pred_pd/);
+  await expect(page.locator("#metric-tabs")).toBeHidden();
+  await page.locator("#dimension-tabs button[data-dim='state']").click();
+  await page.waitForTimeout(300);
+  await expect(page.locator("#metric-tabs button[data-metric='pred_pd']")).toHaveAttribute("aria-selected", "true");
+  for (const selector of [".map-panel", ".list-panel", ".selection-part-a"]) {
+    await expect(page.locator(selector)).toBeVisible();
+  }
+
+  for (const width of [1360, 1100]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#view=explorer&dim=total");
+    await page.waitForTimeout(500);
+    const alignment = await page.evaluate(() => {
+      const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+      return {
+        how: box(".how-built-panel"),
+        total: box("#total-panel"),
+        overflow: document.documentElement.scrollWidth - innerWidth,
+        totalOverflow: document.querySelector("#total-panel").scrollWidth - document.querySelector("#total-panel").clientWidth,
+      };
+    });
+    expect(Math.abs(alignment.how.top - alignment.total.top), `${width} top`).toBeLessThanOrEqual(2);
+    expect(Math.abs(alignment.how.bottom - alignment.total.bottom), `${width} bottom`).toBeLessThanOrEqual(2);
+    expect(alignment.overflow, `${width} page overflow`).toBeLessThanOrEqual(1);
+    expect(alignment.totalOverflow, `${width} total panel overflow`).toBeLessThanOrEqual(1);
+  }
+
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto("/#view=explorer&dim=total");
+  await page.waitForTimeout(500);
+  const mobile = await page.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth - innerWidth,
+    panelOverflow: document.querySelector("#total-panel").scrollWidth - document.querySelector("#total-panel").clientWidth,
+  }));
+  expect(mobile.overflow).toBeLessThanOrEqual(1);
+  expect(mobile.panelOverflow).toBeLessThanOrEqual(1);
   await expectNoErrors(errors);
 });
 
@@ -1847,7 +1907,7 @@ test("explorer panels keep the State tab box geometry at 1360 and 1100", async (
     await page.locator("#dimension-tabs button").filter({ hasText: "State" }).click();
     await page.waitForTimeout(500);
     const state = await readBoxes();
-    for (const dim of ["Total", "Grade", "Purpose", "Vintage", "Home ownership"]) {
+    for (const dim of ["Grade", "Purpose", "Vintage", "Home ownership"]) {
       await page.locator("#dimension-tabs button").filter({ hasText: dim }).click();
       await page.waitForTimeout(300);
       const boxes = await readBoxes();
@@ -1893,7 +1953,7 @@ test("resized explorer panels contain their content without clipping or horizont
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/#view=explorer");
     await page.waitForTimeout(700);
-    for (const dim of ["Total", "State", "Grade", "Purpose", "Vintage", "Home ownership"]) {
+    for (const dim of ["State", "Grade", "Purpose", "Vintage", "Home ownership"]) {
       await page.locator("#dimension-tabs button").filter({ hasText: dim }).click();
       await page.waitForTimeout(200);
       await check(`${width} ${dim}`);

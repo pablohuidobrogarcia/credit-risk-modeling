@@ -234,6 +234,8 @@ function infoContext() {
   return {
     primary_window: meta.years ? `${meta.years.join("-")} ${meta.term}-month` : "the primary test window",
     n_oot: fmtInt(meta.n_total),
+    defaults_per_100: num(meta.default_rate_total) == null ? "—" : (meta.default_rate_total * 100).toFixed(2),
+    el_per_100: num(meta.el_pct_ead) == null ? "—" : (meta.el_pct_ead * 100).toFixed(2),
     default_rate_oot: fmtPct(meta.default_rate_total, 2),
     el_rate: fmtPct(meta.el_pct_ead, 2),
     min_n: fmtInt(meta.min_n),
@@ -390,6 +392,7 @@ function injectStaticInfo() {
     } else {
       const wrapper = document.createElement(heading ? "div" : "span");
       wrapper.className = `control-with-info${heading ? " heading-with-info" : ""}`;
+      wrapper.dataset.infoWrap = id;
       target.parentNode.insertBefore(wrapper, target);
       wrapper.appendChild(target);
       wrapper.insertAdjacentHTML(where === "before" ? "afterbegin" : "beforeend", infoButton(id, label));
@@ -1396,12 +1399,32 @@ function renderHowBuilt() {
   selectStep(howBuiltOpenStep || 1);
 }
 
+function renderTotalPanel() {
+  const meta = pe().meta;
+  $("#total-observed").textContent = fmtPct(meta.default_rate_total, 2);
+  $("#total-predicted").textContent = fmtPct(meta.mean_pd, 2);
+  $("#total-el").textContent = fmtPct(meta.el_pct_ead, 2);
+  $("#total-scope").textContent = `${fmtInt(meta.n_total)} loans, ${meta.years.join("-")} test window, ${meta.term}-month term`;
+}
+
 function renderExplorer() {
   if (!pe()) return;
   const meta = pe().meta;
+  const isTotal = state.dim === "total";
+  $("#view-explorer").dataset.dim = state.dim;
+  $(".explorer-grid").classList.toggle("is-total", isTotal);
+  $("#total-panel").hidden = !isTotal;
+  $(".map-panel").hidden = isTotal;
+  $(".list-panel").hidden = isTotal;
+  $(".selection-part-a").hidden = isTotal;
   $("#explorer-caption").textContent = "Pick a dimension, then a segment or a ranked row, to compare one slice with the portfolio.";
   renderDimensionTabs();
   renderMetricTabs();
+  if (isTotal) {
+    renderTotalPanel();
+    renderHowBuilt();
+    return;
+  }
   const search = $("#segment-search");
   if (search && search.value !== state.search) search.value = state.search;
   if (search && !search.__bound) {
@@ -2270,7 +2293,7 @@ async function boot() {
       fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/welcome.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/process.json", { cache: "no-cache" }).catch(() => null),
-      loadUsMap(),
+            loadUsMap(),
     ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();

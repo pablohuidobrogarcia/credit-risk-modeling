@@ -26,7 +26,7 @@
   "filter": {
     "title": "Filter segments",
     "text": "Type part of a state, grade, purpose, vintage, term or home-ownership label. The filter only hides rows; it does not change the selected segment or the portfolio totals.",
-    "try": "Type CA, then clear the box.",
+    "try": "Type California, then clear the box.",
     "term": "loan"
   },
   "kpi-auc": {
@@ -181,7 +181,7 @@
   },
   "state-map": {
     "title": "US state map",
-    "text": "Each state is colored by {metric}; hatched states have fewer than {min_n} loans and cannot be selected. Hovering shows only the state code; the Selection block shows the numbers.",
+    "text": "Each state is colored by {metric}; hatched states have fewer than {min_n} loans and cannot be selected. Hovering shows only the state name; the Selection block shows the numbers.",
     "try": "Select California and read its observed default, interval and rank in Selection.",
     "term": "default"
   },
@@ -199,14 +199,14 @@
   },
   "small-states": {
     "title": "Small states",
-    "text": "Rhode Island, Delaware, DC, Connecticut, New Jersey, Maryland, Massachusetts, New Hampshire and Vermont are too small to read on the map reliably. The compact strip repeats them; hovering shows the state code and clicking selects the same segment as its map shape.",
+    "text": "Rhode Island, Delaware, District of Columbia, Connecticut, New Jersey, Maryland, Massachusetts, New Hampshire and Vermont are too small to read on the map reliably. The compact strip repeats them; hovering shows the full name and clicking selects the same segment as its map shape.",
     "try": "Use the strip to select Rhode Island, then read its numbers in Selection.",
     "term": "small-segment-masking"
   },
   "masked-states": {
     "title": "Masked states",
-    "text": "Hatching marks segments with fewer than {min_n} loans. Their rates are too noisy to rank, so they are not selectable and do not receive a fill color. Hovering or focusing shows only the state code; the Selection block holds the numbers.",
-    "try": "Hover Iowa for its code, then select California to compare the figures in Selection.",
+    "text": "Hatching marks segments with fewer than {min_n} loans. Their rates are too noisy to rank, so they are not selectable and do not receive a fill color. Hovering or focusing shows only the state name; the Selection block holds the numbers.",
+    "try": "Hover Iowa for its name, then select California to compare the figures in Selection.",
     "term": "small-segment-masking"
   },
   "el-note": {

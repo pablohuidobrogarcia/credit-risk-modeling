@@ -6,6 +6,11 @@ const ROOT = path.resolve(__dirname, "../..");
 const DATA = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/data.json"), "utf8"));
 const PE = DATA.portfolio_explorer;
 const PLOTLY_PATH = path.join(ROOT, "node_modules/plotly.js-dist-min/plotly.min.js");
+const STATE_NAMES = Object.fromEntries(
+  [...fs.readFileSync(path.join(ROOT, "docs/assets/us-map.svg"), "utf8").matchAll(/data-state="([A-Z]+)"[^>]*aria-label="([^"]+)"/g)]
+    .map((match) => [match[1], match[2]])
+);
+const stateName = (id) => STATE_NAMES[id] || id;
 
 const pct = (v, nd = 2) => `${(v * 100).toFixed(nd)}%`;
 const dims = ["total", "state", "grade", "purpose", "vintage", "home_ownership"];
@@ -97,7 +102,7 @@ test("every selectable state shape selects the linked list row, summary and hash
     await page.locator(`#tile-map .us-map-svg .st[data-state="${item.id}"]`).evaluate((element) => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     await expect(page.locator(`#tile-map .us-map-svg .st[data-state="${item.id}"]`)).toHaveClass(/is-selected/);
     await expect(page.locator(`#rank-list .rank-row[data-id="${item.id}"]`)).toHaveAttribute("aria-current", "true");
-    await expect(page.locator("#summary-title")).toHaveText(item.name);
+    await expect(page.locator("#summary-title")).toHaveText(stateName(item.id));
     await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(item.default_rate));
     await expect(page).toHaveURL(new RegExp(`sel=${item.id}`));
   }
@@ -117,13 +122,13 @@ test("state map exposes small-state buttons and blocks masked states", async ({ 
   await maskedIowa.click({ force: true });
   expect(page.url()).toBe(before);
   await maskedIowa.hover();
-  await expect(page.locator(".geo-tooltip")).toHaveText("IA");
+  await expect(page.locator(".geo-tooltip")).toHaveText("Iowa");
 
   const rhodeIsland = page.locator('.state-small-strip .state-chip[data-id="RI"]');
   await rhodeIsland.hover();
   await expect(page.locator('.us-map-svg .st[data-state="RI"]')).toHaveClass(/is-hovered/);
   await rhodeIsland.click();
-  await expect(page.locator("#summary-title")).toHaveText("RI");
+  await expect(page.locator("#summary-title")).toHaveText("Rhode Island");
   await expect(page.locator('.us-map-svg .st[data-state="RI"]')).toHaveClass(/is-selected/);
   await expect(rhodeIsland).toHaveClass(/is-selected/);
   await expect(page).toHaveURL(/sel=RI/);
@@ -156,7 +161,7 @@ test("state map follows the metric selector", async ({ page }) => {
   expect(await chipFill()).not.toBe(defaultChip);
   await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
   await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').hover();
-  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
+  await expect(page.locator(".geo-tooltip")).toHaveText("California");
 
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
@@ -164,7 +169,7 @@ test("state map follows the metric selector", async ({ page }) => {
   expect(await fills()).not.toEqual(defaultFills);
   await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
   await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').hover();
-  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
+  await expect(page.locator(".geo-tooltip")).toHaveText("California");
 
   await page.locator("#metric-tabs button[data-metric='default_rate']").click();
   await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
@@ -222,13 +227,17 @@ test("state subtitles, small-state strip and expected-loss note stay correct", a
   const subtitle = page.locator("#map-subtitle");
   const note = page.locator("#map-note");
   const panelHeight = () => page.locator(".map-panel").evaluate((element) => element.getBoundingClientRect().height);
+  const stripHeight = () => page.locator(".state-small-strip").evaluate((element) => element.getBoundingClientRect().height);
 
-  await expect(subtitle).toContainText("50 states and DC");
+  await expect(subtitle).toContainText("50 states and District of Columbia");
   await expect(subtitle).not.toContainText("51 states");
   const stripIds = await page.locator("#tile-map .state-small-strip .state-chip").evaluateAll((nodes) => nodes.map((node) => node.dataset.id));
   expect(stripIds).toEqual(["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT"]);
+  const stripNames = await page.locator("#tile-map .state-small-strip .state-chip").allTextContents();
+  expect(stripNames).toEqual(["Rhode Island", "Delaware", "District of Columbia", "Connecticut", "New Jersey", "Maryland", "Massachusetts", "New Hampshire", "Vermont"]);
 
   const before = await panelHeight();
+  const beforeStrip = await stripHeight();
   await expect(note).not.toContainText("Expected loss is roughly");
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await page.waitForTimeout(200);
@@ -238,6 +247,7 @@ test("state subtitles, small-state strip and expected-loss note stay correct", a
   await expect(subtitle).toContainText("color = expected loss");
   await expect(subtitle).not.toContainText("51 states");
   expect(Math.abs(before - await panelHeight())).toBeLessThanOrEqual(1);
+  expect(Math.abs(beforeStrip - await stripHeight())).toBeLessThanOrEqual(1);
 
   await page.locator("#metric-tabs button[data-metric='default_rate']").click();
   await expect(note).not.toContainText("Expected loss is roughly");
@@ -246,6 +256,70 @@ test("state subtitles, small-state strip and expected-loss note stay correct", a
   await expect(note).not.toContainText("Expected loss is roughly");
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(note).toContainText(`portfolio LGD (${lgd})`);
+  await expectNoErrors(errors);
+});
+
+test("State tab shows full state names everywhere and keeps the strip height fixed", async ({ page }) => {
+  const errors = await open(page);
+  await page.goto("/#view=explorer&dim=state");
+  await page.waitForTimeout(500);
+  const texas = page.locator('#tile-map .us-map-svg .st[data-state="TX"]');
+  await texas.click();
+  await expect(page.locator("#summary-title")).toHaveText("Texas");
+  await expect(page.locator('#rank-list .rank-row[data-id="TX"] .rank-name')).toHaveText("Texas");
+  await texas.hover();
+  await expect(page.locator(".geo-tooltip")).toHaveText("Texas");
+  await expect(texas).toHaveAttribute("aria-label", "Texas");
+
+  const stripNames = await page.locator(".state-small-strip .state-chip").allTextContents();
+  expect(stripNames).toEqual(["Rhode Island", "Delaware", "District of Columbia", "Connecticut", "New Jersey", "Maryland", "Massachusetts", "New Hampshire", "Vermont"]);
+
+  const stripHeight = () => page.locator(".state-small-strip").evaluate((element) => element.getBoundingClientRect().height);
+  const stripBox = () => page.locator(".state-small-strip").evaluate((element) => {
+    const style = getComputedStyle(element);
+    const buttons = [...element.querySelectorAll(".state-chip")].map((button) => button.getBoundingClientRect());
+    return {
+      height: element.getBoundingClientRect().height,
+      columns: style.gridTemplateColumns.split(" ").length,
+      widths: buttons.map((box) => box.width),
+      rows: new Set(buttons.map((box) => Math.round(box.top))).size,
+    };
+  });
+  const firstHeight = await stripHeight();
+  const firstBox = await stripBox();
+  expect(firstBox.rows).toBeLessThanOrEqual(2);
+  expect(firstBox.columns).toBe(5);
+  expect(Math.max(...firstBox.widths) - Math.min(...firstBox.widths)).toBeLessThanOrEqual(1);
+
+  for (const metric of ["pred_pd", "el_pct_ead", "default_rate"]) {
+    await page.locator(`#metric-tabs button[data-metric='${metric}']`).click();
+    await page.waitForTimeout(200);
+    expect(Math.abs(firstHeight - await stripHeight()), `${metric} strip height`).toBeLessThanOrEqual(1);
+  }
+
+  const stateCodes = Object.keys(STATE_NAMES);
+  const checkNoCodes = (text, where) => {
+    for (const code of stateCodes) {
+      expect(text, `${where} shows state code ${code}`).not.toMatch(new RegExp(`\\b${code}\\b`));
+    }
+  };
+  checkNoCodes(await page.locator("#view-explorer").innerText(), "State tab");
+  for (const id of ["map", "small-states", "masked-states"]) {
+    await page.locator(`[data-info="${id}"]`).first().click();
+    await expect(page.locator("#info-popover")).toBeVisible();
+    checkNoCodes(await page.locator("#info-popover").innerText(), `${id} popover`);
+    await page.locator(".info-close").click();
+  }
+
+  for (const width of [1360, 1100, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#view=explorer&dim=state&sel=TX");
+    await page.waitForTimeout(500);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    expect(overflow, `${width}px state overflow`).toBeLessThanOrEqual(1);
+    const allNames = await page.locator(".state-all-grid .state-chip").allTextContents();
+    if (width === 390) expect(allNames).toContain("District of Columbia");
+  }
   await expectNoErrors(errors);
 });
 
@@ -331,7 +405,7 @@ test("state map zoom, pan and keyboard controls work", async ({ page }) => {
   await page.locator('[data-map-zoom="reset"]').click();
   const ca = page.locator('.st[data-state="CA"]');
   await ca.click();
-  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator("#summary-title")).toHaveText("California");
   await page.locator('[data-map-zoom="in"]').click();
   const beforeDrag = await viewBox();
   const svgBox = await svg.boundingBox();
@@ -341,15 +415,15 @@ test("state map zoom, pan and keyboard controls work", async ({ page }) => {
   await page.mouse.up();
   await page.waitForTimeout(120);
   expect(await viewBox()).not.toBe(beforeDrag);
-  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator("#summary-title")).toHaveText("California");
 
   await page.locator("#metric-tabs button[data-metric='pred_pd']").click();
   await page.waitForTimeout(200);
   expect(await viewBox()).not.toBe(initial);
   await page.locator('.st[data-state="ND"]').click({ force: true });
-  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator("#summary-title")).toHaveText("California");
   await page.locator('#tile-map .state-small-strip .state-chip[data-id="MA"]').click();
-  await expect(page.locator("#summary-title")).toHaveText("MA");
+  await expect(page.locator("#summary-title")).toHaveText("Massachusetts");
 
   await page.locator("#dimension-tabs button[data-dim='grade']").click();
   await page.waitForTimeout(200);
@@ -444,7 +518,7 @@ test("state map switches to a full state-button grid at 390px", async ({ page })
   await expect(page.locator(".state-all-grid")).toBeVisible();
   await expect(page.locator(".state-all-grid .state-chip")).toHaveCount(51);
   await page.locator('.state-all-grid .state-chip[data-id="CA"]').click();
-  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator("#summary-title")).toHaveText("California");
   await expect(page).toHaveURL(/sel=CA/);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
@@ -459,7 +533,7 @@ test("every ranked row selects the linked tile and summary", async ({ page }) =>
     const items = PE.dimensions[dim];
     for (const item of items) {
       await page.locator(`#rank-list .rank-row[data-id="${item.id}"]`).click();
-      await expect(page.locator("#summary-title")).toHaveText(item.name);
+      await expect(page.locator("#summary-title")).toHaveText(dim === "state" ? stateName(item.id) : item.name);
       await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(item.default_rate));
       await expect(page).toHaveURL(new RegExp(`sel=${encodeURIComponent(item.id)}`));
     }
@@ -487,12 +561,12 @@ test("state map hover shows a tooltip and clicking updates the linked details", 
   const errors = await open(page);
   const state = page.locator('#tile-map .us-map-svg .st[data-state="CA"]');
   const label = await state.getAttribute("aria-label");
-  expect(label).toBe("CA");
+  expect(label).toBe("California");
   await state.hover();
   await expect(page.locator(".geo-tooltip")).toBeVisible();
-  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
+  await expect(page.locator(".geo-tooltip")).toHaveText("California");
   await state.click();
-  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator("#summary-title")).toHaveText("California");
   await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(PE.dimensions.state.find((x) => x.id === "CA").default_rate));
   await expect(page).toHaveURL(/sel=CA/);
   await expectNoErrors(errors);
@@ -502,10 +576,10 @@ test("explorer visuals expose only the segment name on hover and focus", async (
   const errors = await open(page);
   const state = page.locator('#tile-map .us-map-svg .st[data-state="CA"]');
   await state.hover();
-  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
+  await expect(page.locator(".geo-tooltip")).toHaveText("California");
   await state.focus();
-  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
-  await expect(state).toHaveAttribute("aria-label", "CA");
+  await expect(page.locator(".geo-tooltip")).toHaveText("California");
+  await expect(state).toHaveAttribute("aria-label", "California");
 
   await page.locator("#dimension-tabs button[data-dim='grade']").click();
   const grade = page.locator('.grade-step[data-id="B"]');
@@ -532,8 +606,8 @@ test("explorer visuals expose only the segment name on hover and focus", async (
 
   await page.locator("#dimension-tabs button[data-dim='state']").click();
   const chip = page.locator('.state-small-strip .state-chip[data-id="RI"]');
-  await expect(chip).toHaveAttribute("title", "RI");
-  await expect(chip).toHaveAttribute("aria-label", "RI");
+  await expect(chip).toHaveAttribute("title", "Rhode Island");
+  await expect(chip).toHaveAttribute("aria-label", "Rhode Island");
   const titles = await page.locator("#tile-map [title]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("title")));
   for (const title of titles) {
     expect(title).not.toMatch(/%|CI|n\s*=|loans|share/i);
@@ -547,7 +621,7 @@ test("selection block shows one context row, three metric rows and a model check
   const item = PE.dimensions.state.find((entry) => entry.id === "AL");
   const total = PE.dimensions.total[0];
   await page.locator('#tile-map .us-map-svg .st[data-state="AL"]').click();
-  await expect(page.locator("#summary-title")).toHaveText("AL");
+  await expect(page.locator("#summary-title")).toHaveText("Alabama");
   await expect(selection.locator("#summary-subtitle, #summary-gap, .eyebrow")).toHaveCount(0);
   await expect(selection.locator('[data-testid="summary-loans"]')).toHaveText(item.n.toLocaleString("en-US"));
   await expect(selection.locator('[data-testid="summary-ead-share"]')).toHaveText(pct(item.ead_share, 1));
@@ -610,7 +684,7 @@ test("model check reports an inside-CI segment", async ({ page }) => {
   const item = PE.dimensions.state.find((entry) => entry.id === "HI");
   await page.goto(`/#view=explorer&dim=state&sel=${item.id}`);
   await page.waitForTimeout(500);
-  await expect(page.locator("#summary-title")).toHaveText("HI");
+  await expect(page.locator("#summary-title")).toHaveText("Hawaii");
   await expect(page.locator('[data-testid="summary-model-check"]')).toHaveText(
     `Model check: observed ${pct(item.default_rate)} vs predicted ${pct(item.pred_pd)}: predicted PD is within the 95% CI.`
   );
@@ -715,7 +789,7 @@ test("explorer removed the score distribution and enlarges Selection type", asyn
 test("search filters the ranked list and clears safely", async ({ page }) => {
   const errors = await open(page);
   const input = page.locator("#segment-search");
-  await input.fill("CA");
+  await input.fill("California");
   await expect(page.locator("#rank-list .rank-row")).toHaveCount(1);
   await expect(page.locator("#list-count")).toContainText("1 of");
   await input.fill("not-a-state");
@@ -736,7 +810,7 @@ test("removed header pill, hero note and insight chips stay out of the DOM", asy
   await expect(page.locator(".chip-row")).toHaveCount(0);
   await expect(page.locator("#how-built-panel")).toBeVisible();
   await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').click();
-  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator("#summary-title")).toHaveText("California");
   await expectNoErrors(errors);
 });
 
@@ -822,9 +896,9 @@ test("back and forward restore explorer state", async ({ page }) => {
   await expect(page).toHaveURL(/sel=NY/);
   await page.goBack();
   await expect(page).toHaveURL(/sel=CA/);
-  await expect(page.locator("#summary-title")).toHaveText("CA");
+  await expect(page.locator("#summary-title")).toHaveText("California");
   await page.goForward();
-  await expect(page.locator("#summary-title")).toHaveText("NY");
+  await expect(page.locator("#summary-title")).toHaveText("New York");
   await expectNoErrors(errors);
 });
 
@@ -1372,7 +1446,7 @@ test("keyboard navigation reaches state shapes, grade steps and rows", async ({ 
   const firstShape = page.locator('#tile-map .us-map-svg .st[data-state="AK"]');
   await firstShape.focus();
   await page.keyboard.press("Enter");
-  await expect(page.locator("#summary-title")).toHaveText("AK");
+  await expect(page.locator("#summary-title")).toHaveText("Alaska");
   await page.locator('#dimension-tabs button[data-dim="grade"]').click();
   const stepA = page.locator('.grade-step[data-id="A"]');
   await stepA.focus();

@@ -11,6 +11,19 @@ const PLOTLY_SRI = "sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLz
 const USE_TILE_MAP = false;
 const SMALL_STATES = ["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT"];
 
+/* The state lookup is populated from the aria-label values in assets/us-map.svg.
+   Codes stay as ids internally, in data-state attributes and in the URL hash. */
+const STATE_NAMES = new Map();
+function stateName(id) { return STATE_NAMES.get(id) || id; }
+function itemName(item) { return state.dim === "state" ? stateName(item.id) : item.name; }
+function rememberStateNames(svgText) {
+  if (!svgText || typeof DOMParser === "undefined") return;
+  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  doc.querySelectorAll("path.st[data-state][aria-label]").forEach((path) => {
+    STATE_NAMES.set(path.getAttribute("data-state"), path.getAttribute("aria-label"));
+  });
+}
+
 const DIMENSIONS = [
   { id: "state", label: "State" },
   { id: "grade", label: "Grade" },
@@ -763,7 +776,7 @@ function loadUsMap() {
         if (!response.ok) throw new Error(`us-map.svg ${response.status}`);
         return response.text();
       })
-      .then((text) => { US_MAP_SVG = text; return text; })
+      .then((text) => { US_MAP_SVG = text; rememberStateNames(text); return text; })
       .catch(() => { US_MAP_FAILED = true; return null; });
   }
   return US_MAP_PROMISE;
@@ -954,15 +967,19 @@ function bindMapZoom(host, svg) {
 function renderStateMap(host, items, meta) {
   const { lo, hi } = geoRange(items);
   setGeoMeta("US state map", items,
-    `${items.filter((item) => item.id !== "DC").length} states and DC · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
+    `${items.filter((item) => item.id !== "DC").length} states and District of Columbia · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
     "state-map",
-    "Each state is colored by the selected metric; hatched = fewer than 500 loans. Hovering shows only the state code; select it to see the numbers in Selection.");
+    "Each state is colored by the selected metric; hatched = fewer than 500 loans. Hovering shows only the state name; select it to see the numbers in Selection.");
   setGeoLegend(lo, hi);
   host.className = "geo-visual state-visual";
   if (!US_MAP_SVG) {
     host.innerHTML = `<p class="geo-loading">Loading state map…</p>`;
     loadUsMap().then(() => {
-      if (state.view === "explorer" && state.dim === "state") renderMap();
+      if (state.view === "explorer" && state.dim === "state") {
+        renderMap();
+        renderList();
+        renderSummary();
+      }
     });
     return;
   }
@@ -988,24 +1005,26 @@ function renderStateMap(host, items, meta) {
     const item = byId.get(path.dataset.state);
     if (!item) { path.style.display = "none"; return; }
     path.dataset.id = item.id;
+    const name = stateName(item.id);
     if (item.insufficient) {
       path.classList.add("is-masked");
       path.setAttribute("role", "button");
-      bindGeoItem(host, path, item, item.id, false);
+      bindGeoItem(host, path, item, name, false);
       return;
     }
     path.style.setProperty("--state-fill", colorFor(item[state.metric], lo, hi));
     path.setAttribute("tabindex", "0");
     path.setAttribute("role", "button");
-    bindGeoItem(host, path, item, item.id, true);
+    bindGeoItem(host, path, item, name, true);
   });
 
   const chip = (item) => {
+    const name = stateName(item.id);
     if (item.insufficient) {
-      return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(item.id)}">${esc(item.id)}</button>`;
+      return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(name)}">${esc(name)}</button>`;
     }
     const bg = colorFor(item[state.metric], lo, hi);
-    return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(item.id)}">${esc(item.id)}</button>`;
+    return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(name)}">${esc(name)}</button>`;
   };
   const smallHost = $(".state-small-strip", host);
   smallHost.innerHTML = SMALL_STATES.map((id) => byId.get(id)).filter(Boolean).map(chip).join("") + infoButton("small-states", "Small states");
@@ -1015,7 +1034,7 @@ function renderStateMap(host, items, meta) {
   $$(".state-chip", host).forEach((button) => {
     const item = byId.get(button.dataset.id);
     if (!item) return;
-    bindGeoItem(host, button, item, item.id, !item.insufficient);
+    bindGeoItem(host, button, item, stateName(item.id), !item.insufficient);
   });
 
   if (state.sel) {
@@ -1152,8 +1171,9 @@ function makeTile(item, lo, hi) {
   tile.type = "button";
   tile.className = `tile${item.insufficient ? " insufficient" : ""}${state.sel === item.id ? " selected" : ""}`;
   tile.dataset.id = item.id;
-  tile.setAttribute("aria-label", item.name);
-  tile.title = item.name;
+  const label = state.dim === "state" ? stateName(item.id) : item.name;
+  tile.setAttribute("aria-label", label);
+  tile.title = label;
   tile.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
   if (!item.insufficient) {
     const bg = colorFor(item[state.metric], lo, hi);
@@ -1186,7 +1206,7 @@ function makeTile(item, lo, hi) {
 function renderList() {
   const host = $("#rank-list");
   const query = state.search.trim().toLowerCase();
-  let items = dimItems().filter((item) => !query || item.name.toLowerCase().includes(query) || item.id.toLowerCase().includes(query));
+  let items = dimItems().filter((item) => !query || itemName(item).toLowerCase().includes(query) || item.id.toLowerCase().includes(query));
   items = items.slice().sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0));
   const maxValue = items.reduce((max, item) => Math.max(max, num(item[state.metric]) || 0), 0);
   const all = dimItems();
@@ -1205,7 +1225,7 @@ function renderList() {
     const value = num(item[state.metric]);
     const width = maxValue > 0 ? clamp((value / maxValue) * 100, 0, 100) : 0;
     row.innerHTML = `
-      <span class="rank-name">${esc(item.name)}${item.insufficient ? `<span class="smalln">small n</span>` : ""}</span>
+      <span class="rank-name">${esc(itemName(item))}${item.insufficient ? `<span class="smalln">small n</span>` : ""}</span>
       <span class="rank-value">${metricText(value, state.metric, 2)}</span>
       <span class="rank-meta">
         <span class="rank-bar" aria-hidden="true"><span style="--w:${width.toFixed(1)}%"></span></span>
@@ -1259,7 +1279,7 @@ function renderSummary() {
   const total = totalItem();
   const isSelected = state.dim !== "total" && !!selectedItem();
   const showCompare = isSelected;
-  $("#summary-title").textContent = state.dim === "total" ? "Total portfolio" : isSelected ? item.name : "Portfolio";
+  $("#summary-title").textContent = state.dim === "total" ? "Total portfolio" : isSelected ? itemName(item) : "Portfolio";
   $("#summary-context").innerHTML = `<span>Loans <strong data-testid="summary-loans">${fmtInt(item.n)}</strong></span><span>Share of EAD <strong data-testid="summary-ead-share">${fmtPct(item.ead_share, 1)}</strong></span>`;
 
   const rows = [
@@ -2254,6 +2274,7 @@ async function boot() {
       fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/welcome.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/process.json", { cache: "no-cache" }).catch(() => null),
+      loadUsMap(),
     ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();

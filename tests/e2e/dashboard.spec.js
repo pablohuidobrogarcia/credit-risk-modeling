@@ -866,7 +866,8 @@ test("hero KPI cards use resolved, non-redundant texts", async ({ page }) => {
   const cards = page.locator(".kpi-strip .kpi-card");
   const meta = PE.meta;
   await expect(cards.nth(0).locator(".mini-label")).toHaveText("Loans analyzed");
-  await expect(cards.nth(0)).toContainText(`Resolved Lending Club loans, ${DATA.display.data_years} · ${pct(meta.default_rate_total, 1)} ended in default`);
+  await expect(cards.nth(0)).toContainText(`Resolved Lending Club loans, ${DATA.display.data_years} · ${pct(DATA.data.default_rate, 1)} ended in default`);
+  await expect(cards.nth(0)).not.toContainText(`${pct(meta.default_rate_total, 1)} ended in default`);
   await expect(cards.nth(1).locator(".mini-label")).toHaveText("Model accuracy (AUC)");
   await expect(cards.nth(1)).toContainText(`about ${Math.round(DATA.pd.champion_auc * 100)}% of the time`);
   await expect(cards.nth(1)).toContainText(`tested on ${DATA.display.oot_years} loans`);

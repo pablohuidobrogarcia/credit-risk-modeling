@@ -616,7 +616,7 @@ function renderShell() {
   $("#hero-risk").onclick = () => setView("risk");
 
   countUp($("#kpi-loans"), D.data.n_rows, fmtInt);
-  $("#kpi-loans-sub").textContent = `Resolved Lending Club loans, ${disp.data_years || "2007-2018"} · ${fmtPct(meta.default_rate_total, 1)} ended in default`;
+  $("#kpi-loans-sub").textContent = `Resolved Lending Club loans, ${disp.data_years || "2007-2018"} · ${fmtPct(D.data.default_rate, 1)} ended in default`;
   countUp($("#kpi-auc"), D.pd.champion_auc, (v) => fmtNum(v, 4));
   $("#kpi-auc-sub").textContent = `Ranks a defaulter above a non-defaulter about ${Math.round(D.pd.champion_auc * 100)}% of the time · tested on ${disp.oot_years || "2014-2015"} loans`;
   countUp($("#kpi-el"), D.lgd.el_rate_oot, (v) => fmtPct(v, 2));

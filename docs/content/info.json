@@ -56,7 +56,7 @@
   "kpi-ci": {
     "title": "95% confidence interval",
     "text": "The Wilson interval shows the sampling uncertainty around the observed default rate. A small segment can have a wide interval even when its point estimate looks dramatic.",
-    "try": "Hover a hatched state to see its wide interval.",
+    "try": "Select a small state and compare its interval with the portfolio in Selection.",
     "term": "wilson-ci"
   },
   "kpi-pd": {
@@ -193,14 +193,14 @@
   },
   "state-map": {
     "title": "US state map",
-    "text": "Each state is colored by {metric}; hatched states have fewer than {min_n} loans and cannot be selected. Click a state or use the small-state buttons.",
-    "try": "Hover a hatched state and use its compact button to select a similar small state.",
+    "text": "Each state is colored by {metric}; hatched states have fewer than {min_n} loans and cannot be selected. Hovering shows only the state code; the Selection block shows the numbers.",
+    "try": "Select California and read its observed default, interval and rank in Selection.",
     "term": "default"
   },
   "grade-staircase": {
     "title": "Grade risk staircase",
-    "text": "Step height and color show {metric} by grade. Click or tap a step to link it to the ranked list and summary.",
-    "try": "Compare grade A with grade F, then read the selection summary.",
+    "text": "Step height and color show {metric} by grade. Hovering shows only the grade; clicking or tapping a step links it to the ranked list and Selection.",
+    "try": "Compare grade A with grade F, then read the Selection block.",
     "term": "grade"
   },
   "map-zoom": {
@@ -211,14 +211,14 @@
   },
   "small-states": {
     "title": "Small states",
-    "text": "Rhode Island, Delaware, DC, Connecticut, New Jersey, Maryland, Massachusetts, New Hampshire and Vermont are too small to read on the map reliably. The compact strip repeats them; each button selects the same segment as its map shape.",
-    "try": "Use the strip to select Rhode Island.",
+    "text": "Rhode Island, Delaware, DC, Connecticut, New Jersey, Maryland, Massachusetts, New Hampshire and Vermont are too small to read on the map reliably. The compact strip repeats them; hovering shows the state code and clicking selects the same segment as its map shape.",
+    "try": "Use the strip to select Rhode Island, then read its numbers in Selection.",
     "term": "small-segment-masking"
   },
   "masked-states": {
     "title": "Masked states",
-    "text": "Hatching marks segments with fewer than {min_n} loans. Their rates are too noisy to rank, so they are not selectable and do not receive a fill color. Hover or focus a hatched state to read its count and interval.",
-    "try": "Hover Iowa and compare its interval with California.",
+    "text": "Hatching marks segments with fewer than {min_n} loans. Their rates are too noisy to rank, so they are not selectable and do not receive a fill color. Hovering or focusing shows only the state code; the Selection block holds the numbers.",
+    "try": "Hover Iowa for its code, then select California to compare the figures in Selection.",
     "term": "small-segment-masking"
   },
   "el-note": {

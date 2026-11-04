@@ -708,16 +708,6 @@ function selectExplorerItem(item) {
   commit({ push: true });
 }
 
-function geoLabel(item, fullName) {
-  const masked = item.insufficient ? `; n < ${fmtInt(pe().meta.min_n)}, masked` : "";
-  const metric = metricMeta(state.metric).short;
-  const value = metricText(item[state.metric], state.metric, 2);
-  const ci = state.metric === "default_rate"
-    ? ` (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)})`
-    : "";
-  return `${fullName}: ${metric} ${value}${ci}; n=${fmtInt(item.n)}${masked}`;
-}
-
 function showGeoTooltip(host, text) {
   const tip = host.querySelector(".geo-tooltip");
   if (!tip) return;
@@ -734,8 +724,7 @@ function highlightGeo(host, id, on) {
   $$(`[data-id="${CSS.escape(id)}"]`, host).forEach((node) => node.classList.toggle("is-hovered", on));
 }
 
-function bindGeoItem(host, element, item, fullName, selectable = true) {
-  const label = geoLabel(item, fullName);
+function bindGeoItem(host, element, item, label, selectable = true) {
   element.dataset.id = item.id;
   element.classList.toggle("is-selected", state.sel === item.id);
   element.setAttribute("aria-label", label);
@@ -795,7 +784,7 @@ function setGeoMeta(title, items, subtitle, captionId, fallbackCaption) {
 
 function setGeoLegend(lo, hi) {
   const meta = pe().meta;
-  $("#map-legend").innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
+  $("#map-legend").innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
 }
 
 function geoRange(items) {
@@ -972,7 +961,7 @@ function renderStateMap(host, items, meta) {
   setGeoMeta("US state map", items,
     `${items.filter((item) => item.id !== "DC").length} states and DC · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
     "state-map",
-    "Each state is colored by the selected metric; hatched = fewer than 500 loans. Click a state or use the small-states buttons.");
+    "Each state is colored by the selected metric; hatched = fewer than 500 loans. Hovering shows only the state code; select it to see the numbers in Selection.");
   setGeoLegend(lo, hi);
   host.className = "geo-visual state-visual";
   if (!US_MAP_SVG) {
@@ -992,40 +981,36 @@ function renderStateMap(host, items, meta) {
         <button type="button" class="map-zoom-btn map-zoom-reset" data-map-zoom="reset" aria-label="Reset zoom">reset</button>
       </div>
     </div>
-    <p class="map-zoom-hint" id="map-zoom-hint">Ctrl + scroll or use + / − to zoom, drag to move ${infoButton("map-zoom", "Map zoom")}${infoButton("masked-states", "Masked states")}</p>
+    <p class="map-zoom-hint" id="map-zoom-hint">Ctrl + scroll or + / − to zoom; drag to move · hover shows the name ${infoButton("map-zoom", "Map zoom")}${infoButton("masked-states", "Masked states")}</p>
     <div class="state-small-strip" role="group" aria-label="Small states"></div>
     <div class="state-all-grid" role="group" aria-label="All states"></div>
     <div class="geo-tooltip" role="status" hidden></div>`;
   bindMapZoom(host, $(".us-map-svg", host));
 
   const paths = $$(".us-map-svg .st", host);
-  const names = {};
-  paths.forEach((path) => { names[path.dataset.state] = path.getAttribute("aria-label") || path.dataset.state; });
   const byId = new Map(items.map((item) => [item.id, item]));
   paths.forEach((path) => {
     const item = byId.get(path.dataset.state);
     if (!item) { path.style.display = "none"; return; }
-    const fullName = names[path.dataset.state] || item.name;
     path.dataset.id = item.id;
     if (item.insufficient) {
       path.classList.add("is-masked");
       path.setAttribute("role", "button");
-      bindGeoItem(host, path, item, fullName, false);
+      bindGeoItem(host, path, item, item.id, false);
       return;
     }
     path.style.setProperty("--state-fill", colorFor(item[state.metric], lo, hi));
     path.setAttribute("tabindex", "0");
     path.setAttribute("role", "button");
-    bindGeoItem(host, path, item, fullName, true);
+    bindGeoItem(host, path, item, item.id, true);
   });
 
   const chip = (item) => {
-    const fullName = names[item.id] || item.name;
     if (item.insufficient) {
-      return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(geoLabel(item, fullName))}">${esc(item.id)}</button>`;
+      return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(item.id)}">${esc(item.id)}</button>`;
     }
     const bg = colorFor(item[state.metric], lo, hi);
-    return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(geoLabel(item, fullName))}">${esc(item.id)}</button>`;
+    return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(item.id)}">${esc(item.id)}</button>`;
   };
   const smallHost = $(".state-small-strip", host);
   smallHost.innerHTML = SMALL_STATES.map((id) => byId.get(id)).filter(Boolean).map(chip).join("") + infoButton("small-states", "Small states");
@@ -1035,8 +1020,7 @@ function renderStateMap(host, items, meta) {
   $$(".state-chip", host).forEach((button) => {
     const item = byId.get(button.dataset.id);
     if (!item) return;
-    const fullName = names[item.id] || item.name;
-    bindGeoItem(host, button, item, fullName, !item.insufficient);
+    bindGeoItem(host, button, item, item.id, !item.insufficient);
   });
 
   if (state.sel) {
@@ -1050,7 +1034,7 @@ function renderGradeStaircase(host, items, meta) {
   setGeoMeta("Grade risk staircase", items,
     `${items.length} grades · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
     "grade-staircase",
-    "Step height and color show the selected metric by grade.");
+    "Step height and color show the selected metric by grade. Hovering shows only the grade; select it to see the numbers in Selection.");
   setGeoLegend(lo, hi);
   host.className = "geo-visual grade-visual";
   const ordered = items.slice().sort((a, b) => a.id.localeCompare(b.id));
@@ -1159,9 +1143,9 @@ function renderTileMap(host, items, meta) {
   }
 
   const legend = $("#map-legend");
-  legend.innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
+  legend.innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
   const mobileHint = window.matchMedia && window.matchMedia("(max-width: 700px)").matches ? " On phones, the ranked list is the main touch interface; the map is a compact overview." : "";
-  $("#map-note").textContent = "Click a tile to link the list and summary." + mobileHint;
+  $("#map-note").textContent = "Hover a segment for its name; select it to see the numbers in Selection. Click a tile to link the list and summary." + mobileHint;
   if (state.sel) {
     const selected = host.querySelector(`[data-id="${CSS.escape(state.sel)}"]`);
     if (selected) selected.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -1173,7 +1157,7 @@ function makeTile(item, lo, hi) {
   tile.type = "button";
   tile.className = `tile${item.insufficient ? " insufficient" : ""}${state.sel === item.id ? " selected" : ""}`;
   tile.dataset.id = item.id;
-  tile.setAttribute("aria-label", `${item.name}: ${metricText(item[state.metric])} ${metricMeta(state.metric).short}; n=${fmtInt(item.n)}${item.insufficient ? "; insufficient data" : ""}`);
+  tile.setAttribute("aria-label", item.name);
   tile.title = item.name;
   tile.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
   if (!item.insufficient) {

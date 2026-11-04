@@ -117,7 +117,7 @@ test("state map exposes small-state buttons and blocks masked states", async ({ 
   await maskedIowa.click({ force: true });
   expect(page.url()).toBe(before);
   await maskedIowa.hover();
-  await expect(page.locator(".geo-tooltip")).toContainText("n < 500, masked");
+  await expect(page.locator(".geo-tooltip")).toHaveText("IA");
 
   const rhodeIsland = page.locator('.state-small-strip .state-chip[data-id="RI"]');
   await rhodeIsland.hover();
@@ -156,8 +156,7 @@ test("state map follows the metric selector", async ({ page }) => {
   expect(await chipFill()).not.toBe(defaultChip);
   await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
   await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').hover();
-  await expect(page.locator(".geo-tooltip")).toContainText("Predicted PD");
-  await expect(page.locator(".geo-tooltip")).not.toContainText("95% CI");
+  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
 
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
@@ -165,8 +164,7 @@ test("state map follows the metric selector", async ({ page }) => {
   expect(await fills()).not.toEqual(defaultFills);
   await expect(page.locator('#tile-map .us-map-svg .st[data-state="CA"]')).toHaveClass(/is-selected/);
   await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').hover();
-  await expect(page.locator(".geo-tooltip")).toContainText("Expected loss");
-  await expect(page.locator(".geo-tooltip")).not.toContainText("95% CI");
+  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
 
   await page.locator("#metric-tabs button[data-metric='default_rate']").click();
   await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
@@ -373,8 +371,7 @@ test("grade staircase renders A to G and selects a grade", async ({ page }) => {
   await expect(stepG).toHaveAttribute("tabindex", "-1");
   const stepB = page.locator('.grade-step[data-id="B"]');
   await stepB.hover();
-  await expect(page.locator(".geo-tooltip")).toContainText("Grade B");
-  await expect(page.locator(".geo-tooltip")).toContainText("95% CI");
+  await expect(page.locator(".geo-tooltip")).toHaveText("Grade B");
   await stepB.click();
   await expect(page.locator("#summary-title")).toHaveText("B");
   await expect(stepB).toHaveClass(/is-selected/);
@@ -414,8 +411,7 @@ test("grade staircase follows the metric selector", async ({ page }) => {
   await expect(page.locator('.grade-step[data-id="B"] .grade-step-rate')).toHaveText(pct(gradeB.pred_pd, 1));
   await expect(page.locator('.grade-step[data-id="B"]')).toHaveClass(/is-selected/);
   await page.locator('.grade-step[data-id="B"]').hover();
-  await expect(page.locator(".geo-tooltip")).toContainText("Predicted PD");
-  await expect(page.locator(".geo-tooltip")).not.toContainText("95% CI");
+  await expect(page.locator(".geo-tooltip")).toHaveText("Grade B");
 
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
@@ -491,17 +487,57 @@ test("state map hover shows a tooltip and clicking updates the linked details", 
   const errors = await open(page);
   const state = page.locator('#tile-map .us-map-svg .st[data-state="CA"]');
   const label = await state.getAttribute("aria-label");
-  expect(label).toContain("California");
-  expect(label).toContain("n=");
-  expect(label).toContain("95% CI");
+  expect(label).toBe("CA");
   await state.hover();
   await expect(page.locator(".geo-tooltip")).toBeVisible();
-  await expect(page.locator(".geo-tooltip")).toContainText("California");
-  await expect(page.locator(".geo-tooltip")).toContainText("95% CI");
+  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
   await state.click();
   await expect(page.locator("#summary-title")).toHaveText("CA");
   await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(PE.dimensions.state.find((x) => x.id === "CA").default_rate));
   await expect(page).toHaveURL(/sel=CA/);
+  await expectNoErrors(errors);
+});
+
+test("explorer visuals expose only the segment name on hover and focus", async ({ page }) => {
+  const errors = await open(page);
+  const state = page.locator('#tile-map .us-map-svg .st[data-state="CA"]');
+  await state.hover();
+  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
+  await state.focus();
+  await expect(page.locator(".geo-tooltip")).toHaveText("CA");
+  await expect(state).toHaveAttribute("aria-label", "CA");
+
+  await page.locator("#dimension-tabs button[data-dim='grade']").click();
+  const grade = page.locator('.grade-step[data-id="B"]');
+  await grade.hover();
+  await expect(page.locator(".geo-tooltip")).toHaveText("Grade B");
+  await grade.focus();
+  await expect(page.locator(".geo-tooltip")).toHaveText("Grade B");
+  await expect(grade).toHaveAttribute("aria-label", "Grade B");
+
+  const cases = [
+    ["purpose", "moving"],
+    ["vintage", "2014"],
+    ["home_ownership", "RENT"],
+  ];
+  for (const [dim, id] of cases) {
+    await page.locator(`#dimension-tabs button[data-dim='${dim}']`).click();
+    const item = PE.dimensions[dim].find((entry) => entry.id === id);
+    const tile = page.locator(`#tile-map .tile[data-id="${id}"]`);
+    await expect(tile).toHaveAttribute("title", item.name);
+    await expect(tile).toHaveAttribute("aria-label", item.name);
+    await tile.hover();
+    expect(await tile.getAttribute("title")).toBe(item.name);
+  }
+
+  await page.locator("#dimension-tabs button[data-dim='state']").click();
+  const chip = page.locator('.state-small-strip .state-chip[data-id="RI"]');
+  await expect(chip).toHaveAttribute("title", "RI");
+  await expect(chip).toHaveAttribute("aria-label", "RI");
+  const titles = await page.locator("#tile-map [title]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("title")));
+  for (const title of titles) {
+    expect(title).not.toMatch(/%|CI|n\s*=|loans|share/i);
+  }
   await expectNoErrors(errors);
 });
 

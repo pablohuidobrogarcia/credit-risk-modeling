@@ -334,10 +334,10 @@ test("state map zoom, pan and keyboard controls work", async ({ page }) => {
   await expect(page.locator("#summary-title")).toHaveText("CA");
   await page.locator('[data-map-zoom="in"]').click();
   const beforeDrag = await viewBox();
-  const caBox = await ca.boundingBox();
-  await page.mouse.move(caBox.x + caBox.width / 2, caBox.y + caBox.height / 2);
+  const svgBox = await svg.boundingBox();
+  await page.mouse.move(svgBox.x + svgBox.width / 2, svgBox.y + svgBox.height / 2);
   await page.mouse.down();
-  await page.mouse.move(caBox.x + caBox.width / 2 + 28, caBox.y + caBox.height / 2 + 14, { steps: 8 });
+  await page.mouse.move(svgBox.x + svgBox.width / 2 + 28, svgBox.y + svgBox.height / 2 + 14, { steps: 8 });
   await page.mouse.up();
   await page.waitForTimeout(120);
   expect(await viewBox()).not.toBe(beforeDrag);
@@ -614,6 +614,46 @@ test("model check reports an inside-CI segment", async ({ page }) => {
   await expect(page.locator('[data-testid="summary-model-check"]')).toHaveText(
     `Model check: observed ${pct(item.default_rate)} vs predicted ${pct(item.pred_pd)}: predicted PD is within the 95% CI.`
   );
+  await expectNoErrors(errors);
+});
+
+test("selection block keeps one size across every tab at 1360, 1100 and 390", async ({ page }) => {
+  const errors = await open(page);
+  const cases = [
+    ["total", null],
+    ["grade", "B"],
+    ["purpose", "moving"],
+    ["vintage", "2014"],
+    ["home_ownership", "MORTGAGE"],
+    ["state", "AL"],
+  ];
+  const measure = () => page.evaluate(() => {
+    const selection = document.querySelector(".selection-part-a");
+    const box = selection.getBoundingClientRect();
+    return {
+      width: box.width,
+      height: box.height,
+      scrollHeight: selection.scrollHeight,
+      clientHeight: selection.clientHeight,
+    };
+  });
+  for (const width of [1360, 1100, 390]) {
+    let first = null;
+    for (const [dim, sel] of cases) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/#view=explorer&dim=${dim}${sel ? `&sel=${sel}` : ""}`);
+      await page.waitForTimeout(500);
+      const next = await measure();
+      first ||= next;
+      expect(Math.abs(next.width - first.width), `${width} ${dim} width`).toBeLessThanOrEqual(2);
+      expect(Math.abs(next.height - first.height), `${width} ${dim} height`).toBeLessThanOrEqual(2);
+      expect(next.scrollHeight, `${width} ${dim} content`).toBeLessThanOrEqual(next.clientHeight + 1);
+    }
+    if (width >= 1100) {
+      const bottoms = await page.evaluate(() => [...document.querySelectorAll(".explorer-column")].slice(1).map((column) => column.getBoundingClientRect().bottom));
+      expect(Math.abs(bottoms[0] - bottoms[1]), `${width} column bottoms`).toBeLessThanOrEqual(2);
+    }
+  }
   await expectNoErrors(errors);
 });
 

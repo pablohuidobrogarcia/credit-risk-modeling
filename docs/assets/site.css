@@ -345,8 +345,8 @@ button, input, select { font: inherit; color: inherit; }
 /* --------------------------------------------------------- explorer grid */
 .explorer-grid {
   --state-col-h: 1013.19px;
-  --state-map-h: 554.39px;
-  --state-a-h: 446px;
+  --state-map-h: 630.39px;
+  --state-a-h: 370px;
   --state-list-h: 677.19px;
   --state-b-h: 323.2px;
   --ranked-w: 320px;
@@ -371,7 +371,7 @@ button, input, select { font: inherit; color: inherit; }
 .selection-part-b .score-figure { margin-top: 0.2rem; }
 .selection-part-b .score-hist { min-height: 150px; max-height: 300px; height: 150px; }
 @media (min-width: 1001px) and (max-width: 1199px) {
-  .explorer-grid { --state-map-h: 537.39px; --state-a-h: 463px; --ranked-w: 240px; }
+  .explorer-grid { --state-map-h: 630.39px; --ranked-w: 240px; }
 }
 .list-panel { min-height: 400px; }
 .selection-panel { flex: 1 1 auto; min-width: 0; }
@@ -390,9 +390,10 @@ button, input, select { font: inherit; color: inherit; }
 .selection-metric-compare { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.1rem 0.8rem; color: var(--fg-soft); font-size: 0.66rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .selection-ci { grid-column: 2; display: flex; align-items: center; justify-content: flex-end; gap: 0.22rem; color: var(--fg-soft); font-size: 0.64rem; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .selection-metric-row.is-active .selection-ci, .selection-metric-row.is-active .selection-metric-compare { color: var(--fg-muted); }
-.selection-metric-row.is-active { background: var(--sky-light); border-color: color-mix(in srgb, var(--sky) 55%, var(--border)); box-shadow: inset 3px 0 0 var(--sky); }
-.selection-metric-row.is-active .selection-metric-label { color: var(--ink); }
-.selection-metric-row.is-active .selection-metric-value { color: var(--ink); font-size: 1.38rem; }
+.selection-metric-row.is-active { border-color: color-mix(in srgb, var(--sky) 55%, var(--border)); box-shadow: inset 3px 0 0 var(--sky); }
+[data-theme="light"] .selection-metric-row.is-active { background: var(--sky-light); }
+[data-theme="light"] .selection-metric-row.is-active .selection-metric-label { color: var(--ink); }
+[data-theme="light"] .selection-metric-row.is-active .selection-metric-value { color: var(--ink); font-size: 1.38rem; }
 .selection-model-check { display: flex; align-items: flex-start; gap: 0.3rem; color: var(--fg-muted); font-size: 0.7rem; line-height: 1.3; }
 .selection-model-check .info-btn { margin-top: 0.05rem; }
 .selection-part-b .score-figure { margin-top: 0.2rem; }
@@ -804,6 +805,7 @@ body.welcome-open { overflow: hidden; }
   .how-built-panel, .map-panel, .selection-part-a, .list-panel, .selection-part-b {
     height: auto; min-height: 0; max-height: none; flex: 0 0 auto;
   }
+  .selection-part-a { min-height: 372px; }
   .map-panel.geo-mode .map-scroll { overflow: visible; }
   .geo-visual { height: auto; min-height: 300px; }
 }

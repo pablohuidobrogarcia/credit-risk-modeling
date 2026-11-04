@@ -207,6 +207,8 @@ function dimMeta(id) {
 
 /* ------------------------------------------------------------ info popovers */
 let INFO = {};
+let FOLDER = { sheets: [] };
+let FOLDER_SVG = null;
 let LEARN = { guide: [], terms: [] };
 let PROCESS = { steps: [] };
 let WELCOME = {};
@@ -214,6 +216,10 @@ let infoReturnFocus = null;
 let infoAnchor = null;
 let welcomeOpen = false;
 let welcomeLastFocus = null;
+let folderOpen = false;
+let folderLastFocus = null;
+let folderActive = 0;
+let folderTouch = null;
 const WELCOME_STORAGE_KEY = "credit-risk-studio:welcome-dismissed";
 
 function infoButton(id, label, extraClass = "") {
@@ -231,11 +237,26 @@ function lgdRangeLabel() {
 function infoContext() {
   const meta = pe() ? pe().meta : {};
   const stats = (D && D.simulation && D.simulation.statistics) || {};
+  const total = (dims().total || [])[0] || {};
+  const observedDefaults = Math.round((meta.n_total || 0) * (meta.default_rate_total || 0));
+  const gapPp = ((meta.default_rate_total || 0) - (meta.mean_pd || 0)) * 100;
   return {
     primary_window: meta.years ? `${meta.years.join("-")} ${meta.term}-month` : "the primary test window",
     n_oot: fmtInt(meta.n_total),
+    n_total: fmtInt(meta.n_total),
+    test_years: meta.years ? meta.years.join("-") : "2014-2015",
+    term: meta.term || "36",
+    default_rate_total: fmtPct(meta.default_rate_total, 2),
+    observed_defaults: fmtInt(observedDefaults),
+    ci_low: fmtPct(total.ci_low, 2),
+    ci_high: fmtPct(total.ci_high, 2),
     defaults_per_100: num(meta.default_rate_total) == null ? "—" : (meta.default_rate_total * 100).toFixed(2),
+    gap_pp: gapPp.toFixed(2),
+    mean_lgd_pct: fmtPct(meta.mean_lgd, 2),
+    el_pct_ead: fmtPct(meta.el_pct_ead, 2),
     el_per_100: num(meta.el_pct_ead) == null ? "—" : (meta.el_pct_ead * 100).toFixed(2),
+    ead_total: fmtMoney(meta.ead_total),
+    champion: (D && D.pd && D.pd.champion) || "champion",
     default_rate_oot: fmtPct(meta.default_rate_total, 2),
     el_rate: fmtPct(meta.el_pct_ead, 2),
     min_n: fmtInt(meta.min_n),
@@ -767,6 +788,14 @@ function bindGeoItem(host, element, item, label, selectable = true) {
   element.addEventListener("mouseleave", hide);
   element.addEventListener("focus", show);
   element.addEventListener("blur", hide);
+}
+
+function loadFolderSvg() {
+  if (FOLDER_SVG) return Promise.resolve(FOLDER_SVG);
+  return fetch("assets/portfolio-folder.svg", { cache: "no-cache" })
+    .then((response) => (response.ok ? response.text() : null))
+    .then((text) => { FOLDER_SVG = text; return text; })
+    .catch(() => null);
 }
 
 function loadUsMap() {
@@ -1399,8 +1428,16 @@ function renderHowBuilt() {
   selectStep(howBuiltOpenStep || 1);
 }
 
+function mountFolderArt() {
+  const host = $("#total-folder-art");
+  if (!host || !FOLDER_SVG || host.dataset.mounted === "1") return;
+  host.innerHTML = FOLDER_SVG;
+  host.dataset.mounted = "1";
+}
+
 function renderTotalPanel() {
   const meta = pe().meta;
+  mountFolderArt();
   $("#total-observed").textContent = fmtPct(meta.default_rate_total, 2);
   $("#total-predicted").textContent = fmtPct(meta.mean_pd, 2);
   $("#total-el").textContent = fmtPct(meta.el_pct_ead, 2);
@@ -2153,6 +2190,185 @@ function setWelcomeDismissed(dismissed) {
   }
 }
 
+function folderVisualMarkup(sheet) {
+  const meta = pe().meta;
+  const observed = (meta.default_rate_total || 0) * 100;
+  const predicted = (meta.mean_pd || 0) * 100;
+  const expectedLoss = (meta.el_pct_ead || 0) * 100;
+  const primary = sheet.id === "expected-loss" ? expectedLoss : observed;
+  const whole = Math.floor(primary + 1e-9);
+  const fraction = primary - whole;
+  const predictedWhole = Math.floor(predicted + 1e-9);
+  const dots = Array.from({ length: 100 }, (_, index) => {
+    const classes = ["folder-dot"];
+    let style = `--i:${index}`;
+    if (index < whole) classes.push("is-filled");
+    else if (index === whole && fraction > 0.001) {
+      classes.push("is-partial");
+      style += `;--fill:${fraction.toFixed(3)}`;
+    }
+    if (sheet.id === "predicted" && index < predictedWhole) classes.push("is-outline");
+    return `<span class="${classes.join(" ")}" style="${style}" aria-hidden="true"></span>`;
+  }).join("");
+  const label = resolveInfoText(sheet.visual_label || "");
+  const note = resolveInfoText(sheet.visual_note || "");
+  return `<figure class="folder-visual">
+    <div class="folder-dots" role="img" aria-label="100 dots; ${primary.toFixed(2)} filled">${dots}</div>
+    <figcaption>${esc(label)}${note ? `<span class="folder-gap">${esc(note)}</span>` : ""}</figcaption>
+  </figure>`;
+}
+
+function folderSheetMarkup(sheet, index) {
+  const hidden = index === 0 ? "" : " hidden";
+  return `<article class="folder-sheet-card folder-sheet-${index}" id="folder-sheet-${index}" data-folder-sheet="${index}" role="tabpanel" aria-labelledby="folder-tab-${index}"${hidden}>
+    <p class="folder-scope">${esc(resolveInfoText(FOLDER.scope || ""))}</p>
+    <div class="folder-sheet-copy">
+      <h3>${esc(resolveInfoText(sheet.title))}</h3>
+      <p class="folder-headline">${esc(resolveInfoText(sheet.headline))}</p>
+      <p class="folder-headline-label">${esc(resolveInfoText(sheet.headline_label))}</p>
+      <p class="folder-copy"><strong>How it is computed here:</strong> ${esc(resolveInfoText(sheet.computation))}</p>
+      <p class="folder-copy"><strong>How to read it:</strong> ${esc(resolveInfoText(sheet.reading))}</p>
+      <p class="folder-copy folder-caveat"><strong>Caveat:</strong> ${esc(resolveInfoText(sheet.caveat))}</p>
+    </div>
+    ${folderVisualMarkup(sheet)}
+  </article>`;
+}
+
+function folderOverlayMarkup() {
+  const sheets = FOLDER.sheets || [];
+  return `<section class="welcome-card folder-card" id="folder-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-title" tabindex="-1">
+    <div class="welcome-head folder-head">
+      <div>
+        <p class="eyebrow">Portfolio folder</p>
+        <h2 id="folder-title">Three views of one portfolio</h2>
+      </div>
+      <button type="button" class="icon-btn folder-close" data-folder-close aria-label="Close portfolio folder">Close</button>
+    </div>
+    <div class="folder-tabs" role="tablist" aria-label="Portfolio sheets">
+      ${sheets.map((sheet, index) => `<button type="button" class="folder-tab folder-tab-${index}" id="folder-tab-${index}" data-folder-tab="${index}" role="tab" aria-selected="${index === 0}" aria-controls="folder-sheet-${index}" tabindex="${index === 0 ? 0 : -1}">${esc(sheet.tab)}</button>`).join("")}
+    </div>
+    <div class="folder-main">
+      <div class="folder-fan" id="folder-fan" data-active="0" aria-hidden="true">
+        <span class="folder-fan-sheet folder-fan-0"></span>
+        <span class="folder-fan-sheet folder-fan-1"></span>
+        <span class="folder-fan-sheet folder-fan-2"></span>
+      </div>
+      <div class="folder-sheet-stack">${sheets.map(folderSheetMarkup).join("")}</div>
+    </div>
+    <div class="folder-nav">
+      <button type="button" class="btn btn-ghost" data-folder-prev>Previous</button>
+      <span id="folder-counter" aria-live="polite">1 of ${sheets.length}</span>
+      <button type="button" class="btn btn-primary" data-folder-next>Next</button>
+    </div>
+  </section>`;
+}
+
+function ensureFolderOverlay() {
+  let overlay = $("#folder-overlay");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "folder-overlay";
+  overlay.className = "welcome-backdrop folder-backdrop";
+  overlay.hidden = true;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) { closeFolder(); return; }
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    const tab = target.closest("[data-folder-tab]");
+    if (tab) { setFolderSheet(Number(tab.dataset.folderTab)); return; }
+    if (target.closest("[data-folder-close]")) { closeFolder(); return; }
+    if (target.closest("[data-folder-prev]")) { setFolderSheet(folderActive - 1, { focusTab: true }); return; }
+    if (target.closest("[data-folder-next]")) { setFolderSheet(folderActive + 1, { focusTab: true }); }
+  });
+  overlay.addEventListener("touchstart", (event) => {
+    if (event.touches.length !== 1) return;
+    folderTouch = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }, { passive: true });
+  overlay.addEventListener("touchend", (event) => {
+    if (!folderTouch) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - folderTouch.x;
+    const dy = touch.clientY - folderTouch.y;
+    folderTouch = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) setFolderSheet(folderActive + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+  return overlay;
+}
+
+function setFolderSheet(index, { focusTab = false } = {}) {
+  const sheets = FOLDER.sheets || [];
+  if (!sheets.length) return;
+  folderActive = (index + sheets.length) % sheets.length;
+  const overlay = $("#folder-overlay");
+  if (!overlay) return;
+  $$("[data-folder-tab]", overlay).forEach((tab, tabIndex) => {
+    const active = tabIndex === folderActive;
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+    tab.tabIndex = active ? 0 : -1;
+  });
+  $$("[data-folder-sheet]", overlay).forEach((panel, panelIndex) => { panel.hidden = panelIndex !== folderActive; });
+  const fan = $("#folder-fan", overlay);
+  if (fan) fan.dataset.active = String(folderActive);
+  const counter = $("#folder-counter", overlay);
+  if (counter) counter.textContent = `${folderActive + 1} of ${sheets.length}`;
+  if (focusTab) $(`#folder-tab-${folderActive}`, overlay)?.focus();
+}
+
+function openFolder() {
+  if (folderOpen || !FOLDER.sheets || !FOLDER.sheets.length) return;
+  const overlay = ensureFolderOverlay();
+  folderLastFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : $("#total-folder-button");
+  folderOpen = true;
+  folderActive = 0;
+  overlay.innerHTML = folderOverlayMarkup();
+  overlay.hidden = false;
+  document.body.classList.add("folder-open");
+  setFolderSheet(0);
+  $("#folder-dialog", overlay)?.focus({ preventScroll: true });
+}
+
+function closeFolder(restoreFocus = true) {
+  const overlay = $("#folder-overlay");
+  if (!overlay || !folderOpen) return;
+  folderOpen = false;
+  overlay.hidden = true;
+  document.body.classList.remove("folder-open");
+  if (restoreFocus && folderLastFocus && typeof folderLastFocus.focus === "function") folderLastFocus.focus();
+  folderLastFocus = null;
+}
+
+function bindFolder() {
+  const button = $("#total-folder-button");
+  if (!button || button.__folderBound) return;
+  button.__folderBound = true;
+  button.addEventListener("click", openFolder);
+  document.addEventListener("keydown", (event) => {
+    if (!folderOpen) return;
+    if (event.key === "Escape") { event.preventDefault(); closeFolder(); return; }
+    if (event.key === "ArrowRight") { event.preventDefault(); setFolderSheet(folderActive + 1, { focusTab: true }); return; }
+    if (event.key === "ArrowLeft") { event.preventDefault(); setFolderSheet(folderActive - 1, { focusTab: true }); return; }
+    if (event.key !== "Tab") return;
+    const card = $("#folder-dialog");
+    if (!card) return;
+    const focusable = $$("button, a, input, select, textarea, [tabindex]:not([tabindex='-1'])", card)
+      .filter((el) => !el.disabled && el.getClientRects().length > 0);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (document.activeElement === card) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
 function renderWelcome() {
   const overlay = $("#welcome-overlay");
   if (!overlay || !WELCOME.title) return false;
@@ -2287,13 +2503,15 @@ async function boot() {
   const initialParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const deepLink = initialParams.has("view") || initialParams.has("term");
   try {
-    const [response, infoResponse, learnResponse, welcomeResponse, processResponse] = await Promise.all([
+    const [response, infoResponse, learnResponse, welcomeResponse, processResponse, folderResponse] = await Promise.all([
       fetch(DATA_URL, { cache: "no-cache" }),
       fetch("content/info.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/welcome.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/process.json", { cache: "no-cache" }).catch(() => null),
-            loadUsMap(),
+      fetch("content/folder.json", { cache: "no-cache" }).catch(() => null),
+      loadFolderSvg(),
+      loadUsMap(),
     ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();
@@ -2307,6 +2525,9 @@ async function boot() {
     if (processResponse && processResponse.ok) {
       try { PROCESS = await processResponse.json(); } catch (err) { PROCESS = { steps: [] }; }
     }
+    if (folderResponse && folderResponse.ok) {
+      try { FOLDER = await folderResponse.json(); } catch (err) { FOLDER = { sheets: [] }; }
+    }
     if (welcomeResponse && welcomeResponse.ok) {
       try { WELCOME = await welcomeResponse.json(); } catch (err) { WELCOME = {}; }
     }
@@ -2316,6 +2537,7 @@ async function boot() {
     $("#app-content").hidden = false;
     bindInfoDelegation();
     bindWelcome();
+    bindFolder();
     applyTheme();
     setupRiskControls();
     setupSimulator();

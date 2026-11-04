@@ -413,6 +413,117 @@ button, input, select { font: inherit; color: inherit; }
 .total-headline-value { display: block; margin-top: 0.18rem; font-family: var(--serif); font-size: clamp(1.2rem, 2.1vw, 1.6rem); font-variant-numeric: tabular-nums; line-height: 1.1; }
 .total-headline-unit { display: block; color: var(--fg-soft); font-size: 0.68rem; margin-top: 0.1rem; }
 .total-scope { margin: 0; color: var(--fg-soft); font-size: 0.8rem; text-align: center; }
+.total-folder-art #sheet-1, .total-folder-art #sheet-2, .total-folder-art #sheet-3 {
+  transform-box: fill-box; transform-origin: 50% 100%;
+  transition: transform 260ms var(--ease);
+}
+.total-folder-art #sheet-3 { transition-delay: 0ms; }
+.total-folder-art #sheet-2 { transition-delay: 35ms; }
+.total-folder-art #sheet-1 { transition-delay: 70ms; }
+.total-folder-button:hover .total-folder-art #sheet-3,
+.total-folder-button:focus-visible .total-folder-art #sheet-3 { transform: translateY(-2px); }
+.total-folder-button:hover .total-folder-art #sheet-2,
+.total-folder-button:focus-visible .total-folder-art #sheet-2 { transform: translateY(-4px); }
+.total-folder-button:hover .total-folder-art #sheet-1,
+.total-folder-button:focus-visible .total-folder-art #sheet-1 { transform: translateY(-6px); }
+
+body.folder-open { overflow: hidden; }
+.folder-backdrop { z-index: 140; }
+.folder-card { width: min(1180px, 94vw); overflow-x: hidden; }
+.folder-head { align-items: flex-start; }
+.folder-head h2 { font-size: clamp(1.55rem, 2.8vw, 2.3rem); }
+.folder-close { flex: 0 0 auto; }
+.folder-tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 1rem 0 0.9rem; }
+.folder-tab {
+  border: 1px solid var(--border); border-radius: 999px; padding: 0.42rem 0.78rem;
+  background: color-mix(in srgb, var(--card-solid) 55%, transparent); color: var(--fg-muted);
+  font-size: 0.78rem; font-weight: 750; cursor: pointer;
+}
+.folder-tab-0 { --tab-color: var(--lilac); --tab-bg: var(--lilac-light); }
+.folder-tab-1 { --tab-color: var(--periwinkle); --tab-bg: var(--periwinkle-light); }
+.folder-tab-2 { --tab-color: var(--sky); --tab-bg: var(--sky-light); }
+.folder-tab[aria-selected="true"] {
+  color: var(--ink); background: var(--tab-bg); border-color: var(--tab-color);
+  box-shadow: inset 0 -3px 0 var(--tab-color);
+}
+.folder-main { display: grid; grid-template-columns: minmax(150px, 0.28fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.folder-fan { position: relative; width: 190px; height: 135px; margin: 1.3rem auto 0; }
+.folder-fan-sheet {
+  position: absolute; top: 8px; left: 18px; right: 18px; bottom: 0;
+  border: 2px solid var(--border-strong); border-radius: 12px; box-shadow: var(--shadow-soft);
+  transform-origin: 50% 100%; transition: translate 320ms var(--ease), rotate 320ms var(--ease);
+  animation: folder-fan-in 480ms var(--ease) both;
+}
+.folder-fan-0 { background: var(--lilac-light); border-color: var(--lilac); translate: -24px 0; rotate: -7deg; z-index: 1; animation-delay: 80ms; }
+.folder-fan-1 { background: var(--periwinkle-light); border-color: var(--periwinkle); translate: 0 0; rotate: 0deg; z-index: 2; animation-delay: 40ms; }
+.folder-fan-2 { background: var(--sky-light); border-color: var(--sky); translate: 24px 0; rotate: 7deg; z-index: 3; }
+.folder-fan[data-active="0"] .folder-fan-0 { translate: -12px -10px; rotate: -4deg; z-index: 4; }
+.folder-fan[data-active="0"] .folder-fan-1 { translate: 8px 0; rotate: 2deg; z-index: 2; }
+.folder-fan[data-active="0"] .folder-fan-2 { translate: 24px 0; rotate: 7deg; z-index: 1; }
+.folder-fan[data-active="1"] .folder-fan-1 { translate: 0 -10px; rotate: 0deg; z-index: 4; }
+.folder-fan[data-active="1"] .folder-fan-0 { translate: -24px 0; rotate: -7deg; z-index: 1; }
+.folder-fan[data-active="1"] .folder-fan-2 { translate: 24px 0; rotate: 7deg; z-index: 2; }
+.folder-fan[data-active="2"] .folder-fan-2 { translate: 12px -10px; rotate: 4deg; z-index: 4; }
+.folder-fan[data-active="2"] .folder-fan-0 { translate: -24px 0; rotate: -7deg; z-index: 1; }
+.folder-fan[data-active="2"] .folder-fan-1 { translate: -8px 0; rotate: -2deg; z-index: 2; }
+.folder-sheet-stack { min-width: 0; }
+.folder-sheet-card {
+  border: 1px solid var(--border); border-top: 5px solid var(--sheet-accent);
+  border-radius: 16px; padding: 0.95rem 1rem;
+  background: color-mix(in srgb, var(--card-solid) 78%, transparent);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 0.55fr); gap: 0.8rem 1rem;
+  animation: folder-sheet-in 360ms var(--ease) both;
+}
+.folder-sheet-0 { --sheet-accent: var(--lilac); --dot-fill: var(--lilac); }
+.folder-sheet-1 { --sheet-accent: var(--periwinkle); --dot-fill: var(--periwinkle); }
+.folder-sheet-2 { --sheet-accent: var(--sky); --dot-fill: var(--sky); }
+.folder-sheet-card h3 { font-size: 1.16rem; margin: 0; }
+.folder-scope { grid-column: 1 / -1; margin: 0; padding-bottom: 0.55rem; border-bottom: 1px solid var(--border); color: var(--fg-soft); font-size: 0.76rem; line-height: 1.45; }
+.folder-headline { margin: 0.55rem 0 0; font-family: var(--serif); font-size: clamp(2rem, 4.2vw, 3rem); font-weight: 650; line-height: 1; letter-spacing: -0.02em; }
+.folder-headline-label { margin: 0.2rem 0 0; color: var(--fg-muted); font-size: 0.8rem; font-weight: 700; }
+.folder-copy { margin: 0.5rem 0 0; color: var(--fg-muted); font-size: 0.82rem; line-height: 1.45; }
+.folder-copy strong { color: var(--fg); }
+.folder-caveat { color: var(--fg-soft); }
+.folder-visual { margin: 0; align-self: center; min-width: 0; }
+.folder-dots { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; width: min(100%, 220px); margin: 0 auto; }
+.folder-dot { aspect-ratio: 1; border: 1.5px solid var(--border-strong); border-radius: 50%; background: transparent; }
+.folder-sheet-card:not([hidden]) .folder-dot { animation: folder-dot-in 260ms var(--ease) both; animation-delay: calc(var(--i) * 4ms); }
+.folder-dot.is-filled { background: var(--dot-fill); border-color: var(--dot-fill); }
+.folder-dot.is-partial { border-color: var(--dot-fill); background: linear-gradient(90deg, var(--dot-fill) calc(var(--fill) * 100%), transparent calc(var(--fill) * 100%)); }
+.folder-sheet-1 .folder-dot.is-filled { background: var(--lilac); border-color: var(--lilac); }
+.folder-sheet-1 .folder-dot.is-outline { border-color: var(--periwinkle); box-shadow: inset 0 0 0 1px var(--periwinkle); }
+.folder-visual figcaption { color: var(--fg-muted); font-size: 0.72rem; text-align: center; margin-top: 0.35rem; }
+.folder-gap { display: block; margin-top: 0.2rem; color: var(--fg); font-weight: 750; }
+.folder-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; margin-top: 1rem; }
+.folder-nav #folder-counter { color: var(--fg-muted); font-size: 0.8rem; text-align: center; }
+@keyframes folder-fan-in { from { opacity: 0; top: 50px; } to { opacity: 1; top: 8px; } }
+@keyframes folder-sheet-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes folder-dot-in { from { opacity: 0; transform: scale(0.35); } to { opacity: 1; transform: none; } }
+@media (max-width: 900px) {
+  .folder-main { grid-template-columns: 1fr; }
+  .folder-fan { margin-top: 0.4rem; scale: 0.9; }
+  .folder-sheet-card { grid-template-columns: 1fr; }
+  .folder-visual { order: -1; }
+}
+@media (max-width: 700px) {
+  .folder-card { width: 100%; max-height: calc(100dvh - 0.8rem); padding: 0.9rem; }
+  .folder-tabs { gap: 0.3rem; }
+  .folder-tab { font-size: 0.7rem; padding: 0.36rem 0.58rem; }
+  .folder-nav .btn { flex: 1 1 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .folder-backdrop, .folder-card { animation: fade-in 160ms linear; }
+  .folder-fan-sheet, .folder-sheet-card, .folder-dot {
+    animation: none !important; transition: none !important;
+  }
+  .total-folder-art #sheet-1, .total-folder-art #sheet-2, .total-folder-art #sheet-3 { transition: none; }
+  .total-folder-button:hover .total-folder-art #sheet-1,
+  .total-folder-button:hover .total-folder-art #sheet-2,
+  .total-folder-button:hover .total-folder-art #sheet-3,
+  .total-folder-button:focus-visible .total-folder-art #sheet-1,
+  .total-folder-button:focus-visible .total-folder-art #sheet-2,
+  .total-folder-button:focus-visible .total-folder-art #sheet-3 { transform: none; }
+}
 @media (min-width: 1001px) and (max-width: 1199px) {
   .explorer-grid { --state-row-h: 630.39px; --ranked-w: 240px; }
 }

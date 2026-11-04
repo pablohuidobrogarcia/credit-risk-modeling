@@ -800,6 +800,103 @@ test("Total tab is one folder view and preserves the metric selector state", asy
   await expectNoErrors(errors);
 });
 
+test("portfolio folder opens, traps focus, navigates and closes", async ({ page }) => {
+  const errors = await open(page);
+  const meta = PE.meta;
+  await page.locator("#dimension-tabs button[data-dim='total']").click();
+  await page.waitForTimeout(400);
+  const folder = page.locator("#total-folder-button");
+  await folder.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#folder-overlay")).toBeVisible();
+  await expect(page.locator("#folder-dialog")).toBeFocused();
+  await expect(page.locator("#folder-tab-0")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#folder-sheet-0 .folder-headline")).toHaveText(pct(meta.default_rate_total));
+  await expect(page.locator("#folder-sheet-0")).not.toContainText(/\{[a-z0-9_]+\}/i);
+
+  await page.locator("#folder-tab-1").click();
+  await expect(page.locator("#folder-tab-1")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#folder-sheet-1 .folder-headline")).toHaveText(pct(meta.mean_pd));
+  await expect(page.locator("#folder-sheet-1")).not.toContainText(/\{[a-z0-9_]+\}/i);
+  await page.locator("[data-folder-next]").click();
+  await expect(page.locator("#folder-tab-2")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#folder-sheet-2 .folder-headline")).toHaveText(`${pct(meta.el_pct_ead)} of EAD`);
+  await expect(page.locator("#folder-sheet-2")).not.toContainText(/\{[a-z0-9_]+\}/i);
+  await expect(page.locator("#folder-sheet-2")).not.toContainText(/\d+(?:\.\d+)?%\s*[×x]\s*\d+(?:\.\d+)?%/);
+  await page.locator("[data-folder-prev]").click();
+  await expect(page.locator("#folder-tab-1")).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowLeft");
+  await expect(page.locator("#folder-tab-0")).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#folder-tab-1")).toHaveAttribute("aria-selected", "true");
+
+  for (let index = 0; index < 12; index += 1) {
+    await page.keyboard.press("Tab");
+    expect(await page.evaluate(() => document.querySelector("#folder-dialog").contains(document.activeElement))).toBe(true);
+  }
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#folder-overlay")).toBeHidden();
+  await expect(folder).toBeFocused();
+
+  await page.keyboard.press("Space");
+  await expect(page.locator("#folder-overlay")).toBeVisible();
+  await page.locator("[data-folder-close]").click();
+  await expect(page.locator("#folder-overlay")).toBeHidden();
+  await expect(folder).toBeFocused();
+
+  await folder.click();
+  await page.locator("#folder-overlay").click({ position: { x: 4, y: 4 } });
+  await expect(page.locator("#folder-overlay")).toBeHidden();
+  await expectNoErrors(errors);
+});
+
+test("portfolio folder content and layout hold at 1360, 1100 and 390 with reduced motion", async ({ page }) => {
+  const errors = await open(page);
+  const meta = PE.meta;
+  for (const width of [1360, 1100, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/#view=explorer&dim=total");
+    await page.waitForTimeout(500);
+    await page.locator("#total-folder-button").click();
+    await page.waitForTimeout(350);
+    const layout = await page.evaluate(() => ({
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      cardClient: document.querySelector("#folder-dialog").clientWidth,
+      cardScroll: document.querySelector("#folder-dialog").scrollWidth,
+    }));
+    expect(layout.overflow, `${width} page overflow`).toBeLessThanOrEqual(1);
+    expect(layout.cardScroll, `${width} folder width`).toBeLessThanOrEqual(layout.cardClient + 1);
+    for (const index of [0, 1, 2]) {
+      await page.locator(`#folder-tab-${index}`).click();
+      await expect(page.locator(`#folder-sheet-${index}`)).toBeVisible();
+      await expect(page.locator(`#folder-sheet-${index}`)).not.toContainText(/\{[a-z0-9_]+\}/i);
+    }
+    await page.keyboard.press("Escape");
+  }
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1360, height: 900 });
+  await page.goto("/#view=explorer&dim=total");
+  await page.waitForTimeout(500);
+  await page.locator("#total-folder-button").focus();
+  await page.locator("#total-folder-button").click();
+  await page.waitForTimeout(250);
+  const motion = await page.evaluate(() => ({
+    totalSheet: getComputedStyle(document.querySelector("#total-folder-art #sheet-1")).transform,
+    sheet: getComputedStyle(document.querySelector("#folder-sheet-0")).transform,
+    sheetAnimation: getComputedStyle(document.querySelector("#folder-sheet-0")).animationName,
+    dotAnimation: getComputedStyle(document.querySelector("#folder-sheet-0 .folder-dot")).animationName,
+    fan: getComputedStyle(document.querySelector(".folder-fan-sheet")).transform,
+  }));
+  expect(motion.totalSheet).toBe("none");
+  expect(motion.sheet).toBe("none");
+  expect(motion.sheetAnimation).toBe("none");
+  expect(motion.dotAnimation).toBe("none");
+  expect(motion.fan).toBe("none");
+  await page.keyboard.press("Escape");
+  await expectNoErrors(errors);
+});
+
 test("explorer removed the score distribution and enlarges Selection type", async ({ page }) => {
   const errors = await open(page);
   await page.setViewportSize({ width: 1360, height: 900 });

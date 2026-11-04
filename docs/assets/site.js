@@ -229,7 +229,7 @@ function infoContext() {
     train_years: (D && D.display && D.display.train_years) || "2010–2013",
     champion_auc: fmtNum(D && D.pd ? D.pd.champion_auc : null, 4),
     window_immature_auc: (D && D.display && D.display.window_immature_auc) || "—",
-    var999: fmtPct(stats["var_0.999_pct_ead"], 2),
+    var999: fmtPct(stats["var_0.999_pct_ead"], 1),
     mean_pd: fmtPct(meta.mean_pd, 2),
     portfolio_ead: fmtMoney(meta.ead_total),
     realized_lgd: fmtNum(D && D.lgd ? D.lgd.realised_lgd_oot : null, 4),
@@ -616,7 +616,7 @@ function renderShell() {
   countUp($("#kpi-el"), D.lgd.el_rate_oot, (v) => fmtPct(v, 2));
   $("#kpi-el-sub").textContent = `of exposure: about ${fmtMoney(D.lgd.expected_loss_oot)} on average`;
   const stats = D.simulation.statistics;
-  countUp($("#kpi-var"), stats["var_0.999_pct_ead"], (v) => fmtPct(v, 2));
+  countUp($("#kpi-var"), stats["var_0.999_pct_ead"], (v) => fmtPct(v, 1));
   $("#kpi-var-sub").textContent = `Exceeded once in 1,000 simulated years · ${fmtMoney(stats["var_0.999"])}`;
 
   $$(".view-tab").forEach((tab) => {
@@ -1512,7 +1512,7 @@ function renderRisk() {
       "es-999": "Average loss in the worst 0.1% of simulated years.",
     };
     kpis.innerHTML = defs.map(([label, value, key]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="risk-${key}">—</p><p class="sub">${esc(meanings[key])}</p></div>`).join("");
-    defs.forEach(([label, value, key]) => countUp(kpis.querySelector(`[data-testid="risk-${key}"]`), value, (v) => fmtPct(v, 2)));
+    defs.forEach(([label, value, key]) => countUp(kpis.querySelector(`[data-testid="risk-${key}"]`), value, (v) => fmtPct(v, 1)));
     $("#loss-sub").textContent = `${scenario.key.replace(/_/g, " ")} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
       renderGauge(ex["var_0.999_pct_ead"]);
   }
@@ -1560,6 +1560,7 @@ function drawLossChart(hist, scenario) {
     ["VaR 99%", ex["var_0.99_pct_ead"], p.teal, "dash"],
     ["VaR 99.9%", ex["var_0.999_pct_ead"], p.lilacDark, "dash"],
     ["ES 99%", ex["es_0.99_pct_ead"], p.sky, "dot"],
+    ["ES 99.9%", ex["es_0.999_pct_ead"], p.green, "dot"],
   ];
   const shapes = [];
   markers.forEach(([label, value, color, dash]) => {
@@ -1569,7 +1570,7 @@ function drawLossChart(hist, scenario) {
   });
   const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: p.periwinkle, line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
     bargap: 0.02,
-    xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02] },
+    xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02], tickformat: ".1f" },
     yaxis: { title: "Simulated paths" },
     showlegend: false, shapes,
     margin: { l: 64, r: 20, t: 24, b: 52 },
@@ -1578,7 +1579,7 @@ function drawLossChart(hist, scenario) {
   if (legend) {
     legend.innerHTML = markers.filter(([, value]) => num(value) != null).map(([label, value, color, dash]) => {
       const style = dash === "dot" ? "dotted" : dash;
-      return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong></span>`;
+      return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong> <span class="legend-value">${fmtPct(value, 1)}</span></span>`;
     }).join("");
   }
   if (!ok) showFallback(host, "assets/loss_distribution.png", "The interactive histogram could not be drawn; a static figure is shown.");
@@ -1623,7 +1624,7 @@ function drawSurface() {
   let ok = false;
   if (!hasWebGL() || window.innerWidth < 700) {
     ok = plot(host, [
-      { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
+      { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
       { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle-open", size: 13, color: p.ink, line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
     ], {
@@ -1634,12 +1635,12 @@ function drawSurface() {
     host.dataset.mode = "heatmap";
   } else {
     ok = plot(host, [
-      { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
+      { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, colorbar: { tickformat: ".1f" }, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
       { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: p.ink }, marker: { size: 5, color: p.ink, symbol: "circle-open", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
     ], {
       height,
-      scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
+      scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD", tickformat: ".1f" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
       margin: { l: 0, r: 0, t: 8, b: 0 },
     });
     host.dataset.mode = "surface";

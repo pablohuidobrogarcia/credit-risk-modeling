@@ -185,7 +185,7 @@ def render_results_block(summary: Dict[str, Any]) -> str:
 
     def _pct_stat(key: str) -> str:
         v = stats.get(key)
-        return _pct(v) if v is not None else "n/a"
+        return _pct(v, 1) if v is not None else "n/a"
 
     lines: List[str] = []
     lines.append("| Stage | Headline result (primary / mature window) |")

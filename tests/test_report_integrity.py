@@ -90,7 +90,7 @@ def test_headline_scalars_appear_in_docs():
     if stats:
         for key in ("expected_loss_pct_ead", "var_0.99_pct_ead", "var_0.999_pct_ead"):
             if stats.get(key) is not None:
-                checks.append(_fmt_pct(stats[key]))
+                checks.append(_fmt_pct(stats[key], 1))
 
     missing = [c for c in checks if c not in haystack]
     assert not missing, f"Headline values absent from the docs: {missing}"

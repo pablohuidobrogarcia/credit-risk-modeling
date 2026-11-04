@@ -873,6 +873,23 @@ test("VaR gauge moves above the loss distribution and tracks every slider", asyn
   await expectNoErrors(errors);
 });
 
+test("tail statistics use one decimal and the hero matches the Risk Lab base case", async ({ page }) => {
+  const errors = await open(page);
+  const hero = await page.locator("#kpi-var").innerText();
+  await page.locator("#view-tab-risk").click();
+  await page.waitForTimeout(800);
+  const gauge = await page.locator("#risk-gauge text:not(.scale)").textContent();
+  expect(gauge).toBe(hero);
+  expect(hero).toMatch(/^\d+\.\d%$/);
+  const tails = await page.locator("#risk-kpis [data-testid^='risk-var'], #risk-kpis [data-testid^='risk-es'], #risk-kpis [data-testid='risk-expected-loss'], #risk-kpis [data-testid='risk-unexpected-loss']").allInnerTexts();
+  expect(tails.length).toBe(5);
+  for (const value of tails) expect(value).toMatch(/^\d+\.\d%$/);
+  const legendValues = await page.locator("#loss-legend .legend-value").allInnerTexts();
+  expect(legendValues.length).toBe(5);
+  for (const value of legendValues) expect(value).toMatch(/^\d+\.\d%$/);
+  await expectNoErrors(errors);
+});
+
 test("Scenario KPI row has five cards with no empty cell at 1360, 1000 and 390", async ({ page }) => {
   const errors = await open(page);
   for (const [width, height] of [[1360, 900], [1000, 900], [390, 844]]) {
@@ -1420,9 +1437,12 @@ test("loss markers use a readable legend and the surface card is large with a ba
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
   await page.waitForTimeout(2500);
-  await expect(page.locator("#loss-legend .legend-item")).toHaveCount(4);
+  await expect(page.locator("#loss-legend .legend-item")).toHaveCount(5);
   const legend = await page.locator("#loss-legend").innerText();
-  for (const label of ["EL", "VaR 99%", "VaR 99.9%", "ES 99%"]) expect(legend).toContain(label);
+  for (const label of ["EL", "VaR 99%", "VaR 99.9%", "ES 99%", "ES 99.9%"]) expect(legend).toContain(label);
+  const legendValues = await page.locator("#loss-legend .legend-value").allInnerTexts();
+  expect(legendValues.length).toBe(5);
+  for (const value of legendValues) expect(value).toMatch(/^\d+\.\d%$/);
   for (const item of await page.locator("#loss-legend .legend-item").all()) {
     const box = await item.boundingBox();
     expect(box.width).toBeGreaterThan(20);

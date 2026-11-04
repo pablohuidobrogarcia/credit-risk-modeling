@@ -383,14 +383,14 @@ Base case, 100,000 paths, **stratified** sampling of the systematic factor, ρ =
 
 | Metric | Amount | % of EAD |
 |---|---|---|
-| Expected loss | $574,731,161 | 10.14 % |
-| Unexpected loss (std) | $333,542,731 | 5.88 % |
-| VaR 99 % | $1,617,286,614 | 28.52 % |
-| ES 99 % | $1,837,432,176 | 32.40 % |
-| VaR 99.9 % | $2,120,320,304 | 37.39 % |
-| ES 99.9 % | $2,306,245,549 | 40.67 % |
-| Economic capital (99 %) | $1,042,555,453 | 18.39 % |
-| Economic capital (99.9 %) | $1,545,589,143 | 27.25 % |
+| Expected loss | $574,731,161 | 10.1 % |
+| Unexpected loss (std) | $333,542,731 | 5.9 % |
+| VaR 99 % | $1,617,286,614 | 28.5 % |
+| ES 99 % | $1,837,432,176 | 32.4 % |
+| VaR 99.9 % | $2,120,320,304 | 37.4 % |
+| ES 99.9 % | $2,306,245,549 | 40.7 % |
+| Economic capital (99 %) | $1,042,555,453 | 18.4 % |
+| Economic capital (99.9 %) | $1,545,589,143 | 27.3 % |
 
 ### 8.1 Asset correlation (the dominant assumption)
 
@@ -400,15 +400,15 @@ grid makes the choice transparent:
 
 | ρ | EL (% EAD) | UL (% EAD) | VaR 99 % | VaR 99.9 % |
 |---|---|---|---|---|
-| 0.02 | 10.14 % | 2.33 % | 16.37 % | **18.92 %** |
-| 0.0322 (Basel implied) | 10.14 % | 2.96 % | 18.32 % | 21.80 % |
-| 0.05 | 10.14 % | 3.72 % | 20.76 % | 25.53 % |
-| 0.10 | 10.14 % | 5.34 % | 26.50 % | 34.20 % |
-| **0.12 (base)** | **10.14 %** | **5.88 %** | **28.52 %** | **37.39 %** |
-| 0.15 | 10.14 % | 6.64 % | 31.43 % | **41.67 %** |
+| 0.02 | 10.1 % | 2.3 % | 16.4 % | **18.9 %** |
+| 0.0322 (Basel implied) | 10.1 % | 3.0 % | 18.3 % | 21.8 % |
+| 0.05 | 10.1 % | 3.7 % | 20.8 % | 25.5 % |
+| 0.10 | 10.1 % | 5.3 % | 26.5 % | 34.2 % |
+| **0.12 (base)** | **10.1 %** | **5.9 %** | **28.5 %** | **37.4 %** |
+| 0.15 | 10.1 % | 6.6 % | 31.4 % | **41.7 %** |
 
 **Finding M-1 (High).** EL is essentially invariant to ρ, while VaR 99.9 % moves from
-**18.92 % to 41.67 % of EAD** — more than a doubling — purely from the correlation
+**18.9 % to 41.7 % of EAD** — more than a doubling — purely from the correlation
 assumption. Any capital number from this model is only meaningful together with its ρ;
 the repository therefore never quotes one in isolation.
 
@@ -452,11 +452,11 @@ to the factor quantile (≈ 3.09) collapses it further and biases the weighted q
 
 | Scenario | EAD-weighted PD | Mean LGD | EL | EL % EAD | VaR 99.9 % |
 |---|---|---|---|---|---|
-| baseline | 0.1172 | 0.8625 | $575,061,033 | 10.14 % | $2,124,846,785 |
-| PD +30 % | 0.1523 | 0.8625 | $747,468,417 | 13.18 % | $2,445,639,962 |
-| PD +50 % | 0.1758 | 0.8625 | $862,414,536 | 15.21 % | $2,630,254,724 |
-| LGD +10 % | 0.1172 | 0.9488 | $632,567,136 | 11.16 % | $2,337,331,464 |
-| PD +50 % & LGD +10 % | 0.1758 | 0.9488 | $948,655,990 | 16.73 % | $2,893,280,197 |
+| baseline | 0.1172 | 0.8625 | $575,061,033 | 10.1 % | $2,124,846,785 |
+| PD +30 % | 0.1523 | 0.8625 | $747,468,417 | 13.2 % | $2,445,639,962 |
+| PD +50 % | 0.1758 | 0.8625 | $862,414,536 | 15.2 % | $2,630,254,724 |
+| LGD +10 % | 0.1172 | 0.9488 | $632,567,136 | 11.2 % | $2,337,331,464 |
+| PD +50 % & LGD +10 % | 0.1758 | 0.9488 | $948,655,990 | 16.7 % | $2,893,280,197 |
 
 **Finding M-4 (Low).** Stress is close to linear in PD and LGD (EL = PD × LGD × EAD), as
 expected. That is a property of the Vasicek formulation, worth stating explicitly to avoid
@@ -471,7 +471,7 @@ over-reading the stress grid.
 | **C-0** | **High** | Testing on the censored 2017–2018 window inflates AUC by +0.0580 (0.7152 vs 0.6572). The primary split now removes this by construction. |
 | **P-2** | **High** | Lender `grade`/`int_rate` add +0.0227 AUC / +0.0455 Gini over our best application-data model, even when the benchmark gets the same wide feature set and recipe. |
 | **L-1 / L-2** | **High** | LGD R² is negative for all three models; the `LGD=1` boundary mass shifts 5.20 % → 26.86 % across windows; LGD is usable only as a grade/portfolio average. |
-| **M-1** | **High** | VaR 99.9 % spans 18.92 %–41.67 % of EAD across the ρ grid; ρ dominates the capital figure. |
+| **M-1** | **High** | VaR 99.9 % spans 18.9 %–41.7 % of EAD across the ρ grid; ρ dominates the capital figure. |
 | **C-2** | **High** | k-means segmentation separates almost nothing (0.54 pp DR spread); the Gaussian-mixture alternative is materially better (6.28 pp) but still descriptive. |
 | **E-1** | Medium | EL of 10.14 % of EAD reflects a high (~14 %) default rate in a resolved-only sample. |
 | **P-4** | Medium | Calibration does **not** improve the test-window Brier (raw 0.11950 vs isotonic 0.11970); the model still under-predicts by ~2.3 pp. |

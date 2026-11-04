@@ -43,7 +43,7 @@
   },
   "kpi-var": {
     "title": "Bad-year loss (VaR 99.9%)",
-    "text": "VaR 99.9% is the simulated loss that 999 of 1,000 base-case years stay below. It is a tail quantile, not a worst case, and it depends on the Vasicek assumptions.",
+    "text": "VaR 99.9% is the simulated loss that 999 of 1,000 base-case years stay below. It is a tail quantile, not a worst case, and it depends on the Vasicek assumptions. Monte Carlo estimate: it varies by about 0.01 percentage points between runs.",
     "try": "Open Risk Lab and compare VaR 99.9% with ES 99.9%.",
     "term": "var"
   },
@@ -109,13 +109,13 @@
   },
   "gauge": {
     "title": "VaR gauge",
-    "text": "The gauge places VaR 99.9% on a 0–60% loss scale so the current scenario has a visual reference. The scale is descriptive; it is not a regulatory limit or an appetite statement.",
+    "text": "The gauge places VaR 99.9% on a 0–60% loss scale so the current scenario has a visual reference. The scale is descriptive; it is not a regulatory limit or an appetite statement. Monte Carlo estimate: it varies by about 0.01 percentage points between runs.",
     "try": "Use the sliders to pick a high-stress scenario and watch the needle.",
     "term": "var"
   },
   "loss-histogram": {
     "title": "Loss distribution",
-    "text": "Each bar counts simulated portfolio losses for the current scenario. The vertical lines mark EL, VaR 99%, VaR 99.9% and ES 99%; the legend lists their values so the labels never collide.",
+    "text": "Each bar counts simulated portfolio losses for the current scenario. The vertical lines mark EL, VaR 99%, VaR 99.9%, ES 99% and ES 99.9%; the legend lists their values so the labels never collide.",
     "try": "Increase LGD stress and see how far the whole distribution moves right.",
     "term": "loss-distribution"
   },

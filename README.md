@@ -71,7 +71,7 @@ is reported separately as the censoring-exposed secondary analysis.
 | **LGD — boundary mass** (`recoveries = 0`) | **5.20 %** train / **26.86 %** OOT |
 | **Expected loss** | **$574.8M** on $5,670.3M EAD → **10.14 %** of EAD (primary OOT portfolio) |
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
-| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.14 %**, UL **5.88 %**, VaR 99 % **28.52 %**, VaR 99.9 % **37.39 %**, ES 99 % **32.40 %**, ES 99.9 % **40.67 %** of EAD |
+| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.1 %**, UL **5.9 %**, VaR 99 % **28.5 %**, VaR 99.9 % **37.4 %**, ES 99 % **32.4 %**, ES 99.9 % **40.7 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
 | **Test suite** | **146** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
 
@@ -702,8 +702,8 @@ no improvement is claimed.
   shocks, not forecasts.
 * **Vasicek correlation is an assumption.** The Basel retail formula at the portfolio PD
   (EAD-weighted PD 0.1172) implies a much lower ρ than the simulation base case of
-  **ρ = 0.12** (Basel-implied ≈ 0.0322); VaR 99.9 % ranges from **18.92 %** of EAD
-  (ρ = 0.02) to **41.67 %** (ρ = 0.15)
+  **ρ = 0.12** (Basel-implied ≈ 0.0322); VaR 99.9 % ranges from **18.9 %** of EAD
+  (ρ = 0.02) to **41.7 %** (ρ = 0.15)
   — the choice of ρ matters more than anything else in the capital number. That is why the
   full sensitivity grid is reported instead of a single figure.
 * **Importance sampling works, but it is not a free lunch.** Shifting the systematic factor

@@ -564,9 +564,14 @@ test("metric tabs re-sort the list when the segment map is illustrative", async 
   const errors = await open(page);
   await page.locator('#dimension-tabs button[data-dim="purpose"]').click();
   await expect(page.locator("#tile-map.purpose-map .segment-svg")).toBeVisible();
-  await expect(page.locator("#map-legend")).toBeHidden();
+  await expect(page.locator("#map-legend")).toBeVisible();
+  const category = page.locator('#tile-map.purpose-map [data-id="debt_consolidation"] .bg');
+  const before = await category.evaluate((el) => getComputedStyle(el).fill);
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(page).toHaveURL(/metric=el_pct_ead/);
+  await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
+  const after = await category.evaluate((el) => getComputedStyle(el).fill);
+  expect(after).not.toBe(before);
   const firstRow = page.locator("#rank-list .rank-row").first();
   const topId = await firstRow.getAttribute("data-id");
   const topItem = PE.dimensions.purpose.find((x) => x.id === topId);
@@ -583,7 +588,16 @@ test("purpose and home ownership maps use their supplied SVGs and stay linked", 
     await page.locator(`#dimension-tabs button[data-dim="${dim}"]`).click();
     await expect(page.locator(`#tile-map.${className} .segment-svg`)).toBeVisible();
     await expect(page.locator(`#tile-map.${className} [data-id]`)).toHaveCount(PE.dimensions[dim].length);
-    await expect(page.locator("#map-legend")).toBeHidden();
+    await expect(page.locator("#map-legend")).toBeVisible();
+    await expect(page.locator("#map-subtitle")).toContainText("color = observed default");
+    if (dim === "home_ownership") {
+      const howBuiltLabel = await page.locator("#how-built-picture text.label").first().evaluate((el) => {
+        const style = getComputedStyle(el);
+        return { fontSize: style.fontSize, fontFamily: style.fontFamily };
+      });
+      expect(howBuiltLabel.fontSize).toBe("12px");
+      expect(howBuiltLabel.fontFamily.toLowerCase()).not.toContain("helvetica");
+    }
     await page.locator(`#tile-map.${className} [data-id="${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`dim=${dim}`));
     await expect(page).toHaveURL(new RegExp(`sel=${id}`));

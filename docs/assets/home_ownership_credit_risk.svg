@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 40 1200 380" width="1200" height="380" font-family="Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 40 1200 380" width="1200" height="380" class="home-ownership-svg" font-family="Helvetica, Arial, sans-serif">
   <style>
-    .card { cursor: pointer; outline: none; }
-    .card .bg { fill: #ffffff; stroke-width: 3; transition: fill .15s, stroke-width .15s; }
-    .card:hover .bg, .card:focus .bg { stroke-width: 6; }
-    #rent:hover .bg, #rent:focus .bg { fill: #e8f1f7; }
-    #own:hover .bg, #own:focus .bg { fill: #e6f5ee; }
-    #mortgage:hover .bg, #mortgage:focus .bg { fill: #f0eaf8; }
-    #any:hover .bg, #any:focus .bg { fill: #eceff1; }
-    .label { font-size: 28px; font-weight: 800; letter-spacing: 1px; text-anchor: middle; }
-    .sub { font-size: 13px; fill: #666; text-anchor: middle; }
+    .home-ownership-svg .card { cursor: pointer; outline: none; }
+    .home-ownership-svg .card .bg { fill: #ffffff; stroke-width: 3; transition: fill .15s, stroke-width .15s; }
+    .home-ownership-svg .card:hover .bg, .home-ownership-svg .card:focus .bg { stroke-width: 6; }
+    .home-ownership-svg #rent:hover .bg, .home-ownership-svg #rent:focus .bg { fill: #e8f1f7; }
+    .home-ownership-svg #own:hover .bg, .home-ownership-svg #own:focus .bg { fill: #e6f5ee; }
+    .home-ownership-svg #mortgage:hover .bg, .home-ownership-svg #mortgage:focus .bg { fill: #f0eaf8; }
+    .home-ownership-svg #any:hover .bg, .home-ownership-svg #any:focus .bg { fill: #eceff1; }
+    .home-ownership-svg .label { font-size: 28px; font-weight: 800; letter-spacing: 1px; text-anchor: middle; }
+    .home-ownership-svg .sub { font-size: 13px; fill: #666; text-anchor: middle; }
   </style>
 
-  <rect width="1200" height="440" fill="#f7f5f0"/>
+  <rect width="1200" height="440" fill="#ffffff"/>
 
   <!-- ================= RENT ================= -->
   <a href="#rent" id="rent" class="card" data-category="RENT">

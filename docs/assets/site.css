@@ -616,10 +616,12 @@ body.folder-open { overflow: hidden; }
 .illustrated-map { display: flex; align-items: center; justify-content: center; align-self: center; }
 .illustrated-map .segment-svg { display: block; width: 100%; height: auto; max-height: 100%; }
 .illustrated-map .segment-svg a { outline: none; cursor: pointer; }
-.illustrated-map .segment-svg a .bg { transition: fill 160ms var(--ease), stroke 160ms var(--ease), stroke-width 160ms var(--ease); }
+.illustrated-map .segment-svg a .bg {
+  stroke: var(--border-strong); stroke-width: 3px;
+  transition: fill 160ms var(--ease), stroke 160ms var(--ease), stroke-width 160ms var(--ease);
+}
 .illustrated-map .segment-svg a.is-selected .bg,
 .illustrated-map .segment-svg a:focus-visible .bg {
-  fill: var(--sky-light);
   stroke: var(--accent);
   stroke-width: 7px;
 }

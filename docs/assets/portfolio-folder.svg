@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 350" role="img" aria-label="Portfolio folder with three sheets">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 332" role="img" aria-label="Portfolio folder with three sheets">
   <g id="sheet-3" class="folder-sheet" stroke-linejoin="round">
     <rect x="150" y="32" width="150" height="190" rx="8" fill="var(--sky-light)" stroke="var(--sky)" stroke-width="4"/>
     <rect x="168" y="48" width="96" height="7" rx="3.5" fill="var(--ink)" opacity=".35"/>

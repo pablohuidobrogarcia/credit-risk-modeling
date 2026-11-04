@@ -399,7 +399,7 @@ button, input, select { font: inherit; color: inherit; }
   background: color-mix(in srgb, var(--accent) 5%, transparent);
 }
 .total-folder-button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 38%, transparent); outline-offset: 3px; }
-.total-folder-art { display: block; width: 100%; aspect-ratio: 400 / 350; }
+.total-folder-art { display: block; width: 100%; aspect-ratio: 400 / 332; }
 .total-folder-art svg { display: block; width: 100%; height: auto; }
 .total-folder-caption { color: var(--fg-muted); font-size: 0.9rem; font-weight: 750; }
 .total-folder-button:hover .total-folder-caption, .total-folder-button:focus-visible .total-folder-caption { color: var(--fg); }
@@ -613,6 +613,18 @@ body.folder-open { overflow: hidden; }
 .tilemap { display: grid; gap: 4px; touch-action: manipulation; }
 .tilemap.state-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 .tilemap.matrix { grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 6px; }
+.illustrated-map { display: flex; align-items: center; justify-content: center; align-self: center; }
+.illustrated-map .segment-svg { display: block; width: 100%; height: auto; max-height: 100%; }
+.illustrated-map .segment-svg a { outline: none; cursor: pointer; }
+.illustrated-map .segment-svg a .bg { transition: fill 160ms var(--ease), stroke 160ms var(--ease), stroke-width 160ms var(--ease); }
+.illustrated-map .segment-svg a.is-selected .bg,
+.illustrated-map .segment-svg a:focus-visible .bg {
+  fill: var(--sky-light);
+  stroke: var(--accent);
+  stroke-width: 7px;
+}
+.illustrated-map .segment-svg a.is-selected .lbl,
+.illustrated-map .segment-svg a:focus-visible .lbl { fill: var(--ink); }
 .tile {
   position: relative; border: 0; padding: 0.15rem; border-radius: 8px; cursor: pointer;
   min-height: 0; aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
@@ -853,8 +865,6 @@ body.folder-open { overflow: hidden; }
 .glossary-entry p { color: var(--fg-muted); font-size: 0.81rem; margin-top: 0.45rem; }
 .glossary-entry .glossary-why { color: var(--fg); }
 .glossary-entry .glossary-example { font-style: italic; }
-.glossary-entry .glossary-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.55rem; }
-.glossary-entry .glossary-actions button { border: 1px solid var(--border); background: var(--card-solid); border-radius: 999px; padding: 0.3rem 0.55rem; font-size: 0.7rem; cursor: pointer; color: var(--accent); }
 .glossary-entry .formula { font-family: var(--mono); font-size: 0.74rem; background: color-mix(in srgb, var(--fg) 6%, transparent); padding: 0.35rem 0.45rem; border-radius: 6px; margin-top: 0.4rem; }
 .glossary-entry mark { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--fg); border-radius: 2px; }
 @media (max-width: 1000px) { .guide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

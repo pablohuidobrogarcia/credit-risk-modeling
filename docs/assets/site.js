@@ -37,6 +37,10 @@ const METRICS = [
   { id: "pred_pd", label: "Predicted PD", short: "Predicted PD" },
   { id: "el_pct_ead", label: "Expected loss % of EAD", short: "Expected loss" },
 ];
+const ILLUSTRATED_MAPS = {
+  home_ownership: { file: "home_ownership_credit_risk.svg", className: "home-ownership-map" },
+  purpose: { file: "loan_purpose_honeycomb.svg", className: "purpose-map" },
+};
 const SURFACE_METRICS = {
   "var_0.999": "VaR 99.9%",
   "es_0.999": "ES 99.9%",
@@ -209,6 +213,9 @@ function dimMeta(id) {
 let INFO = {};
 let FOLDER = { sheets: [] };
 let FOLDER_SVG = null;
+const ILLUSTRATED_SVGS = {};
+const ILLUSTRATED_PROMISES = {};
+const ILLUSTRATED_FAILED = new Set();
 let LEARN = { guide: [], terms: [] };
 let PROCESS = { steps: [] };
 let WELCOME = {};
@@ -810,6 +817,23 @@ function loadUsMap() {
   return US_MAP_PROMISE;
 }
 
+function loadIllustratedMap(dim) {
+  const config = ILLUSTRATED_MAPS[dim];
+  if (!config) return Promise.resolve(null);
+  if (ILLUSTRATED_SVGS[dim]) return Promise.resolve(ILLUSTRATED_SVGS[dim]);
+  if (ILLUSTRATED_FAILED.has(dim)) return Promise.resolve(null);
+  if (!ILLUSTRATED_PROMISES[dim]) {
+    ILLUSTRATED_PROMISES[dim] = fetch(`assets/${config.file}`, { cache: "no-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`${config.file} ${response.status}`);
+        return response.text();
+      })
+      .then((text) => { ILLUSTRATED_SVGS[dim] = text; return text; })
+      .catch(() => { ILLUSTRATED_FAILED.add(dim); return null; });
+  }
+  return ILLUSTRATED_PROMISES[dim];
+}
+
 function setGeoMeta(title, items, subtitle, captionId, fallbackCaption) {
   $("#map-title").textContent = title;
   $("#map-subtitle").textContent = subtitle;
@@ -1131,12 +1155,66 @@ function renderGradeStaircase(host, items, meta) {
   });
 }
 
+function renderIllustratedMap(host, items, meta, config) {
+  const dim = state.dim;
+  const dimLabel = dimMeta(dim).label;
+  $("#map-title").textContent = `${dimLabel} segment map`;
+  $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · category view`;
+  $("#map-metric-badge").textContent = "Category view";
+  $("#map-legend").hidden = true;
+  $("#map-note").textContent = "Select a category to link the ranked list and Selection.";
+
+  host.className = `tilemap illustrated-map ${config.className}`;
+  const svg = ILLUSTRATED_SVGS[dim];
+  if (!svg) {
+    host.innerHTML = `<p class="geo-loading">Loading ${esc(dimLabel)} map.</p>`;
+    loadIllustratedMap(dim).then(() => {
+      if (state.view === "explorer" && state.dim === dim) renderMap();
+    });
+    return;
+  }
+
+  host.innerHTML = svg;
+  const root = host.querySelector("svg");
+  if (root) {
+    root.classList.add("segment-svg");
+    root.setAttribute("role", "group");
+    root.setAttribute("aria-label", `${dimLabel} segment map`);
+  }
+  const byId = new Map(items.map((item) => [String(item.id).toLowerCase(), item]));
+  $$("[data-category]", host).forEach((node) => {
+    const item = byId.get(String(node.dataset.category || "").toLowerCase());
+    if (!item) return;
+    node.removeAttribute("href");
+    node.removeAttribute("xlink:href");
+    node.dataset.id = item.id;
+    node.setAttribute("role", "button");
+    node.setAttribute("tabindex", "0");
+    node.setAttribute("title", itemName(item));
+    node.setAttribute("aria-label", itemName(item));
+    node.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+    node.classList.toggle("is-selected", state.sel === item.id);
+    const activate = () => {
+      state.sel = state.sel === item.id ? null : item.id;
+      commit({ push: true });
+    };
+    node.addEventListener("click", (event) => { event.preventDefault(); activate(); });
+    node.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      activate();
+    });
+  });
+}
+
 function renderMap() {
   const host = $("#tile-map");
   if (!host) return;
   if (state.dim !== "state") resetMapView();
   const items = dimItems();
   const meta = pe().meta;
+  const legend = $("#map-legend");
+  if (legend) legend.hidden = false;
   const geo = !USE_TILE_MAP && !US_MAP_FAILED && (state.dim === "state" || state.dim === "grade");
   const panel = host.closest(".map-panel");
   if (panel) panel.classList.toggle("geo-mode", geo);
@@ -1146,6 +1224,11 @@ function renderMap() {
   }
   if (geo && state.dim === "grade") {
     renderGradeStaircase(host, items, meta);
+    return;
+  }
+  const illustrated = ILLUSTRATED_MAPS[state.dim];
+  if (illustrated && !ILLUSTRATED_FAILED.has(state.dim)) {
+    renderIllustratedMap(host, items, meta, illustrated);
     return;
   }
   renderTileMap(host, items, meta);
@@ -2063,26 +2146,6 @@ function runGuideAction(action) {
   else if (action === "validation") { go("evidence", "#view-evidence"); }
 }
 
-function seeTerm(term) {
-  const entry = (LEARN.terms || []).find((item) => item.id === term);
-  if (!entry || !entry.see) return;
-  const see = entry.see;
-  if (see.view === "explorer") {
-    state.dim = see.dim || "state";
-    state.metric = see.metric || "default_rate";
-    state.sel = null;
-    setView("explorer");
-  } else if (see.view === "risk") {
-    setView("risk");
-    const target = see.sim ? "#sim-title" : see.panel === "cutoff" ? "#cutoff-title" : "#risk-kpis";
-    window.setTimeout(() => $(target)?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
-  } else if (see.view === "evidence") {
-    setView("evidence");
-  } else {
-    setView("explorer");
-  }
-}
-
 function renderLearn() {
   const guideHost = $("#learn-guide");
   if (guideHost) {
@@ -2121,10 +2184,8 @@ function renderLearn() {
         <p class="glossary-why"><strong>Why it matters here:</strong> ${esc(resolveInfoText(entry.why))}</p>
         <p class="glossary-example">${esc(resolveInfoText(entry.example))}</p>
         ${entry.formula ? `<details class="formula-details"><summary>Formula</summary><div class="formula">${esc(entry.formula)}</div></details>` : ""}
-        <div class="glossary-actions"><button type="button" data-see-term="${esc(entry.id)}">See it in the dashboard</button></div>
       </details>`;
     }).join("");
-    $$("[data-see-term]", list).forEach((button) => { button.onclick = () => seeTerm(button.dataset.seeTerm); });
   }
   $("#glossary-empty").hidden = entries.length > 0;
   if (state.term && state.view === "learn") {
@@ -2505,6 +2566,8 @@ async function boot() {
       fetch("content/folder.json", { cache: "no-cache" }).catch(() => null),
       loadFolderSvg(),
       loadUsMap(),
+      loadIllustratedMap("home_ownership"),
+      loadIllustratedMap("purpose"),
     ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();

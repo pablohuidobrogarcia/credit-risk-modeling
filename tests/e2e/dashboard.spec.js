@@ -95,6 +95,7 @@ test("every dimension tab changes the whole explorer and the URL", async ({ page
     }
     if (dim === "state") await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(items.length);
     else if (dim === "grade") await expect(page.locator("#tile-map .grade-step")).toHaveCount(items.length);
+    else if (dim === "purpose" || dim === "home_ownership") await expect(page.locator("#tile-map.illustrated-map [data-id]")).toHaveCount(items.length);
     else await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(items.length);
     await expect(page.locator("#rank-list .rank-row")).toHaveCount(items.length);
     await expect(page.locator("#summary-title")).toHaveText("Portfolio");
@@ -559,19 +560,35 @@ test("every ranked row selects the linked tile and summary", async ({ page }) =>
   await expectNoErrors(errors);
 });
 
-test("metric tabs recolor the map and re-sort the list", async ({ page }) => {
+test("metric tabs re-sort the list when the segment map is illustrative", async ({ page }) => {
   const errors = await open(page);
   await page.locator('#dimension-tabs button[data-dim="purpose"]').click();
-  const tile = page.locator('#tile-map .tile[data-id="debt_consolidation"]');
-  const before = await tile.evaluate((el) => getComputedStyle(el).backgroundColor);
+  await expect(page.locator("#tile-map.purpose-map .segment-svg")).toBeVisible();
+  await expect(page.locator("#map-legend")).toBeHidden();
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(page).toHaveURL(/metric=el_pct_ead/);
-  const after = await tile.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(after).not.toBe(before);
   const firstRow = page.locator("#rank-list .rank-row").first();
   const topId = await firstRow.getAttribute("data-id");
   const topItem = PE.dimensions.purpose.find((x) => x.id === topId);
   await expect(firstRow.locator(".rank-value")).toHaveText(pct(topItem.el_pct_ead));
+  await expectNoErrors(errors);
+});
+
+test("purpose and home ownership maps use their supplied SVGs and stay linked", async ({ page }) => {
+  const errors = await open(page);
+  for (const [dim, id, className] of [
+    ["home_ownership", "MORTGAGE", "home-ownership-map"],
+    ["purpose", "debt_consolidation", "purpose-map"],
+  ]) {
+    await page.locator(`#dimension-tabs button[data-dim="${dim}"]`).click();
+    await expect(page.locator(`#tile-map.${className} .segment-svg`)).toBeVisible();
+    await expect(page.locator(`#tile-map.${className} [data-id]`)).toHaveCount(PE.dimensions[dim].length);
+    await expect(page.locator("#map-legend")).toBeHidden();
+    await page.locator(`#tile-map.${className} [data-id="${id}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`dim=${dim}`));
+    await expect(page).toHaveURL(new RegExp(`sel=${id}`));
+    await expect(page.locator("#summary-title")).toHaveText(PE.dimensions[dim].find((x) => x.id === id).name);
+  }
   await expectNoErrors(errors);
 });
 
@@ -615,7 +632,7 @@ test("explorer visuals expose only the segment name on hover and focus", async (
   for (const [dim, id] of cases) {
     await page.locator(`#dimension-tabs button[data-dim='${dim}']`).click();
     const item = PE.dimensions[dim].find((entry) => entry.id === id);
-    const tile = page.locator(`#tile-map .tile[data-id="${id}"]`);
+    const tile = page.locator(`#tile-map [data-id="${id}"]`);
     await expect(tile).toHaveAttribute("title", item.name);
     await expect(tile).toHaveAttribute("aria-label", item.name);
     await tile.hover();
@@ -1880,7 +1897,7 @@ test("Learn guide cards use ribbon pastels with ink text and white buttons", asy
   await expectNoErrors(errors);
 });
 
-test("info Learn more and glossary See it links resolve", async ({ page }) => {
+test("info Learn more resolves and glossary cards omit the dashboard button", async ({ page }) => {
   const errors = await open(page);
   await page.locator('[data-info="small-states"]').first().click();
   await expect(page.locator("#info-popover .info-learn")).toBeVisible();
@@ -1889,8 +1906,9 @@ test("info Learn more and glossary See it links resolve", async ({ page }) => {
   await expect(page.locator("#term-small-segment-masking")).toHaveAttribute("open", "");
   await page.locator("#glossary-search").fill("value at risk");
   await page.locator("#term-var").click();
-  await page.locator('#term-var [data-see-term="var"]').click();
-  await expect(page.locator("#view-risk")).toBeVisible();
+  await expect(page.locator("#term-var")).toHaveAttribute("open", "");
+  await expect(page.locator("#term-var [data-see-term], #term-var .glossary-actions")).toHaveCount(0);
+  await expect(page.locator("#view-learn")).not.toContainText("See it in the dashboard");
   await expectNoErrors(errors);
 });
 

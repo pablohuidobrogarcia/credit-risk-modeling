@@ -1746,12 +1746,7 @@ function mountFolderArt() {
 }
 
 function renderTotalPanel() {
-  const meta = pe().meta;
   mountFolderArt();
-  $("#total-observed").textContent = fmtPct(meta.default_rate_total, 2);
-  $("#total-predicted").textContent = fmtPct(meta.mean_pd, 2);
-  $("#total-el").textContent = fmtPct(meta.el_pct_ead, 2);
-  $("#total-scope").textContent = `${fmtInt(meta.n_total)} loans, ${meta.years.join("-")} test window, ${meta.term}-month term`;
 }
 
 function renderExplorer() {

@@ -84,7 +84,7 @@ test("loads the linked explorer on Total by default without console or page erro
   await expect(page.locator("#total-panel")).toBeVisible();
   await expect(page.locator("#total-folder-open")).toHaveText("Open the folder");
   await expect(page.locator("#explorer-caption")).toHaveText("The whole test portfolio at a glance. Pick a dimension to compare slices with it.");
-  await expect(page.locator("#total-scope")).toHaveText(`${PE.meta.n_total.toLocaleString("en-US")} loans, ${PE.meta.years.join("-")} test window, ${PE.meta.term}-month term`);
+  await expect(page.locator(".total-headline, #total-scope")).toHaveCount(0);
   await expect(page.locator("#total-tab-guide")).toContainText("State");
   await expect(page.locator("#total-tab-guide")).toContainText("Home ownership");
   for (const selector of [".map-panel", ".list-panel", ".selection-part-a"]) {
@@ -1065,47 +1065,18 @@ test("Total tab is one folder view and preserves the metric selector state", asy
   await expectNoErrors(errors);
 });
 
-test("Total folder button, subtitle and scope line stay polished", async ({ page }) => {
+test("Total folder button, subtitle and enlarged illustration stay polished", async ({ page }) => {
   const errors = await open(page, { dim: null });
   await expect(page.locator("#total-folder-open")).toBeVisible();
   await expect(page.locator("#total-folder-open")).toHaveText("Open the folder");
   await expect(page.locator("#explorer-caption")).toHaveText("The whole test portfolio at a glance. Pick a dimension to compare slices with it.");
-  await expect(page.locator("#total-scope")).toHaveText(`${PE.meta.n_total.toLocaleString("en-US")} loans, ${PE.meta.years.join("-")} test window, ${PE.meta.term}-month term`);
+  await expect(page.locator(".total-headline, #total-scope")).toHaveCount(0);
 
   await page.setViewportSize({ width: 1360, height: 1000 });
   await page.waitForTimeout(300);
   const folderWidth = await page.locator("#total-folder-art").evaluate((el) => el.getBoundingClientRect().width);
-  expect(folderWidth).toBeGreaterThanOrEqual(440);
-  expect(folderWidth).toBeLessThanOrEqual(470);
-
-  const scope = await page.locator("#total-scope").evaluate((el) => {
-    const parse = (value) => {
-      const match = value.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
-      return match ? { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]), a: match[4] === undefined ? 1 : Number(match[4]) } : null;
-    };
-    const channel = (value) => {
-      const v = value / 255;
-      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-    };
-    const luminance = (color) => 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
-    const background = (node) => {
-      let current = node;
-      while (current) {
-        const color = parse(getComputedStyle(current).backgroundColor);
-        if (color && color.a > 0.05) return color;
-        current = current.parentElement;
-      }
-      return { r: 255, g: 255, b: 255, a: 1 };
-    };
-    const style = getComputedStyle(el);
-    const fg = parse(style.color);
-    const bg = background(el);
-    const l1 = luminance(fg);
-    const l2 = luminance(bg);
-    return { fontSize: parseFloat(style.fontSize), ratio: (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05) };
-  });
-  expect(scope.fontSize).toBeGreaterThanOrEqual(13);
-  expect(scope.ratio).toBeGreaterThanOrEqual(4.5);
+  expect(folderWidth).toBeGreaterThanOrEqual(540);
+  expect(folderWidth).toBeLessThanOrEqual(570);
 
   await page.locator("#total-folder-open").click();
   await expect(page.locator("#folder-overlay")).toBeVisible();
@@ -1145,6 +1116,9 @@ test("portfolio folder opens, traps focus, navigates and closes", async ({ page 
   await expect(page.locator("#folder-dialog")).toBeFocused();
   await expect(page.locator("#folder-tab-0")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#folder-sheet-0 .folder-headline")).toHaveText(pct(meta.default_rate_total));
+  await expect(page.locator("#folder-sheet-0 .folder-scope")).toContainText(`${meta.n_total.toLocaleString("en-US")} loans`);
+  await expect(page.locator("#folder-sheet-0 .folder-scope")).toContainText(`${meta.years.join("-")} test window`);
+  await expect(page.locator("#folder-sheet-0 .folder-scope")).toContainText(`${meta.term}-month term`);
   await expect(page.locator("#folder-sheet-0")).not.toContainText(/\{[a-z0-9_]+\}/i);
 
   await page.locator("#folder-tab-1").click();

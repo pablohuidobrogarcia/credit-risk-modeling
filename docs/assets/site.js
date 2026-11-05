@@ -273,6 +273,7 @@ function dimMeta(id) {
 
 /* ------------------------------------------------------------ info popovers */
 let INFO = {};
+let EXPLORER = { captions: {} };
 let FOLDER = { sheets: [] };
 let FOLDER_SVG = null;
 const ILLUSTRATED_SVGS = {};
@@ -760,6 +761,15 @@ function setView(view) {
 }
 
 /* ---------------------------------------------------------------- explorer */
+function pulseExplorerFade() {
+  const view = $("#view-explorer");
+  if (!view || prefersReduced()) return;
+  view.classList.remove("is-dim-switching");
+  void view.offsetWidth;
+  view.classList.add("is-dim-switching");
+  window.setTimeout(() => view.classList.remove("is-dim-switching"), 180);
+}
+
 function renderDimensionTabs() {
   const host = $("#dimension-tabs");
   const available = ["total", ...DIMENSIONS.map((d) => d.id).filter((id) => dims()[id] && dims()[id].length >= 2)];
@@ -773,6 +783,7 @@ function renderDimensionTabs() {
       state.sel = null;
       state.search = "";
       commit({ push: true });
+      pulseExplorerFade();
     };
   });
   host.onkeydown = (event) => {
@@ -1631,7 +1642,12 @@ function mountFolderArt() {
 }
 
 function renderTotalPanel() {
+  const meta = pe().meta;
   mountFolderArt();
+  $("#total-observed").textContent = fmtPct(meta.default_rate_total, 2);
+  $("#total-predicted").textContent = fmtPct(meta.mean_pd, 2);
+  $("#total-el").textContent = fmtPct(meta.el_pct_ead, 2);
+  $("#total-scope").textContent = `${fmtInt(meta.n_total)} loans, ${meta.years.join("-")} test window, ${meta.term}-month term`;
 }
 
 function renderExplorer() {
@@ -1644,7 +1660,9 @@ function renderExplorer() {
   $(".map-panel").hidden = isTotal;
   $(".list-panel").hidden = isTotal;
   $(".selection-part-a").hidden = isTotal;
-  $("#explorer-caption").textContent = "Pick a dimension to compare one slice with the portfolio.";
+  $("#explorer-caption").textContent = isTotal
+    ? (EXPLORER.captions && EXPLORER.captions.total) || "The whole test portfolio at a glance. Pick a dimension to compare slices with it."
+    : (EXPLORER.captions && EXPLORER.captions.default) || "Pick a dimension to compare one slice with the portfolio.";
   renderDimensionTabs();
   renderMetricTabs();
   if (isTotal) {
@@ -2507,10 +2525,15 @@ function closeFolder(restoreFocus = true) {
 }
 
 function bindFolder() {
-  const button = $("#total-folder-button");
-  if (!button || button.__folderBound) return;
-  button.__folderBound = true;
-  button.addEventListener("click", openFolder);
+  const buttons = [$("#total-folder-button"), $("#total-folder-open")].filter(Boolean);
+  if (!buttons.length) return;
+  buttons.forEach((button) => {
+    if (button.__folderBound) return;
+    button.__folderBound = true;
+    button.addEventListener("click", openFolder);
+  });
+  if (document.__folderKeyBound) return;
+  document.__folderKeyBound = true;
   document.addEventListener("keydown", (event) => {
     if (!folderOpen) return;
     if (event.key === "Escape") { event.preventDefault(); closeFolder(); return; }
@@ -2671,13 +2694,14 @@ async function boot() {
   const initialParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const deepLink = initialParams.has("view") || initialParams.has("term");
   try {
-    const [response, infoResponse, learnResponse, welcomeResponse, processResponse, folderResponse] = await Promise.all([
+    const [response, infoResponse, learnResponse, welcomeResponse, processResponse, folderResponse, explorerResponse] = await Promise.all([
       fetch(DATA_URL, { cache: "no-cache" }),
       fetch("content/info.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/welcome.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/process.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/folder.json", { cache: "no-cache" }).catch(() => null),
+      fetch("content/explorer.json", { cache: "no-cache" }).catch(() => null),
       loadFolderSvg(),
       loadUsMap(),
       loadIllustratedMap("home_ownership"),
@@ -2700,6 +2724,9 @@ async function boot() {
     }
     if (welcomeResponse && welcomeResponse.ok) {
       try { WELCOME = await welcomeResponse.json(); } catch (err) { WELCOME = {}; }
+    }
+    if (explorerResponse && explorerResponse.ok) {
+      try { EXPLORER = await explorerResponse.json(); } catch (err) { EXPLORER = { captions: {} }; }
     }
     readHash();
     applyHashState();

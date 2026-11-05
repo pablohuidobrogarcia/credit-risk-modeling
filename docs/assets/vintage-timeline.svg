@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 300" role="group" aria-label="Vintage timeline">
+<defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="7" height="7" fill="#eef0fb"/><line x1="0" y1="0" x2="0" y2="7" stroke="#a9b3d6" stroke-width="2"/></pattern></defs>
+<g class="tl-row" data-year="2014">
+<rect x="84" y="76" width="620" height="38" rx="19" fill="#d6cdf5" opacity=".45"/>
+<path d="M692 87 l10 8 -10 8" fill="none" stroke="#a99be0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g class="tl-year" role="button" tabindex="0" aria-label="2014"><circle cx="48" cy="95" r="28" fill="#1f2937"/><text x="48" y="100" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="800" fill="#fff">2014</text></g>
+<g class="tl-month" data-month="2014-01" role="button" tabindex="0" aria-label="Jan 2014">
+<circle cx="124" cy="95" r="20" fill="#6fc6b9" stroke="#fff" stroke-width="2.5"/>
+<text x="124" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Jan</text></g>
+<g class="tl-month" data-month="2014-02" role="button" tabindex="0" aria-label="Feb 2014">
+<circle cx="174" cy="95" r="20" fill="#6fc6b9" stroke="#fff" stroke-width="2.5"/>
+<text x="174" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Feb</text></g>
+<g class="tl-month" data-month="2014-03" role="button" tabindex="0" aria-label="Mar 2014">
+<circle cx="224" cy="95" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="224" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Mar</text></g>
+<g class="tl-month" data-month="2014-04" role="button" tabindex="0" aria-label="Apr 2014">
+<circle cx="274" cy="95" r="20" fill="#6fc6b9" stroke="#fff" stroke-width="2.5"/>
+<text x="274" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Apr</text></g>
+<g class="tl-month" data-month="2014-05" role="button" tabindex="0" aria-label="May 2014">
+<circle cx="324" cy="95" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="324" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">May</text></g>
+<g class="tl-month" data-month="2014-06" role="button" tabindex="0" aria-label="Jun 2014">
+<circle cx="374" cy="95" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="374" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Jun</text></g>
+<g class="tl-month" data-month="2014-07" role="button" tabindex="0" aria-label="Jul 2014">
+<circle cx="424" cy="95" r="20" fill="#6fc6b9" stroke="#fff" stroke-width="2.5"/>
+<text x="424" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Jul</text></g>
+<g class="tl-month" data-month="2014-08" role="button" tabindex="0" aria-label="Aug 2014">
+<circle cx="474" cy="95" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="474" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Aug</text></g>
+<g class="tl-month" data-month="2014-09" role="button" tabindex="0" aria-label="Sep 2014">
+<circle cx="524" cy="95" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="524" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Sep</text></g>
+<g class="tl-month" data-month="2014-10" role="button" tabindex="0" aria-label="Oct 2014">
+<circle cx="574" cy="95" r="20" fill="#8fa6ea" stroke="#fff" stroke-width="2.5"/>
+<text x="574" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Oct</text></g>
+<g class="tl-month" data-month="2014-11" role="button" tabindex="0" aria-label="Nov 2014">
+<circle cx="624" cy="95" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="624" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Nov</text></g>
+<g class="tl-month" data-month="2014-12" role="button" tabindex="0" aria-label="Dec 2014">
+<circle cx="674" cy="95" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="674" y="99" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Dec</text></g>
+</g>
+<g class="tl-row" data-year="2015">
+<rect x="84" y="196" width="620" height="38" rx="19" fill="#d6cdf5" opacity=".45"/>
+<path d="M692 207 l10 8 -10 8" fill="none" stroke="#a99be0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<g class="tl-year" role="button" tabindex="0" aria-label="2015"><circle cx="48" cy="215" r="28" fill="#1f2937"/><text x="48" y="220" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" font-weight="800" fill="#fff">2015</text></g>
+<g class="tl-month" data-month="2015-01" role="button" tabindex="0" aria-label="Jan 2015">
+<circle cx="124" cy="215" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="124" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Jan</text></g>
+<g class="tl-month" data-month="2015-02" role="button" tabindex="0" aria-label="Feb 2015">
+<circle cx="174" cy="215" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="174" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Feb</text></g>
+<g class="tl-month" data-month="2015-03" role="button" tabindex="0" aria-label="Mar 2015">
+<circle cx="224" cy="215" r="25" fill="none" stroke="#1d4ed8" stroke-width="3.5"/>
+<circle cx="224" cy="215" r="20" fill="#8fa6ea" stroke="#fff" stroke-width="2.5"/>
+<text x="224" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Mar</text></g>
+<g class="tl-month" data-month="2015-04" role="button" tabindex="0" aria-label="Apr 2015">
+<circle cx="274" cy="215" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="274" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Apr</text></g>
+<g class="tl-month" data-month="2015-05" role="button" tabindex="0" aria-label="May 2015">
+<circle cx="324" cy="215" r="20" fill="#8fa6ea" stroke="#fff" stroke-width="2.5"/>
+<text x="324" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">May</text></g>
+<g class="tl-month" data-month="2015-06" role="button" tabindex="0" aria-label="Jun 2015">
+<circle cx="374" cy="215" r="20" fill="#8fa6ea" stroke="#fff" stroke-width="2.5"/>
+<text x="374" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Jun</text></g>
+<g class="tl-month" data-month="2015-07" role="button" tabindex="0" aria-label="Jul 2015">
+<circle cx="424" cy="215" r="20" fill="#8fa6ea" stroke="#fff" stroke-width="2.5"/>
+<text x="424" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Jul</text></g>
+<g class="tl-month" data-month="2015-08" role="button" tabindex="0" aria-label="Aug 2015">
+<circle cx="474" cy="215" r="20" fill="#7fbbe6" stroke="#fff" stroke-width="2.5"/>
+<text x="474" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Aug</text></g>
+<g class="tl-month" data-month="2015-09" role="button" tabindex="0" aria-label="Sep 2015">
+<circle cx="524" cy="215" r="20" fill="#8fa6ea" stroke="#fff" stroke-width="2.5"/>
+<text x="524" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Sep</text></g>
+<g class="tl-month" data-month="2015-10" role="button" tabindex="0" aria-label="Oct 2015">
+<circle cx="574" cy="215" r="20" fill="#8fa6ea" stroke="#fff" stroke-width="2.5"/>
+<text x="574" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Oct</text></g>
+<g class="tl-month" data-month="2015-11" role="button" tabindex="0" aria-label="Nov 2015">
+<circle cx="624" cy="215" r="20" fill="#a99be0" stroke="#fff" stroke-width="2.5"/>
+<text x="624" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#1f2937">Nov</text></g>
+<g class="tl-month" data-month="2015-12" role="button" tabindex="0" aria-label="Dec 2015">
+<circle cx="674" cy="215" r="20" fill="url(#hatch)" stroke="#a9b3d6" stroke-width="2.5"/>
+<text x="674" y="219" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11.5" font-weight="700" fill="#6b7280">Dec</text></g>
+</g>
+</svg>

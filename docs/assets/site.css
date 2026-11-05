@@ -632,6 +632,21 @@ body.folder-open { overflow: hidden; }
 .illustrated-map .segment-svg { display: block; width: 100%; height: auto; max-height: 100%; }
 .illustrated-map .segment-svg a { outline: none; cursor: pointer; }
 .illustrated-map .segment-svg a.is-masked { cursor: not-allowed; }
+.vintage-visual { width: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; }
+.vintage-svg { display: block; width: 100%; height: auto; }
+.vintage-track { fill: var(--lilac-light); opacity: 0.45; }
+.vintage-arrow { fill: none; stroke: var(--lilac); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.vintage-year { cursor: pointer; outline: none; }
+.vintage-year-circle { fill: var(--ink); }
+.vintage-year-label { fill: var(--surface); font-size: 14px; font-weight: 800; }
+.vintage-half-label { fill: var(--fg-muted); font-size: 9px; font-weight: 700; }
+.vintage-node { cursor: pointer; outline: none; }
+.vintage-node.is-masked { cursor: not-allowed; }
+.vintage-month-circle { stroke: var(--surface); stroke-width: 2.5; }
+.vintage-node:focus-visible .vintage-month-circle,
+.vintage-year:focus-visible .vintage-year-circle { stroke: var(--accent); stroke-width: 4; }
+.vintage-ring { fill: none; stroke: var(--accent); stroke-width: 3.5; }
+.vintage-month-label { font-size: 11.5px; font-weight: 700; text-anchor: middle; pointer-events: none; }
 .illustrated-map .segment-svg a .bg {
   stroke: var(--border-strong); stroke-width: 3px;
   transition: fill 160ms var(--ease), stroke 160ms var(--ease), stroke-width 160ms var(--ease);
@@ -683,6 +698,7 @@ body.folder-open { overflow: hidden; }
 .legend-swatch { width: 14px; height: 14px; border-radius: 4px; background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--fg-soft) 55%, transparent) 0 3px, color-mix(in srgb, var(--fg-soft) 20%, transparent) 3px 6px); }
 .legend-num, .legend-value { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--fg); }
 .legend-value { font-weight: 600; }
+.map-narrow { margin: 0.35rem 0 0; color: var(--fg-muted); font-size: 0.78rem; line-height: 1.35; }
 
 /* ---------------------------------------------------------- geo visuals */
 .map-panel.geo-mode .map-scroll { flex: 1 1 auto; display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; overflow: hidden; }
@@ -767,6 +783,7 @@ body.folder-open { overflow: hidden; }
 .rank-row[aria-current="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .rank-name { font-size: 0.85rem; font-weight: 700; overflow-wrap: anywhere; }
 .rank-name .smalln { color: var(--warning); font-size: 0.67rem; font-weight: 700; margin-left: 0.35rem; }
+.rank-name .year-tag { color: var(--fg-soft); font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 0.35rem; }
 .rank-value { font-variant-numeric: tabular-nums; font-size: 0.83rem; font-weight: 750; text-align: right; }
 .rank-meta { grid-column: 1 / -1; display: flex; align-items: center; gap: 0.5rem; }
 .rank-bar { height: 6px; flex: 1; border-radius: 999px; background: color-mix(in srgb, var(--fg) 9%, transparent); overflow: hidden; }

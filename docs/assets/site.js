@@ -37,6 +37,11 @@ const SEGMENT_LABELS = {
 function stateName(id) { return STATE_NAMES.get(id) || id; }
 function segmentLabel(id) {
   if (SEGMENT_LABELS[id]) return SEGMENT_LABELS[id];
+  const month = String(id).match(/^(\d{4})-(\d{2})$/);
+  if (month) {
+    const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${names[Number(month[2]) - 1]} ${month[1]}`;
+  }
   if (/^[A-G]$/.test(id)) return `Grade ${id}`;
   return id;
 }
@@ -86,9 +91,9 @@ const MAP_NOTES = {
     el_pct_ead: "Hover a category for its name; the fill is expected loss as a share of EAD. Select a category to see how PD and LGD combine.",
   },
   vintage: {
-    default_rate: "Each tile is a vintage, filled by observed default. Select a year to compare that cohort with the portfolio in Selection.",
-    pred_pd: "Each tile is a vintage, filled by the model's predicted PD. Select a year to see how model risk differs from the realized default rate.",
-    el_pct_ead: "Each tile is a vintage, filled by expected loss as a share of EAD. Select a year to inspect the PD and LGD combination.",
+    default_rate: "Each node is an origination month, filled by observed default; year circles select the aggregate. Select a month to compare it with the portfolio.",
+    pred_pd: "Each node is an origination month, filled by predicted PD; year circles select the aggregate. Select a month to read its model risk in Selection.",
+    el_pct_ead: "Each node is an origination month, filled by expected loss as a share of EAD; year circles select the aggregate. Select a month to inspect it.",
   },
   home_ownership: {
     default_rate: "Hover a category for its name; the fill is observed default. Select Rent, Own, Mortgage or Any to read the linked numbers in Selection.",
@@ -701,7 +706,7 @@ function minN() { return (pe() && pe().meta && pe().meta.min_n) || 500; }
 function isMasked(item) {
   if (!item) return true;
   const n = num(item.n);
-  return item.insufficient === true || (n != null && n < minN());
+  return item.insufficient === true || item.immature === true || (n != null && n < minN());
 }
 
 /* ------------------------------------------------------------------ shell */
@@ -922,6 +927,12 @@ function setGeoMeta(title, subtitle, note) {
 function setGeoLegend(lo, hi, showHatch = true) {
   const meta = pe().meta;
   $("#map-legend").innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span>${showHatch ? `<span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>` : ""}`;
+  const narrow = $("#map-narrow");
+  if (narrow) {
+    const text = (EXPLORER && EXPLORER.narrowRange) || "Narrow range: colors exaggerate small differences.";
+    narrow.hidden = !(Number.isFinite(lo) && Number.isFinite(hi) && hi - lo < 0.03);
+    narrow.textContent = text;
+  }
 }
 
 function geoRange(items) {
@@ -1306,6 +1317,94 @@ function renderIllustratedMap(host, items, meta, config) {
   });
 }
 
+/* Reference design: docs/assets/vintage-timeline.svg (viewBox 0 0 720 300). */
+function renderVintageTimeline(host, items, meta) {
+  const months = items.filter((item) => item.segment_type === "month");
+  const years = items.filter((item) => item.segment_type === "year").sort((a, b) => a.id.localeCompare(b.id));
+  if (!months.length || !years.length) {
+    renderTileMap(host, items, meta);
+    return;
+  }
+  const { lo, hi } = geoRange(months);
+  setGeoMeta("Vintage timeline",
+    `${months.length} monthly vintages + ${years.length} year totals · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
+    mapNote());
+  setGeoLegend(lo, hi);
+  host.className = "vintage-visual";
+  const mobile = window.matchMedia && window.matchMedia("(max-width: 599px)").matches;
+  const byYear = new Map();
+  months.forEach((item) => {
+    const year = item.id.slice(0, 4);
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(item);
+  });
+  const rows = mobile
+    ? ["2014", "2015"].flatMap((year) => [
+        { year, half: "H1", items: (byYear.get(year) || []).filter((item) => Number(item.id.slice(5)) <= 6) },
+        { year, half: "H2", items: (byYear.get(year) || []).filter((item) => Number(item.id.slice(5)) > 6) },
+      ])
+    : ["2014", "2015"].map((year) => ({ year, half: "", items: byYear.get(year) || [] }));
+  const rowY = mobile ? [48, 124, 200, 276] : [95, 215];
+  const yearX = mobile ? 36 : 48;
+  const yearR = mobile ? 22 : 28;
+  const barX = mobile ? 90 : 84;
+  const barWidth = mobile ? 600 : 620;
+  const monthStart = mobile ? 142 : 124;
+  const monthStep = mobile ? 96 : 50;
+  const monthR = mobile ? 18 : 20;
+
+  const node = (item, cx, cy, r, yearNode = false) => {
+    const masked = isMasked(item);
+    const selected = state.sel === item.id;
+    const name = itemName(item);
+    const fill = yearNode
+      ? "var(--ink)"
+      : masked
+        ? "url(#vintage-hatch)"
+        : colorFor(item[state.metric], lo, hi);
+    const textColor = yearNode ? "var(--surface)" : masked ? "var(--fg-muted)" : readableText(fill);
+    const label = yearNode ? item.id : item.name.slice(0, 3);
+    const ring = selected ? `<circle class="vintage-ring" cx="${cx}" cy="${cy}" r="${r + 3.5}"></circle>` : "";
+    if (yearNode) {
+      return `<g class="vintage-year" data-id="${esc(item.id)}" role="button" tabindex="0" aria-label="${esc(name)}" title="${esc(name)}">
+        ${ring}<circle class="vintage-year-circle" cx="${cx}" cy="${cy}" r="${r}"></circle>
+        <text class="vintage-year-label" x="${cx}" y="${cy + 5}" text-anchor="middle">${esc(item.id)}</text>
+        <title>${esc(name)}</title>
+      </g>`;
+    }
+    return `<g class="vintage-node${masked ? " is-masked" : ""}${selected ? " is-selected" : ""}" data-id="${esc(item.id)}" role="button" tabindex="${masked ? "-1" : "0"}" aria-label="${esc(name)}"${masked ? ' aria-disabled="true"' : ""}>
+      ${ring}<circle class="vintage-month-circle" cx="${cx}" cy="${cy}" r="${r}" style="fill:${fill}"></circle>
+      <text class="vintage-month-label" x="${cx}" y="${cy + 4}" text-anchor="middle" style="fill:${textColor}">${esc(label)}</text>
+      <title>${esc(name)}</title>
+    </g>`;
+  };
+
+  const groups = rows.map((row, rowIndex) => {
+    const cy = rowY[rowIndex];
+    const yearItem = years.find((item) => item.id === row.year);
+    const halfLabel = mobile ? `<text class="vintage-half-label" x="68" y="${cy + 4}">${row.year} ${row.half}</text>` : "";
+    const monthsMarkup = row.items.map((item, index) => node(item, monthStart + index * monthStep, cy, monthR)).join("");
+    return `<g class="vintage-row" data-year="${row.year}">
+      <rect class="vintage-track" x="${barX}" y="${cy - (mobile ? 14 : 19)}" width="${barWidth}" height="${mobile ? 28 : 38}" rx="${mobile ? 14 : 19}"></rect>
+      <path class="vintage-arrow" d="M692 ${cy - 8} l10 8 -10 8"></path>
+      ${yearItem ? node(yearItem, yearX, cy, yearR, true) : ""}
+      ${halfLabel}${monthsMarkup}
+    </g>`;
+  }).join("");
+
+  host.innerHTML = `<svg class="vintage-svg" viewBox="0 0 720 300" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Vintage timeline">
+    <defs><pattern id="vintage-hatch" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)"><rect class="hatch-bg" width="7" height="7"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="7"></line></pattern></defs>
+    ${groups}
+  </svg><div class="geo-tooltip" role="status" hidden></div>`;
+
+  const byId = new Map(items.map((item) => [item.id, item]));
+  $$(".vintage-year, .vintage-node", host).forEach((element) => {
+    const item = byId.get(element.dataset.id);
+    if (!item) return;
+    bindGeoItem(host, element, item, itemName(item), !isMasked(item));
+  });
+}
+
 function renderMap() {
   const host = $("#tile-map");
   if (!host) return;
@@ -1314,7 +1413,7 @@ function renderMap() {
   const meta = pe().meta;
   const legend = $("#map-legend");
   if (legend) legend.hidden = false;
-  const geo = !USE_TILE_MAP && !US_MAP_FAILED && (state.dim === "state" || state.dim === "grade");
+  const geo = !USE_TILE_MAP && !US_MAP_FAILED && (state.dim === "state" || state.dim === "grade" || state.dim === "vintage");
   const panel = host.closest(".map-panel");
   if (panel) panel.classList.toggle("geo-mode", geo);
   if (geo && state.dim === "state") {
@@ -1323,6 +1422,10 @@ function renderMap() {
   }
   if (geo && state.dim === "grade") {
     renderGradeStaircase(host, items, meta);
+    return;
+  }
+  if (geo && state.dim === "vintage") {
+    renderVintageTimeline(host, items, meta);
     return;
   }
   const illustrated = ILLUSTRATED_MAPS[state.dim];
@@ -1447,9 +1550,10 @@ function renderList() {
     }
     const value = num(item[state.metric]);
     const width = maxValue > 0 ? clamp((value / maxValue) * 100, 0, 100) : 0;
+    const isYearTotal = state.dim === "vintage" && item.segment_type === "year";
     if (!isSmallN) row.style.setProperty("--rank-color", colorFor(value, lo, hi));
     row.innerHTML = `
-      <span class="rank-name">${esc(itemName(item))}${isSmallN ? `<span class="smalln">small n</span>` : ""}</span>
+      <span class="rank-name">${esc(itemName(item))}${isYearTotal ? '<span class="year-tag">year</span>' : ""}${isSmallN ? `<span class="smalln">${item.immature ? "immature" : "small n"}</span>` : ""}</span>
       <span class="rank-value">${metricText(value, state.metric, 2)}</span>
       <span class="rank-meta">
         <span class="rank-bar" aria-hidden="true"><span style="--w:${width.toFixed(1)}%"></span></span>
@@ -1477,7 +1581,7 @@ function renderList() {
     const divider = document.createElement("div");
     divider.className = "rank-divider";
     divider.setAttribute("role", "separator");
-    divider.innerHTML = "<span>Small n, not ranked</span>";
+    divider.innerHTML = `<span>${masked.some((item) => item.immature) ? "Immature, not ranked" : "Small n, not ranked"}</span>`;
     host.appendChild(divider);
     masked.forEach((item) => renderRow(item, true));
   }
@@ -1485,7 +1589,7 @@ function renderList() {
 
 function metricRank(item, metric) {
   const peers = dimItems()
-    .filter((entry) => !isMasked(entry) && num(entry[metric]) != null)
+    .filter((entry) => !isMasked(entry) && !(state.dim === "vintage" && entry.segment_type === "year") && num(entry[metric]) != null)
     .sort((a, b) => (num(b[metric]) || 0) - (num(a[metric]) || 0));
   const index = peers.findIndex((entry) => entry.id === item.id);
   return index >= 0 ? { rank: index + 1, total: peers.length } : null;
@@ -2744,6 +2848,13 @@ async function boot() {
     bindThemeMedia();
     window.addEventListener("popstate", () => { readHash(); applyHashState(); writeHash(false); paint(); });
     window.addEventListener("hashchange", () => { readHash(); applyHashState(); writeHash(false); paint(); });
+    let vintageResizeTimer = null;
+    window.addEventListener("resize", () => {
+      window.clearTimeout(vintageResizeTimer);
+      vintageResizeTimer = window.setTimeout(() => {
+        if (state.view === "explorer" && state.dim === "vintage") renderMap();
+      }, 120);
+    });
     writeHash(false);
     maybeOpenWelcome(deepLink);
     loadPlotly().then(() => { paint(); }).catch((err) => {

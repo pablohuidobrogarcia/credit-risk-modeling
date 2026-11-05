@@ -228,7 +228,7 @@
               <article class="total-tab-note"><strong>State</strong><span>Compare states on the US map. The small-state buttons make compact states selectable.</span></article>
               <article class="total-tab-note"><strong>Grade</strong><span>Compare the lender’s A–G risk grades on the staircase.</span></article>
               <article class="total-tab-note"><strong>Purpose</strong><span>Compare loan purposes as ranked tiles.</span></article>
-              <article class="total-tab-note"><strong>Vintage</strong><span>Compare origination years as ranked tiles.</span></article>
+              <article class="total-tab-note"><strong>Vintage</strong><span>Explore monthly vintages on a timeline, with year totals.</span></article>
               <article class="total-tab-note"><strong>Home ownership</strong><span>Compare mortgage, rent and own-home segments.</span></article>
             </div>
           </section>
@@ -245,6 +245,7 @@
               <div class="tilemap" id="tile-map" role="group" aria-label="Segment tile map"></div>
             </div>
             <div class="legend" id="map-legend"></div>
+            <p class="map-narrow" id="map-narrow" hidden></p>
             <p class="panel-foot" id="map-note">—</p>
           </section>
 
@@ -478,7 +479,7 @@
 
             <section class="panel limitations-panel">
               <h3>What did not work, and limitations</h3>
-              <ul class="limitations" id="limitations-list"><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li><li>Clustering is weakly separated: silhouette 0.1840, stability ARI 0.9566, and k-means separates the default rate by only 0.54 pp.</li></ul>
+              <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
               <p class="note-copy" id="segments-note"></p>
             </section>
           </div>

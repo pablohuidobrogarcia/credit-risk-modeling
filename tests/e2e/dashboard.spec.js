@@ -18,7 +18,12 @@ const SEGMENT_LABELS = {
   car: "Car", home_improvement: "Home improvement", credit_card: "Credit card",
   RENT: "Rent", OWN: "Own", MORTGAGE: "Mortgage", ANY: "Any",
 };
-const labelFor = (id) => SEGMENT_LABELS[id] || (/^[A-G]$/.test(id) ? `Grade ${id}` : id);
+const labelFor = (id) => {
+  if (SEGMENT_LABELS[id]) return SEGMENT_LABELS[id];
+  const month = String(id).match(/^(\d{4})-(\d{2})$/);
+  if (month) return `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month[2]) - 1]} ${month[1]}`;
+  return /^[A-G]$/.test(id) ? `Grade ${id}` : id;
+};
 const isMasked = (item) => item.insufficient === true || item.n < PE.meta.min_n;
 
 const pct = (v, nd = 2) => `${(v * 100).toFixed(nd)}%`;
@@ -107,7 +112,10 @@ test("every dimension tab changes the whole explorer and the URL", async ({ page
     if (dim === "state") await expect(page.locator("#tile-map .us-map-svg .st")).toHaveCount(items.length);
     else if (dim === "grade") await expect(page.locator("#tile-map .grade-step")).toHaveCount(items.length);
     else if (dim === "purpose" || dim === "home_ownership") await expect(page.locator("#tile-map.illustrated-map [data-id]")).toHaveCount(items.length);
-    else await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(items.length);
+    else if (dim === "vintage") {
+      await expect(page.locator("#tile-map .vintage-node")).toHaveCount(24);
+      await expect(page.locator("#tile-map .vintage-year")).toHaveCount(2);
+    } else await expect(page.locator("#tile-map .tile:not(.empty)")).toHaveCount(items.length);
     await expect(page.locator("#rank-list .rank-row")).toHaveCount(items.length);
     await expect(page.locator("#summary-title")).toHaveText("Portfolio");
   }
@@ -620,7 +628,7 @@ test("ranked segment bars use the same metric colors as their maps", async ({ pa
     ["state", "CA", '#tile-map .us-map-svg .st[data-state="CA"]'],
     ["grade", "B", '#tile-map .grade-step[data-id="B"] .grade-step-face'],
     ["purpose", "debt_consolidation", '#tile-map.purpose-map [data-id="debt_consolidation"] .bg'],
-    ["vintage", "2014", '#tile-map .tile[data-id="2014"]'],
+    ["vintage", "2014-01", '#tile-map .vintage-node[data-id="2014-01"] .vintage-month-circle'],
     ["home_ownership", "MORTGAGE", '#tile-map.home-ownership-map [data-id="MORTGAGE"] .bg'],
   ];
   for (const [dim, id, mapSelector] of cases) {
@@ -685,7 +693,8 @@ test("masked segments stay neutral, unselectable and below the divider in every 
         await expect(page.locator("#rank-list .rank-divider")).toHaveCount(0);
       }
 
-      const values = rankedItems.map((item) => Number(item[metric]));
+      const legendItems = dim === "vintage" ? rankedItems.filter((item) => item.segment_type === "month") : rankedItems;
+      const values = legendItems.map((item) => Number(item[metric]));
       const expectedLegend = [pct(Math.min(...values), 1), pct(Math.max(...values), 1)];
       await expect(page.locator("#map-legend .legend-num")).toHaveText(expectedLegend);
       await expect(page.locator("#map-legend .legend-swatch")).toHaveCount(1);
@@ -760,6 +769,62 @@ test("Explorer shows readable segment labels and no raw ids", async ({ page }) =
     await page.locator(`#rank-list .rank-row[data-id="${selectable.id}"]`).click();
     await expect(page.locator("#summary-title")).toHaveText(dim === "state" ? stateName(selectable.id) : labelFor(selectable.id));
   }
+  await expectNoErrors(errors);
+});
+
+test("Vintage timeline renders months, year totals and the narrow-range note", async ({ page }) => {
+  const errors = await open(page);
+  await page.goto("/#view=explorer&dim=vintage");
+  await page.waitForTimeout(500);
+  await expect(page.locator("#tile-map .vintage-row")).toHaveCount(2);
+  await expect(page.locator("#tile-map .vintage-node")).toHaveCount(24);
+  await expect(page.locator("#tile-map .vintage-year")).toHaveCount(2);
+  await expect(page.locator("#tile-map .vintage-row").first().locator(".vintage-node")).toHaveCount(12);
+  const narrow = page.locator("#map-narrow");
+  await expect(narrow).toBeHidden();
+  await expect(page.locator("#map-legend .legend-swatch")).toHaveCount(1);
+
+  const xFor = async (id) => page.locator(`#tile-map .vintage-node[data-id="${id}"] .vintage-month-circle`).evaluate((el) => el.getBoundingClientRect().x);
+  expect(Math.abs((await xFor("2014-03")) - (await xFor("2015-03")))).toBeLessThanOrEqual(1);
+  const circle = page.locator('#tile-map .vintage-node[data-id="2015-03"] .vintage-month-circle');
+  const beforeFill = await circle.evaluate((el) => getComputedStyle(el).fill);
+  const beforeHeight = await page.locator(".vintage-svg").evaluate((el) => el.getBoundingClientRect().height);
+  await page.locator("#metric-tabs button[data-metric='pred_pd']").click();
+  await page.waitForTimeout(250);
+  expect(await circle.evaluate((el) => getComputedStyle(el).fill)).not.toBe(beforeFill);
+  expect(Math.abs((await page.locator(".vintage-svg").evaluate((el) => el.getBoundingClientRect().height)) - beforeHeight)).toBeLessThanOrEqual(1);
+  await expect(narrow).toBeVisible();
+  await expect(narrow).toHaveText("Narrow range: colors exaggerate small differences.");
+
+  const march = PE.dimensions.vintage.find((item) => item.id === "2014-03");
+  await page.locator('#tile-map .vintage-node[data-id="2014-03"]').click();
+  await expect(page).toHaveURL(/sel=2014-03/);
+  await expect(page.locator("#summary-title")).toHaveText("Mar 2014");
+  await expect(page.locator('[data-testid="summary-loans"]')).toHaveText(march.n.toLocaleString("en-US"));
+  await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(march.default_rate));
+  await expect(page.locator(".selection-metric-row.is-active .selection-metric-rank")).toContainText("of 24");
+  await expect(page.locator("#tile-map .vintage-ring")).toHaveCount(1);
+  await expect(page.locator('#rank-list .rank-row[data-id="2014"] .year-tag')).toHaveText("year");
+
+  const year2015 = PE.dimensions.vintage.find((item) => item.id === "2015");
+  await page.locator('#tile-map .vintage-year[data-id="2015"]').click();
+  await expect(page).toHaveURL(/sel=2015/);
+  await expect(page.locator("#summary-title")).toHaveText("2015");
+  await expect(page.locator('[data-testid="summary-loans"]')).toHaveText(year2015.n.toLocaleString("en-US"));
+
+  await page.goto("/#view=explorer&dim=grade");
+  await page.waitForTimeout(300);
+  await expect(page.locator("#map-narrow")).toBeHidden();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/#view=explorer&dim=vintage");
+  await page.waitForTimeout(400);
+  await expect(page.locator("#tile-map .vintage-row")).toHaveCount(4);
+  await expect(page.locator("#tile-map .vintage-row").first().locator(".vintage-node")).toHaveCount(6);
+  await expect(page.locator("#tile-map .vintage-node")).toHaveCount(24);
+  await expect(page.locator("#tile-map")).toContainText("2014 H1");
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
   await expectNoErrors(errors);
 });
 

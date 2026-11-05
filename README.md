@@ -11,7 +11,7 @@ visual case study of this project (built from `reports/results/summary.json`, se
 [![Credit-risk case study: champion AUC, expected loss, VaR 99.9% and the censoring gap](docs/assets/og-card.png)](https://pablohuidobrogarcia.github.io/credit-risk-modeling/)
 
 **Interactive dashboard:** the live site is now one linked application — a portfolio explorer
-(state / grade / purpose / vintage tile maps, ranked bars, summary and provenance drawer) and a
+(state, grade, purpose and home-ownership maps, a monthly vintage timeline, ranked bars, summary and provenance drawer) and a
 Monte Carlo risk lab (loss histogram, linked 3D VaR surface, applicant simulator and cutoff
 explorer). Every view shares one state store, the URL hash is shareable, and the back button
 restores the previous selection.

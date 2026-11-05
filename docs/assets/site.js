@@ -14,8 +14,36 @@ const SMALL_STATES = ["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT"];
 /* The state lookup is populated from the aria-label values in assets/us-map.svg.
    Codes stay as ids internally, in data-state attributes and in the URL hash. */
 const STATE_NAMES = new Map();
+const SEGMENT_LABELS = {
+  small_business: "Small business",
+  other: "Other",
+  renewable_energy: "Renewable energy",
+  house: "House",
+  medical: "Medical",
+  moving: "Moving",
+  wedding: "Wedding",
+  vacation: "Vacation",
+  educational: "Educational",
+  debt_consolidation: "Debt consolidation",
+  major_purchase: "Major purchase",
+  car: "Car",
+  home_improvement: "Home improvement",
+  credit_card: "Credit card",
+  RENT: "Rent",
+  OWN: "Own",
+  MORTGAGE: "Mortgage",
+  ANY: "Any",
+};
 function stateName(id) { return STATE_NAMES.get(id) || id; }
-function itemName(item) { return state.dim === "state" ? stateName(item.id) : item.name; }
+function segmentLabel(id) {
+  if (SEGMENT_LABELS[id]) return SEGMENT_LABELS[id];
+  if (/^[A-G]$/.test(id)) return `Grade ${id}`;
+  return id;
+}
+function itemName(item) {
+  if (!item) return "";
+  return state.dim === "state" ? stateName(item.id) : segmentLabel(item.id);
+}
 function rememberStateNames(svgText) {
   if (!svgText || typeof DOMParser === "undefined") return;
   const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
@@ -173,7 +201,10 @@ function applyHashState() {
   if (!dims[state.dim] || (state.dim !== "total" && dims[state.dim].length < 2)) state.dim = dims.state?.length >= 2 ? "state" : "total";
   if (!METRICS.some((m) => m.id === state.metric)) state.metric = "default_rate";
   if (state.dim === "total") state.sel = null;
-  else if (state.sel && !dims[state.dim].some((item) => item.id === state.sel)) state.sel = null;
+  else if (state.sel) {
+    const selected = dims[state.dim].find((item) => item.id === state.sel);
+    if (!selected || isMasked(selected)) state.sel = null;
+  }
   if (state.search && !D.portfolio_explorer.dimensions[state.dim]) state.search = "";
   if (state.term && !(LEARN.terms || []).some((entry) => entry.id === state.term)) state.term = null;
   const sc = D.interactive && D.interactive.scenario_explorer;
@@ -666,6 +697,11 @@ function selectedItem() {
 }
 function summaryItem() { return selectedItem() || totalItem(); }
 function minN() { return (pe() && pe().meta && pe().meta.min_n) || 500; }
+function isMasked(item) {
+  if (!item) return true;
+  const n = num(item.n);
+  return item.insufficient === true || (n != null && n < minN());
+}
 
 /* ------------------------------------------------------------------ shell */
 function renderShell() {
@@ -769,7 +805,7 @@ const STATE_POSITIONS = {
 };
 
 function selectExplorerItem(item) {
-  if (!item || item.insufficient) return;
+  if (!item || isMasked(item)) return;
   state.sel = state.sel === item.id ? null : item.id;
   commit({ push: true });
 }
@@ -878,7 +914,7 @@ function setGeoLegend(lo, hi, showHatch = true) {
 }
 
 function geoRange(items) {
-  const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
+  const eligible = items.filter((item) => !isMasked(item) && num(item[state.metric]) != null);
   const values = eligible.map((item) => item[state.metric]);
   return {
     eligible,
@@ -1087,7 +1123,7 @@ function renderStateMap(host, items, meta) {
     if (!item) { path.style.display = "none"; return; }
     path.dataset.id = item.id;
     const name = stateName(item.id);
-    if (item.insufficient) {
+    if (isMasked(item)) {
       path.classList.add("is-masked");
       path.setAttribute("role", "button");
       bindGeoItem(host, path, item, name, false);
@@ -1101,7 +1137,7 @@ function renderStateMap(host, items, meta) {
 
   const chip = (item) => {
     const name = stateName(item.id);
-    if (item.insufficient) {
+    if (isMasked(item)) {
       return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(name)}">${esc(name)}</button>`;
     }
     const bg = colorFor(item[state.metric], lo, hi);
@@ -1115,7 +1151,7 @@ function renderStateMap(host, items, meta) {
   $$(".state-chip", host).forEach((button) => {
     const item = byId.get(button.dataset.id);
     if (!item) return;
-    bindGeoItem(host, button, item, stateName(item.id), !item.insufficient);
+    bindGeoItem(host, button, item, stateName(item.id), !isMasked(item));
   });
 
   if (state.sel) {
@@ -1139,21 +1175,22 @@ function renderGradeStaircase(host, items, meta) {
   const baseline = height - 38;
   const top = 38;
   const stepWidth = Math.max(28, (width - margin * 2 - gap * (ordered.length - 1)) / ordered.length);
-  const maxValue = Math.max(...ordered.map((item) => num(item[state.metric]) || 0), 0.0001);
+  const maxValue = Math.max(...ordered.filter((item) => !isMasked(item)).map((item) => num(item[state.metric]) || 0), 0.0001);
   const maxHeight = baseline - top;
 
   const groups = ordered.map((item, index) => {
     const value = num(item[state.metric]) || 0;
-    const stepHeight = Math.max(22, 22 + (value / maxValue) * (maxHeight - 22));
+    const stepHeight = clamp(22 + (value / maxValue) * (maxHeight - 22), 22, maxHeight);
+    const masked = isMasked(item);
     const selected = state.sel === item.id;
     const raise = selected ? 6 : 0;
     const x = margin + index * (stepWidth + gap);
     const y = baseline - stepHeight - raise;
     const cx = x + stepWidth / 2;
     const bg = colorFor(value, lo, hi);
-    const cls = `grade-step${item.insufficient ? " is-masked" : ""}${selected ? " is-selected" : ""}`;
-    const fill = item.insufficient ? "url(#grade-hatch)" : bg;
-    const tabindex = item.insufficient ? -1 : 0;
+    const cls = `grade-step${masked ? " is-masked" : ""}${selected ? " is-selected" : ""}`;
+    const fill = masked ? "url(#grade-hatch)" : bg;
+    const tabindex = masked ? -1 : 0;
     return `<g class="${cls}" data-id="${esc(item.id)}" tabindex="${tabindex}" role="button">
       <rect class="grade-step-face" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${stepWidth.toFixed(1)}" height="${stepHeight.toFixed(1)}" rx="7" style="fill:${fill}"></rect>
       <text class="grade-step-letter" x="${cx.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle">${esc(item.id)}</text>
@@ -1168,7 +1205,7 @@ function renderGradeStaircase(host, items, meta) {
   $$(".grade-step", host).forEach((step) => {
     const item = ordered.find((entry) => entry.id === step.dataset.id);
     if (!item) return;
-    bindGeoItem(host, step, item, `Grade ${item.id}`, !item.insufficient);
+    bindGeoItem(host, step, item, `Grade ${item.id}`, !isMasked(item));
     step.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
       event.preventDefault();
@@ -1184,15 +1221,12 @@ function renderIllustratedMap(host, items, meta, config) {
   const dim = state.dim;
   const dimLabel = dimMeta(dim).label;
   const metricLabel = metricMeta(state.metric).short.toLowerCase();
-  const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
-  const values = eligible.map((item) => num(item[state.metric]));
-  const lo = values.length ? Math.min(...values) : 0;
-  const hi = values.length ? Math.max(...values) : 1;
+  const { lo, hi } = geoRange(items);
   $("#map-title").textContent = `${dimLabel} segment map`;
   $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricLabel}`;
   $("#map-metric-badge").textContent = metricMeta(state.metric).short;
   $("#map-legend").hidden = false;
-  setGeoLegend(lo, hi, false);
+  setGeoLegend(lo, hi);
   $("#map-note").textContent = mapNote();
 
   host.className = `tilemap illustrated-map ${config.className}`;
@@ -1211,6 +1245,10 @@ function renderIllustratedMap(host, items, meta, config) {
     root.classList.add("segment-svg");
     root.setAttribute("role", "group");
     root.setAttribute("aria-label", `${dimLabel} segment map`);
+    const ns = "http://www.w3.org/2000/svg";
+    const defs = document.createElementNS(ns, "defs");
+    defs.innerHTML = '<pattern id="illustrated-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern>';
+    root.insertBefore(defs, root.firstChild);
   }
   const byId = new Map(items.map((item) => [String(item.id).toLowerCase(), item]));
   $$("[data-category]", host).forEach((node) => {
@@ -1218,16 +1256,22 @@ function renderIllustratedMap(host, items, meta, config) {
     if (!item) return;
     node.removeAttribute("href");
     node.removeAttribute("xlink:href");
+    const masked = isMasked(item);
     node.dataset.id = item.id;
     node.setAttribute("role", "button");
-    node.setAttribute("tabindex", "0");
+    node.setAttribute("tabindex", masked ? "-1" : "0");
     node.setAttribute("title", itemName(item));
     node.setAttribute("aria-label", itemName(item));
-    node.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+    if (masked) {
+      node.setAttribute("aria-disabled", "true");
+    } else {
+      node.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+    }
+    node.classList.toggle("is-masked", masked);
     node.classList.toggle("is-selected", state.sel === item.id);
     const bgNode = node.querySelector(".bg");
-    const fill = colorFor(num(item[state.metric]), lo, hi);
-    const textColor = readableText(fill);
+    const fill = masked ? "url(#illustrated-hatch)" : colorFor(num(item[state.metric]), lo, hi);
+    const textColor = masked ? palette().muted : readableText(fill);
     if (bgNode) bgNode.style.fill = fill;
     $$("text", node).forEach((text) => { text.style.fill = textColor; });
     $$(".ic", node).forEach((icon) => { icon.style.color = textColor; icon.style.stroke = textColor; });
@@ -1235,17 +1279,19 @@ function renderIllustratedMap(host, items, meta, config) {
     $$('[fill="#000000"], [fill="black"]', node).forEach((el) => { el.style.fill = textColor; });
     $$('[stroke="#000000"], [stroke="black"]', node).forEach((el) => { el.style.stroke = textColor; });
     $$('[fill="#ffffff"], [fill="white"]', node).forEach((el) => { if (el.tagName.toLowerCase() === "text") el.style.fill = fill; });
-    $$('[stroke="#ffffff"], [stroke="white"]', node).forEach((el) => { el.style.stroke = fill; });
-    const activate = () => {
-      state.sel = state.sel === item.id ? null : item.id;
-      commit({ push: true });
-    };
-    node.addEventListener("click", (event) => { event.preventDefault(); activate(); });
-    node.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      event.preventDefault();
-      activate();
-    });
+    $$('[stroke="#ffffff"], [stroke="white"]', node).forEach((el) => { el.style.stroke = masked ? textColor : fill; });
+    if (!masked) {
+      const activate = () => {
+        state.sel = state.sel === item.id ? null : item.id;
+        commit({ push: true });
+      };
+      node.addEventListener("click", (event) => { event.preventDefault(); activate(); });
+      node.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        activate();
+      });
+    }
   });
 }
 
@@ -1277,10 +1323,7 @@ function renderMap() {
 }
 
 function renderTileMap(host, items, meta) {
-  const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
-  const values = eligible.map((item) => item[state.metric]);
-  const lo = values.length ? Math.min(...values) : 0;
-  const hi = values.length ? Math.max(...values) : 1;
+  const { lo, hi } = geoRange(items);
   const dimLabel = state.dim === "total" ? "Portfolio" : dimMeta(state.dim).label;
   $("#map-title").textContent = state.dim === "state" ? "US state map" : state.dim === "total" ? "Portfolio tile" : `${dimLabel} segment map`;
   $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricMeta(state.metric).short.toLowerCase()}`;
@@ -1309,8 +1352,7 @@ function renderTileMap(host, items, meta) {
     sorted.forEach((item) => host.appendChild(makeTile(item, lo, hi)));
   }
 
-  const legend = $("#map-legend");
-  legend.innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
+  setGeoLegend(lo, hi);
   const mobileHint = window.matchMedia && window.matchMedia("(max-width: 700px)").matches ? " On phones, the ranked list is the main touch interface; the map is a compact overview." : "";
   $("#map-note").textContent = mapNote() + mobileHint;
   if (state.sel) {
@@ -1321,90 +1363,118 @@ function renderTileMap(host, items, meta) {
 
 function makeTile(item, lo, hi) {
   const tile = document.createElement("button");
+  const masked = isMasked(item);
   tile.type = "button";
-  tile.className = `tile${item.insufficient ? " insufficient" : ""}${state.sel === item.id ? " selected" : ""}`;
+  tile.className = `tile${masked ? " insufficient" : ""}${state.sel === item.id ? " selected" : ""}`;
   tile.dataset.id = item.id;
-  const label = state.dim === "state" ? stateName(item.id) : item.name;
+  const label = itemName(item);
   tile.setAttribute("aria-label", label);
   tile.title = label;
-  tile.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
-  if (!item.insufficient) {
+  if (masked) {
+    tile.setAttribute("aria-disabled", "true");
+    tile.setAttribute("tabindex", "-1");
+  } else {
+    tile.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+  }
+  if (!masked) {
     const bg = colorFor(item[state.metric], lo, hi);
     tile.style.setProperty("--tile-bg", bg);
     tile.style.color = readableText(bg);
   }
-  const rawName = state.dim === "state" ? item.id : item.name;
-  const displayName = rawName.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-  tile.textContent = displayName;
-  tile.onclick = () => {
-    if (state.dim === "total") return;
-    state.sel = state.sel === item.id ? null : item.id;
-    commit({ push: true });
-  };
-  tile.onkeydown = (event) => {
-    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
-    const tiles = $$(".tile:not(.empty)", $("#tile-map"));
-    const idx = tiles.indexOf(tile);
-    const cols = state.dim === "state" ? 12 : Math.max(1, Math.round($("#tile-map").clientWidth / 80));
-    let next = idx;
-    if (event.key === "ArrowRight") next = idx + 1;
-    if (event.key === "ArrowLeft") next = idx - 1;
-    if (event.key === "ArrowDown") next = idx + cols;
-    if (event.key === "ArrowUp") next = idx - cols;
-    if (next >= 0 && next < tiles.length) { event.preventDefault(); tiles[next].focus(); }
-  };
+  tile.textContent = label;
+  if (!masked) {
+    tile.onclick = () => {
+      if (state.dim === "total") return;
+      state.sel = state.sel === item.id ? null : item.id;
+      commit({ push: true });
+    };
+    tile.onkeydown = (event) => {
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+      const tiles = $$(".tile:not(.empty):not(.insufficient)", $("#tile-map"));
+      const idx = tiles.indexOf(tile);
+      const cols = state.dim === "state" ? 12 : Math.max(1, Math.round($("#tile-map").clientWidth / 80));
+      let next = idx;
+      if (event.key === "ArrowRight") next = idx + 1;
+      if (event.key === "ArrowLeft") next = idx - 1;
+      if (event.key === "ArrowDown") next = idx + cols;
+      if (event.key === "ArrowUp") next = idx - cols;
+      if (next >= 0 && next < tiles.length) { event.preventDefault(); tiles[next].focus(); }
+    };
+  }
   return tile;
 }
 
 function renderList() {
   const host = $("#rank-list");
   const query = state.search.trim().toLowerCase();
-  let items = dimItems().filter((item) => !query || itemName(item).toLowerCase().includes(query) || item.id.toLowerCase().includes(query));
-  items = items.slice().sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0));
-  const maxValue = items.reduce((max, item) => Math.max(max, num(item[state.metric]) || 0), 0);
+  const items = dimItems()
+    .filter((item) => !query || itemName(item).toLowerCase().includes(query) || item.id.toLowerCase().includes(query))
+    .sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0));
+  const ranked = items.filter((item) => !isMasked(item));
+  const masked = items.filter((item) => isMasked(item));
+  const maxValue = ranked.reduce((max, item) => Math.max(max, num(item[state.metric]) || 0), 0);
   const { lo, hi } = geoRange(dimItems());
   const all = dimItems();
   $("#list-count").textContent = query ? `${items.length} of ${all.length} segments match "${state.search}"` : `${all.length} segment${all.length === 1 ? "" : "s"} in this view`;
   $("#sort-pill").textContent = `Sorted by ${metricMeta(state.metric).short.toLowerCase()}`;
   $("#list-empty").hidden = items.length > 0;
   host.innerHTML = "";
-  items.forEach((item) => {
+
+  const renderRow = (item, isSmallN) => {
     const row = document.createElement("button");
     row.type = "button";
-    row.className = "rank-row";
+    row.className = `rank-row${isSmallN ? " is-masked" : ""}`;
     row.dataset.id = item.id;
     row.setAttribute("role", "option");
     row.setAttribute("aria-selected", state.sel === item.id ? "true" : "false");
-    if (state.sel === item.id) row.setAttribute("aria-current", "true");
+    row.setAttribute("title", itemName(item));
+    if (isSmallN) {
+      row.setAttribute("aria-disabled", "true");
+      row.setAttribute("tabindex", "-1");
+    } else if (state.sel === item.id) {
+      row.setAttribute("aria-current", "true");
+    }
     const value = num(item[state.metric]);
     const width = maxValue > 0 ? clamp((value / maxValue) * 100, 0, 100) : 0;
-    row.style.setProperty("--rank-color", colorFor(value, lo, hi));
+    if (!isSmallN) row.style.setProperty("--rank-color", colorFor(value, lo, hi));
     row.innerHTML = `
-      <span class="rank-name">${esc(itemName(item))}${item.insufficient ? `<span class="smalln">small n</span>` : ""}</span>
+      <span class="rank-name">${esc(itemName(item))}${isSmallN ? `<span class="smalln">small n</span>` : ""}</span>
       <span class="rank-value">${metricText(value, state.metric, 2)}</span>
       <span class="rank-meta">
         <span class="rank-bar" aria-hidden="true"><span style="--w:${width.toFixed(1)}%"></span></span>
         <span class="rank-sub">n=${fmtInt(item.n)} · PD ${fmtPct(item.pred_pd, 1)}</span>
       </span>`;
-    row.onclick = () => {
-      state.sel = state.sel === item.id ? null : item.id;
-      commit({ push: true });
-    };
-    row.onkeydown = (event) => {
-      if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
-      event.preventDefault();
-      const rows = $$(".rank-row", host);
-      const index = rows.indexOf(row);
-      const next = event.key === "ArrowDown" ? Math.min(rows.length - 1, index + 1) : Math.max(0, index - 1);
-      rows[next].focus();
-    };
+    if (!isSmallN) {
+      row.onclick = () => {
+        state.sel = state.sel === item.id ? null : item.id;
+        commit({ push: true });
+      };
+      row.onkeydown = (event) => {
+        if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+        event.preventDefault();
+        const rows = $$(".rank-row:not(.is-masked)", host);
+        const index = rows.indexOf(row);
+        const next = event.key === "ArrowDown" ? Math.min(rows.length - 1, index + 1) : Math.max(0, index - 1);
+        rows[next].focus();
+      };
+    }
     host.appendChild(row);
-  });
+  };
+
+  ranked.forEach((item) => renderRow(item, false));
+  if (masked.length) {
+    const divider = document.createElement("div");
+    divider.className = "rank-divider";
+    divider.setAttribute("role", "separator");
+    divider.innerHTML = "<span>Small n, not ranked</span>";
+    host.appendChild(divider);
+    masked.forEach((item) => renderRow(item, true));
+  }
 }
 
 function metricRank(item, metric) {
   const peers = dimItems()
-    .filter((entry) => !entry.insufficient && num(entry[metric]) != null)
+    .filter((entry) => !isMasked(entry) && num(entry[metric]) != null)
     .sort((a, b) => (num(b[metric]) || 0) - (num(a[metric]) || 0));
   const index = peers.findIndex((entry) => entry.id === item.id);
   return index >= 0 ? { rank: index + 1, total: peers.length } : null;

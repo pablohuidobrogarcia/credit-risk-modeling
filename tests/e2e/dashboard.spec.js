@@ -11,6 +11,15 @@ const STATE_NAMES = Object.fromEntries(
     .map((match) => [match[1], match[2]])
 );
 const stateName = (id) => STATE_NAMES[id] || id;
+const SEGMENT_LABELS = {
+  small_business: "Small business", other: "Other", renewable_energy: "Renewable energy",
+  house: "House", medical: "Medical", moving: "Moving", wedding: "Wedding", vacation: "Vacation",
+  educational: "Educational", debt_consolidation: "Debt consolidation", major_purchase: "Major purchase",
+  car: "Car", home_improvement: "Home improvement", credit_card: "Credit card",
+  RENT: "Rent", OWN: "Own", MORTGAGE: "Mortgage", ANY: "Any",
+};
+const labelFor = (id) => SEGMENT_LABELS[id] || (/^[A-G]$/.test(id) ? `Grade ${id}` : id);
+const isMasked = (item) => item.insufficient === true || item.n < PE.meta.min_n;
 
 const pct = (v, nd = 2) => `${(v * 100).toFixed(nd)}%`;
 const dims = ["total", "state", "grade", "purpose", "vintage", "home_ownership"];
@@ -162,7 +171,7 @@ test("state map exposes small-state buttons and blocks masked states", async ({ 
 test("state map follows the metric selector", async ({ page }) => {
   const errors = await open(page);
   await page.locator('#tile-map .us-map-svg .st[data-state="CA"]').evaluate((element) => element.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(600);
   const fills = () => page.locator("#tile-map .us-map-svg .st:not(.is-masked)").evaluateAll((elements) => elements.map((element) => getComputedStyle(element).fill));
   const legend = () => page.locator("#map-legend .legend-num").allTextContents();
   const chipFill = () => page.locator('.state-small-strip .state-chip[data-id="RI"]').evaluate((element) => getComputedStyle(element).backgroundColor);
@@ -465,7 +474,7 @@ test("grade staircase renders A to G and selects a grade", async ({ page }) => {
   await stepB.hover();
   await expect(page.locator(".geo-tooltip")).toHaveText("Grade B");
   await stepB.click();
-  await expect(page.locator("#summary-title")).toHaveText("B");
+  await expect(page.locator("#summary-title")).toHaveText("Grade B");
   await expect(stepB).toHaveClass(/is-selected/);
   await expect(page).toHaveURL(/sel=B/);
   const before = page.url();
@@ -543,10 +552,10 @@ test("every ranked row selects the linked tile and summary", async ({ page }) =>
   const errors = await open(page);
   for (const dim of ["state", "grade", "purpose", "vintage", "home_ownership"]) {
     await page.locator(`#dimension-tabs button[data-dim="${dim}"]`).click();
-    const items = PE.dimensions[dim];
+    const items = PE.dimensions[dim].filter((item) => !isMasked(item));
     for (const item of items) {
       await page.locator(`#rank-list .rank-row[data-id="${item.id}"]`).click();
-      await expect(page.locator("#summary-title")).toHaveText(dim === "state" ? stateName(item.id) : item.name);
+      await expect(page.locator("#summary-title")).toHaveText(dim === "state" ? stateName(item.id) : labelFor(item.id));
       await expect(page.locator('[data-testid="summary-default-rate"]')).toHaveText(pct(item.default_rate));
       await expect(page).toHaveURL(new RegExp(`sel=${encodeURIComponent(item.id)}`));
     }
@@ -598,7 +607,7 @@ test("purpose and home ownership maps use their supplied SVGs and stay linked", 
     await page.locator(`#tile-map.${className} [data-id="${id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`dim=${dim}`));
     await expect(page).toHaveURL(new RegExp(`sel=${id}`));
-    await expect(page.locator("#summary-title")).toHaveText(PE.dimensions[dim].find((x) => x.id === id).name);
+    await expect(page.locator("#summary-title")).toHaveText(labelFor(id));
   }
   await expectNoErrors(errors);
 });
@@ -643,6 +652,115 @@ test("map notes are tailored to each dimension and metric", async ({ page }) => 
   await expectNoErrors(errors);
 });
 
+test("masked segments stay neutral, unselectable and below the divider in every tab", async ({ page }) => {
+  test.setTimeout(150_000);
+  const errors = await open(page);
+  const tabs = ["state", "grade", "purpose", "vintage", "home_ownership"];
+  for (const dim of tabs) {
+    const items = PE.dimensions[dim];
+    const maskedItems = items.filter(isMasked);
+    const rankedItems = items.filter((item) => !isMasked(item));
+    await page.goto(`/#view=explorer&dim=${dim}`);
+    await page.waitForTimeout(400);
+    for (const metric of ["default_rate", "pred_pd", "el_pct_ead"]) {
+      await page.locator(`#metric-tabs button[data-metric="${metric}"]`).click();
+      await page.waitForTimeout(150);
+      const expectedOrder = items
+        .slice()
+        .sort((a, b) => (Number(b[metric]) || 0) - (Number(a[metric]) || 0))
+        .map((item) => item.id);
+      const expectedRanked = expectedOrder.filter((id) => !maskedItems.some((item) => item.id === id));
+      const expectedMasked = expectedOrder.filter((id) => maskedItems.some((item) => item.id === id));
+      const domOrder = await page.locator("#rank-list > *").evaluateAll((nodes) => nodes.map((node) => node.classList.contains("rank-divider") ? "__divider__" : node.dataset.id));
+      if (maskedItems.length) {
+        const split = domOrder.indexOf("__divider__");
+        expect(split, `${dim}/${metric} divider`).toBeGreaterThan(-1);
+        expect(domOrder.slice(0, split), `${dim}/${metric} ranked order`).toEqual(expectedRanked);
+        expect(domOrder.slice(split + 1), `${dim}/${metric} masked order`).toEqual(expectedMasked);
+        await expect(page.locator("#rank-list .rank-divider")).toHaveText("Small n, not ranked");
+      } else {
+        expect(domOrder, `${dim}/${metric} order`).toEqual(expectedOrder);
+        await expect(page.locator("#rank-list .rank-divider")).toHaveCount(0);
+      }
+
+      const values = rankedItems.map((item) => Number(item[metric]));
+      const expectedLegend = [pct(Math.min(...values), 1), pct(Math.max(...values), 1)];
+      await expect(page.locator("#map-legend .legend-num")).toHaveText(expectedLegend);
+      await expect(page.locator("#map-legend .legend-swatch")).toHaveCount(1);
+      await expect(page.locator("#map-legend")).toContainText("insufficient data");
+
+      for (const item of maskedItems) {
+        const row = page.locator(`#rank-list .rank-row[data-id="${item.id}"]`);
+        await expect(row).toHaveClass(/is-masked/);
+        await expect(row).toHaveAttribute("aria-disabled", "true");
+        await expect(row).toHaveAttribute("tabindex", "-1");
+        await expect(row.locator(".smalln")).toHaveText("small n");
+        const barImage = await row.locator(".rank-bar span").evaluate((el) => getComputedStyle(el).backgroundImage);
+        expect(barImage, `${dim}/${metric} ${item.id} bar`).toContain("repeating-linear-gradient");
+        const before = page.url();
+        await row.click({ force: true });
+        expect(page.url(), `${dim}/${metric} ${item.id} row`).toBe(before);
+      }
+
+      if (dim === "state") {
+        for (const item of maskedItems) {
+          const shape = page.locator(`#tile-map .us-map-svg .st[data-state="${item.id}"]`);
+          expect(await shape.evaluate((el) => getComputedStyle(el).fill)).toContain("state-hatch");
+          const chip = page.locator(`#tile-map .state-chip[data-id="${item.id}"]`);
+          await expect(chip).toHaveClass(/is-masked/);
+          await expect(chip).toHaveAttribute("aria-disabled", "true");
+          const before = page.url();
+          await shape.click({ force: true });
+          expect(page.url()).toBe(before);
+        }
+      }
+      if (dim === "grade") {
+        for (const item of maskedItems) {
+          const step = page.locator(`#tile-map .grade-step[data-id="${item.id}"]`);
+          await expect(step).toHaveClass(/is-masked/);
+          expect(await step.locator(".grade-step-face").evaluate((el) => getComputedStyle(el).fill)).toContain("grade-hatch");
+          const before = page.url();
+          await step.click({ force: true });
+          expect(page.url()).toBe(before);
+        }
+      }
+      if (dim === "purpose" || dim === "home_ownership") {
+        const className = dim === "purpose" ? "purpose-map" : "home-ownership-map";
+        for (const item of maskedItems) {
+          const node = page.locator(`#tile-map.${className} [data-id="${item.id}"]`);
+          await expect(node).toHaveClass(/is-masked/);
+          await expect(node).toHaveAttribute("aria-disabled", "true");
+          await expect(node).toHaveAttribute("tabindex", "-1");
+          expect(await node.locator(".bg").evaluate((el) => getComputedStyle(el).fill)).toContain("illustrated-hatch");
+          const before = page.url();
+          await node.click({ force: true });
+          expect(page.url()).toBe(before);
+        }
+      }
+    }
+  }
+  await expectNoErrors(errors);
+});
+
+test("Explorer shows readable segment labels and no raw ids", async ({ page }) => {
+  const errors = await open(page);
+  for (const dim of ["state", "grade", "purpose", "vintage", "home_ownership"]) {
+    await page.goto(`/#view=explorer&dim=${dim}`);
+    await page.waitForTimeout(350);
+    const visibleText = await page.locator("#view-explorer").innerText();
+    expect(visibleText).not.toMatch(/\b[a-z][a-z0-9]*_[a-z0-9_]+\b/i);
+    expect(visibleText).not.toMatch(/\b(?:RENT|OWN|MORTGAGE|ANY)\b/);
+    for (const item of PE.dimensions[dim]) {
+      const expected = dim === "state" ? stateName(item.id) : labelFor(item.id);
+      await expect(page.locator(`#rank-list .rank-row[data-id="${item.id}"] .rank-name`)).toContainText(expected);
+    }
+    const selectable = PE.dimensions[dim].find((item) => !isMasked(item));
+    await page.locator(`#rank-list .rank-row[data-id="${selectable.id}"]`).click();
+    await expect(page.locator("#summary-title")).toHaveText(dim === "state" ? stateName(selectable.id) : labelFor(selectable.id));
+  }
+  await expectNoErrors(errors);
+});
+
 test("state map hover shows a tooltip and clicking updates the linked details", async ({ page }) => {
   const errors = await open(page);
   const state = page.locator('#tile-map .us-map-svg .st[data-state="CA"]');
@@ -682,12 +800,11 @@ test("explorer visuals expose only the segment name on hover and focus", async (
   ];
   for (const [dim, id] of cases) {
     await page.locator(`#dimension-tabs button[data-dim='${dim}']`).click();
-    const item = PE.dimensions[dim].find((entry) => entry.id === id);
     const tile = page.locator(`#tile-map [data-id="${id}"]`);
-    await expect(tile).toHaveAttribute("title", item.name);
-    await expect(tile).toHaveAttribute("aria-label", item.name);
+    await expect(tile).toHaveAttribute("title", labelFor(id));
+    await expect(tile).toHaveAttribute("aria-label", labelFor(id));
     await tile.hover();
-    expect(await tile.getAttribute("title")).toBe(item.name);
+    expect(await tile.getAttribute("title")).toBe(labelFor(id));
   }
 
   await page.locator("#dimension-tabs button[data-dim='state']").click();
@@ -1692,7 +1809,7 @@ test("keyboard navigation reaches state shapes, grade steps and rows", async ({ 
   await page.keyboard.press("ArrowRight");
   await expect(page.locator('.grade-step[data-id="B"]')).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.locator("#summary-title")).toHaveText("B");
+  await expect(page.locator("#summary-title")).toHaveText("Grade B");
   await page.locator("#rank-list .rank-row").first().focus();
   await page.keyboard.press("ArrowDown");
   const rowFocus = await page.evaluate(() => document.activeElement?.getAttribute("data-id"));

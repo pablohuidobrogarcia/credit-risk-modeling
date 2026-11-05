@@ -94,14 +94,14 @@
     <title>Small Business</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-small_business" class="ic" transform="translate(0 -24)"/>
-    <text class="lbl" y="22"><tspan x="0">Small</tspan><tspan x="0" dy="15">Business</tspan></text>
+    <text class="lbl" y="22"><tspan x="0">Small</tspan><tspan x="0" dy="15">business</tspan></text>
   </g></a>
 
   <a href="#renewable_energy" id="renewable_energy" data-category="renewable_energy"><g class="hex" transform="translate(254 90)">
     <title>Renewable Energy</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-renewable_energy" class="ic" transform="translate(0 -24)"/>
-    <text class="lbl" y="22"><tspan x="0">Renewable</tspan><tspan x="0" dy="15">Energy</tspan></text>
+    <text class="lbl" y="22"><tspan x="0">Renewable</tspan><tspan x="0" dy="15">energy</tspan></text>
   </g></a>
 
   <a href="#house" id="house" data-category="house"><g class="hex" transform="translate(400 90)">
@@ -144,14 +144,14 @@
     <title>Debt Consolidation</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-debt_consolidation" class="ic" transform="translate(0 -24)"/>
-    <text class="lbl" y="22"><tspan x="0">Debt</tspan><tspan x="0" dy="15">Consolidation</tspan></text>
+    <text class="lbl" y="22"><tspan x="0">Debt</tspan><tspan x="0" dy="15">consolidation</tspan></text>
   </g></a>
 
   <a href="#major_purchase" id="major_purchase" data-category="major_purchase"><g class="hex" transform="translate(619 216)">
     <title>Major Purchase</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-major_purchase" class="ic" transform="translate(0 -24)"/>
-    <text class="lbl" y="22"><tspan x="0">Major</tspan><tspan x="0" dy="15">Purchase</tspan></text>
+    <text class="lbl" y="22"><tspan x="0">Major</tspan><tspan x="0" dy="15">purchase</tspan></text>
   </g></a>
 
   <!-- ============ FILA 3 ============ -->
@@ -159,7 +159,7 @@
     <title>Home Improvement</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-home_improvement" class="ic" transform="translate(0 -24)"/>
-    <text class="lbl" y="22"><tspan x="0">Home</tspan><tspan x="0" dy="15">Improvement</tspan></text>
+    <text class="lbl" y="22"><tspan x="0">Home</tspan><tspan x="0" dy="15">improvement</tspan></text>
   </g></a>
 
   <a href="#car" id="car" data-category="car"><g class="hex" transform="translate(254 342)">
@@ -173,7 +173,7 @@
     <title>Credit Card</title>
     <use href="#hexshape" class="bg"/>
     <use href="#ic-credit_card" class="ic" transform="translate(0 -24)"/>
-    <text class="lbl" y="22"><tspan x="0">Credit</tspan><tspan x="0" dy="15">Card</tspan></text>
+    <text class="lbl" y="22"><tspan x="0">Credit</tspan><tspan x="0" dy="15">card</tspan></text>
   </g></a>
 
   <a href="#wedding" id="wedding" data-category="wedding"><g class="hex" transform="translate(546 342)">

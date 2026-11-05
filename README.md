@@ -73,7 +73,7 @@ is reported separately as the censoring-exposed secondary analysis.
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
 | **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.1 %**, UL **5.9 %**, VaR 99 % **28.5 %**, VaR 99.9 % **37.4 %**, ES 99 % **32.4 %**, ES 99.9 % **40.7 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
-| **Test suite** | **146** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
+| **Test suite** | **147** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 

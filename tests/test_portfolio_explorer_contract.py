@@ -11,6 +11,7 @@ import json
 import math
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -44,8 +45,15 @@ def test_dimensions_reconcile_with_window_total(pe):
         assert dim in pe["dimensions"], dim
         items = pe["dimensions"][dim]
         assert items, f"{dim} has no segments"
-        assert sum(item["n"] for item in items) == meta["n_total"], dim
-        assert sum(item["ead"] for item in items) == pytest.approx(meta["ead_total"], rel=1e-9)
+        leaf_items = items
+        if dim == "vintage" and any(item.get("segment_type") == "month" for item in items):
+            leaf_items = [item for item in items if item.get("segment_type") == "month"]
+            year_items = [item for item in items if item.get("segment_type") == "year"]
+            assert len(year_items) == 2
+            assert sum(item["n"] for item in year_items) == meta["n_total"]
+            assert sum(item["ead"] for item in year_items) == pytest.approx(meta["ead_total"], rel=1e-9)
+        assert sum(item["n"] for item in leaf_items) == meta["n_total"], dim
+        assert sum(item["ead"] for item in leaf_items) == pytest.approx(meta["ead_total"], rel=1e-9)
         for item in items:
             assert item["n"] > 0
             assert item["ead"] >= 0
@@ -58,6 +66,31 @@ def test_dimensions_reconcile_with_window_total(pe):
                           item["pred_pd"], item["mean_lgd"], item["ead"], item["ead_share"],
                           item["el_pct_ead"], item["el_amount"]):
                 assert math.isfinite(float(value)), (dim, item["id"], value)
+
+
+def test_vintage_months_reconcile_with_year_aggregates(pe):
+    items = pe["dimensions"]["vintage"]
+    years = {item["id"]: item for item in items if item.get("segment_type") == "year"}
+    months = {item["id"]: item for item in items if item.get("segment_type") == "month"}
+    assert set(years) == {"2014", "2015"}
+    expected_months = {
+        f"{year}-{month:02d}" for year in (2014, 2015) for month in range(1, 13)
+    }
+    assert set(months) == expected_months
+    assert len(months) == 24
+    assert sum(item["n"] for item in months.values()) == pe["meta"]["n_total"]
+    assert sum(item["ead"] for item in months.values()) == pytest.approx(pe["meta"]["ead_total"], rel=1e-9)
+    for month_id, item in months.items():
+        assert item["name"] == pd.Timestamp(month_id + "-01").strftime("%b %Y")
+        assert item["insufficient"] is False
+        assert 0.0 <= item["resolved_share"] <= 1.0
+        assert item["immature"] is bool(item["resolved_share"] < 0.90)
+    for year, year_item in years.items():
+        subset = [item for month_id, item in months.items() if month_id.startswith(year)]
+        assert sum(item["n"] for item in subset) == year_item["n"]
+        assert sum(item["n"] * item["default_rate"] for item in subset) / year_item["n"] == pytest.approx(year_item["default_rate"], abs=1e-8)
+        assert sum(item["n"] * item["pred_pd"] for item in subset) / year_item["n"] == pytest.approx(year_item["pred_pd"], abs=1e-8)
+        assert sum(item["ead"] * item["el_pct_ead"] for item in subset) / year_item["ead"] == pytest.approx(year_item["el_pct_ead"], abs=1e-8)
 
 
 def test_total_reconciles_with_headline_summary(pe, summary):

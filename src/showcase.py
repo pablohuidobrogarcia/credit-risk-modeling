@@ -656,7 +656,7 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
 
     test = pd.read_parquet(pred_path).copy()
     if "issue_d" in test.columns:
-        test["issue_year"] = pd.to_datetime(test["issue_d"], errors="coerce").dt.year
+        test["issue_year"] = pd.to_datetime(test["issue_d"], format="%b-%Y", errors="coerce").dt.year
     else:
         test["issue_year"] = 2014
     test["term_clean"] = test["term"].astype(str).str.extract(r"(\d+)")[0]
@@ -769,18 +769,71 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
         "term": "term_clean",
         "home_ownership": "home_ownership",
     }
+
+    # Monthly resolved shares need the full accepted population, not just the
+    # resolved prediction rows. This is a processed pipeline artifact, never a
+    # browser-side calculation.
+    resolution_by_month: Dict[str, tuple[int, int]] = {}
+    accepted_path = project_root() / "data" / "processed" / "accepted.parquet"
+    if accepted_path.exists():
+        import pandas as pd
+
+        population = pd.read_parquet(
+            accepted_path, columns=["issue_d", "term", "resolved_flag"]
+        )
+        population["issue_dt"] = pd.to_datetime(population["issue_d"], format="%b-%Y", errors="coerce")
+        population["term_clean"] = population["term"].astype(str).str.extract(r"(\d+)")[0]
+        population = population[
+            population["issue_dt"].dt.year.between(2014, 2015)
+            & (population["term_clean"] == "36")
+        ].copy()
+        population["issue_month"] = population["issue_dt"].dt.strftime("%Y-%m")
+        grouped = population.groupby("issue_month")
+        resolution_by_month = {
+            str(month): (int(len(frame)), int(frame["resolved_flag"].sum()))
+            for month, frame in grouped
+        }
+
+    if "issue_d" in test.columns:
+        test["issue_month"] = pd.to_datetime(test["issue_d"], format="%b-%Y", errors="coerce").dt.strftime("%Y-%m")
+    min_resolved_share = float(
+        (((summary.get("pd") or {}).get("split_design") or {}).get("primary") or {}).get(
+            "min_resolved_share", 0.90
+        )
+    )
+
     for dim, column in columns.items():
         if column not in test.columns:
             continue
         items: List[Dict[str, Any]] = []
-        for key, frame in test.groupby(column, dropna=True):
-            if frame.empty:
-                continue
-            label = str(key)
-            if dim == "term":
-                label = f"{label} months"
-            items.append(make_item(label, label, frame))
-        items.sort(key=lambda x: (-x["el_pct_ead"], x["name"]))
+        if dim == "vintage":
+            for key, frame in test.groupby("issue_year", dropna=True):
+                item = make_item(str(key), str(key), frame)
+                item["segment_type"] = "year"
+                items.append(item)
+            if "issue_month" not in test.columns:
+                raise ValueError("issue_d is required to build monthly vintages")
+            for key, frame in test.groupby("issue_month", dropna=True):
+                month = str(key)
+                if month not in resolution_by_month:
+                    raise ValueError(f"missing resolved-population count for vintage month {month}")
+                n_all, n_resolved = resolution_by_month[month]
+                resolved_share = n_resolved / n_all if n_all else 0.0
+                item = make_item(month, pd.to_datetime(month + "-01").strftime("%b %Y"), frame)
+                item["segment_type"] = "month"
+                item["resolved_share"] = round(resolved_share, 8)
+                item["immature"] = bool(resolved_share < min_resolved_share)
+                items.append(item)
+            items.sort(key=lambda x: (x["segment_type"] != "year", x["id"]))
+        else:
+            for key, frame in test.groupby(column, dropna=True):
+                if frame.empty:
+                    continue
+                label = str(key)
+                if dim == "term":
+                    label = f"{label} months"
+                items.append(make_item(label, label, frame))
+            items.sort(key=lambda x: (-x["el_pct_ead"], x["name"]))
         dims[dim] = items
 
     score_hists = {"total:total": score_counts(test)}
@@ -789,8 +842,11 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
             continue
         column = columns[dim]
         for item in items:
-            if column == "issue_year":
-                frame = test[test["issue_year"].astype(str) == item["id"]]
+            if dim == "vintage":
+                if item.get("segment_type") == "month":
+                    frame = test[test["issue_month"].astype(str) == item["id"]]
+                else:
+                    frame = test[test["issue_year"].astype(str) == item["id"]]
             elif column == "term_clean":
                 frame = test[test["term_clean"].astype(str) == item["id"].split()[0]]
             else:

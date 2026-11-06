@@ -6,6 +6,7 @@ const ROOT = path.resolve(__dirname, "../..");
 const DATA = JSON.parse(fs.readFileSync(path.join(ROOT, "docs/data.json"), "utf8"));
 const PE = DATA.portfolio_explorer;
 const PLOTLY_PATH = path.join(ROOT, "node_modules/plotly.js-dist-min/plotly.min.js");
+const AXE_PATH = require.resolve("axe-core/axe.min.js");
 const STATE_NAMES = Object.fromEntries(
   [...fs.readFileSync(path.join(ROOT, "docs/assets/us-map.svg"), "utf8").matchAll(/data-state="([A-Z]+)"[^>]*aria-label="([^"]+)"/g)]
     .map((match) => [match[1], match[2]])
@@ -1337,7 +1338,7 @@ test("hero KPI cards use resolved, non-redundant texts", async ({ page }) => {
   await expect(cards.nth(1)).toContainText(`about ${Math.round(DATA.pd.champion_auc * 100)}% of the time`);
   await expect(cards.nth(1)).toContainText(`tested on ${DATA.display.oot_years} loans`);
   await expect(cards.nth(2).locator(".mini-label")).toHaveText("Expected loss");
-  await expect(cards.nth(2)).toContainText(`of exposure: about ${DATA.display.el_amount} on average`);
+  await expect(cards.nth(2)).toContainText(`of EAD: about ${DATA.display.el_amount} expected loss`);
   await expect(cards.nth(3).locator(".mini-label")).toHaveText("Bad-year loss (VaR 99.9%)");
   await expect(cards.nth(3)).toContainText("Exceeded once in 1,000 simulated years");
   await expect(cards.nth(3).locator(".kpi-sub")).toContainText("$");
@@ -1345,7 +1346,7 @@ test("hero KPI cards use resolved, non-redundant texts", async ({ page }) => {
   expect(heroText).not.toMatch(/\{[a-zA-Z0-9_]+\}/);
   expect(heroText).not.toContain("Gini");
   expect(heroText).not.toMatch(/rho|ρ/i);
-  expect(heroText).not.toContain("of EAD");
+  expect(heroText).not.toContain("of exposure");
   for (const [width, height] of [[1360, 900], [1100, 900], [390, 844]]) {
     await page.setViewportSize({ width, height });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
@@ -1463,7 +1464,7 @@ test("risk sliders, play sweep and surface control the shared state", async ({ p
   await expect(page).toHaveURL(/lgd=/);
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible();
   await page.locator("#surface-metrics button[data-metric='es_0.999']").click();
-  await expect(page.locator("#surface-metrics button[data-metric='es_0.999']")).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#surface-metrics button[data-metric='es_0.999']")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("#surface-chart canvas")).toBeVisible({ timeout: 20_000 });
   const beforeRho = await page.locator("#rho-output").innerText();
   await page.locator("#play-rho").click();
@@ -2510,3 +2511,28 @@ test("reduced motion keeps count-ups instant and turns the sweep into one step",
 
 
 
+
+test("axe reports no wcag2a, wcag2aa or best-practice violations in the four views", async ({ page }) => {
+  const errors = await open(page);
+  for (const width of [1360, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
+    for (const view of ["explorer", "risk", "evidence", "learn"]) {
+      await page.locator(`#view-tab-${view}`).click();
+      await page.waitForTimeout(view === "risk" ? 1800 : 500);
+      await page.addScriptTag({ path: AXE_PATH });
+      const violations = await page.evaluate(async () => {
+        const results = await window.axe.run(document, {
+          runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "best-practice"] },
+        });
+        return results.violations.map((v) => ({
+          id: v.id,
+          impact: v.impact,
+          help: v.help,
+          nodes: v.nodes.slice(0, 4).map((n) => n.target.join(" ")),
+        }));
+      });
+      expect(violations, `${view} @ ${width}px: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+    }
+  }
+  await expectNoErrors(errors);
+});

@@ -9,6 +9,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
+    "axe-core": "^4.14.0",
     "plotly.js-dist-min": "2.35.2"
   }
 }

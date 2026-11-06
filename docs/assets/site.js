@@ -331,6 +331,8 @@ function infoContext() {
     el_pct_ead: fmtPct(meta.el_pct_ead, 2),
     el_per_100: num(meta.el_pct_ead) == null ? "—" : (meta.el_pct_ead * 100).toFixed(2),
     ead_total: fmtMoney(meta.ead_total),
+    funded_total: fmtMoney(meta.funded_total),
+    el_pct_funded: fmtPct(meta.el_pct_funded, 2),
     champion: (D && D.pd && D.pd.champion) || "champion",
     default_rate_oot: fmtPct(meta.default_rate_total, 2),
     el_rate: fmtPct(meta.el_pct_ead, 2),
@@ -722,7 +724,7 @@ function renderShell() {
   countUp($("#kpi-auc"), D.pd.champion_auc, (v) => fmtNum(v, 4));
   $("#kpi-auc-sub").textContent = `Ranks a defaulter above a non-defaulter about ${Math.round(D.pd.champion_auc * 100)}% of the time · tested on ${disp.oot_years || "2014-2015"} loans`;
   countUp($("#kpi-el"), D.lgd.el_rate_oot, (v) => fmtPct(v, 2));
-  $("#kpi-el-sub").textContent = `of exposure: about ${fmtMoney(D.lgd.expected_loss_oot)} on average`;
+  $("#kpi-el-sub").textContent = `of EAD: about ${fmtMoney(D.lgd.expected_loss_oot)} expected loss`;
   const stats = D.simulation.statistics;
   countUp($("#kpi-var"), stats["var_0.999_pct_ead"], (v) => fmtPct(v, 1));
   $("#kpi-var-sub").textContent = `Exceeded once in 1,000 simulated years · ${fmtMoney(stats["var_0.999"])}`;
@@ -1539,8 +1541,6 @@ function renderList() {
     row.type = "button";
     row.className = `rank-row${isSmallN ? " is-masked" : ""}`;
     row.dataset.id = item.id;
-    row.setAttribute("role", "option");
-    row.setAttribute("aria-selected", state.sel === item.id ? "true" : "false");
     row.setAttribute("title", itemName(item));
     if (isSmallN) {
       row.setAttribute("aria-disabled", "true");
@@ -1847,7 +1847,7 @@ function updateRiskControls() {
   set("risk-rho", "rho", opts.rhos, (v) => fmtNum(v, 3));
   set("risk-pd", "pd", opts.pds, fmtX);
   set("risk-lgd", "lgd", opts.lgds, fmtX);
-  $$("#surface-metrics button").forEach((btn) => btn.setAttribute("aria-selected", btn.dataset.metric === state.surfaceMetric ? "true" : "false"));
+  $$("#surface-metrics button").forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.metric === state.surfaceMetric ? "true" : "false"));
 }
 
 function renderRisk() {

@@ -72,13 +72,13 @@
         </article>
         <article class="kpi-card">
           <p class="mini-label">Expected loss</p>
-          <p class="kpi-value" id="kpi-el" data-countup data-field="display.el_rate">10.14%</p>
-          <p class="kpi-sub" id="kpi-el-sub">of exposure: about $574.8M on average</p>
+          <p class="kpi-value" id="kpi-el" data-countup data-field="display.el_rate">10.29%</p>
+          <p class="kpi-sub" id="kpi-el-sub">of EAD: about $332.1M expected loss</p>
         </article>
         <article class="kpi-card risk">
           <p class="mini-label">Bad-year loss (VaR 99.9%)</p>
-          <p class="kpi-value" id="kpi-var" data-countup data-field="display.sim_var999">37.4%</p>
-          <p class="kpi-sub" id="kpi-var-sub">Exceeded once in 1,000 simulated years · $2,120.3M</p>
+          <p class="kpi-value" id="kpi-var" data-countup data-field="display.sim_var999">37.73%</p>
+          <p class="kpi-sub" id="kpi-var-sub">Exceeded once in 1,000 simulated years · $1,217.4M</p>
         </article>
       </section>
 
@@ -252,7 +252,7 @@
               </div>
               <span class="sort-pill" id="sort-pill">—</span>
             </div>
-            <div class="rank-list" id="rank-list" role="listbox" aria-label="Ranked segments"></div>
+            <div class="rank-list" id="rank-list" role="group" aria-label="Ranked segments"></div>
             <p class="empty-state" id="list-empty" hidden>No segment matches that filter.</p>
           </section>
         </div>
@@ -336,10 +336,10 @@
                 <h3 id="surface-title">VaR surface</h3>
                 <p class="panel-sub" id="surface-sub">—</p>
               </div>
-              <div class="segmented surface-toggle compact" id="surface-metrics" role="tablist" aria-label="Surface metric">
-                <button type="button" data-metric="var_0.999" aria-selected="true">VaR 99.9%</button>
-                <button type="button" data-metric="es_0.999">ES 99.9%</button>
-                <button type="button" data-metric="el">EL</button>
+              <div class="segmented surface-toggle compact" id="surface-metrics" role="group" aria-label="Surface metric">
+                <button type="button" data-metric="var_0.999" aria-pressed="true">VaR 99.9%</button>
+                <button type="button" data-metric="es_0.999" aria-pressed="false">ES 99.9%</button>
+                <button type="button" data-metric="el" aria-pressed="false">EL</button>
               </div>
             </div>
             <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional surface of portfolio risk across correlation and PD stress"></div>
@@ -416,7 +416,7 @@
           <div class="evidence-column">
             <section class="panel">
               <h3>Model comparison</h3>
-              <div class="table-scroll">
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Model comparison table">
                 <table id="model-table">
                   <caption>Mature out-of-time window (★ = selected champion)</caption>
                   <thead><tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr></thead>
@@ -429,7 +429,7 @@
             <section class="panel">
               <h3>Calibration and LGD</h3>
               <p class="note-copy" id="calibration-note"></p>
-              <div class="table-scroll">
+              <div class="table-scroll" tabindex="0" role="region" aria-label="LGD model comparison table">
                 <table id="lgd-table">
                   <caption>Loan-level LGD models, out of time</caption>
                   <thead><tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr></thead>
@@ -444,7 +444,7 @@
             <section class="panel">
               <h3>Censoring and the test window</h3>
               <p class="note-copy" id="censoring-note"></p>
-              <div class="table-scroll">
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Validation window comparison table">
                 <table id="window-table">
                   <caption>Mature vs censored validation window</caption>
                   <thead><tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr></thead>
@@ -452,7 +452,7 @@
                 </table>
               </div>
               <p class="note-copy" id="forecast-note"></p>
-              <div class="table-scroll">
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Forecast benchmark table">
                 <table id="forecast-table">
                   <caption>Monthly default-rate forecast, benchmark comparison</caption>
                   <thead><tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr></thead>

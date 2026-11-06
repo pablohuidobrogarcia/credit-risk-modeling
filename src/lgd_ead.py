@@ -311,13 +311,81 @@ def lgd_distribution_plot_by_grade(lgd_df: pd.DataFrame, name: str = "lgd_by_gra
     return save_fig(fig, name)
 
 
-def expected_loss_table(df: pd.DataFrame, pd_hat: np.ndarray, lgd_hat: np.ndarray) -> pd.DataFrame:
-    """Per-loan expected loss, ready for aggregation."""
-    ead_col = "funded_amnt" if "funded_amnt" in df.columns else "loan_amnt"
-    out = df[["grade", "loan_amnt", "default_flag"]].copy()
+def ead_rate_by_grade(defaults: pd.DataFrame) -> pd.DataFrame:
+    """Mean EAD-at-default rate by grade on a set of defaulted loans.
+
+    ``ead_rate`` is computed by :func:`compute_lgd_ead` as
+    ``(funded_amnt - total_rec_prncp) / funded_amnt``. Only defaulted loans have
+    a realised value, so this table must be estimated on the *training* defaults.
+    The primary model window contains a single 36-month term; if a caller passes
+    a population with several terms, ``term`` is added to the grouping key so the
+    rate is not pooled across terms.
+    """
+    d = defaults.copy()
+    if "ead_rate" not in d.columns:
+        d = compute_lgd_ead(d)
+    d = d[d["default_flag"].astype(int) == 1].dropna(subset=["ead_rate"])
+    group_cols = ["grade"]
+    if "term" in d.columns and d["term"].astype(str).nunique() > 1:
+        group_cols.append("term")
+    out = (
+        d.groupby(group_cols, dropna=False)["ead_rate"]
+        .agg(n_defaults="size", ead_rate="mean")
+        .reset_index()
+    )
+    return out
+
+
+def apply_ead_at_default(df: pd.DataFrame, rates: pd.DataFrame) -> pd.DataFrame:
+    """Set ``ead`` to ``funded_amnt x mean train EAD rate`` for every loan.
+
+    The lookup is by grade (and term where the rate table has more than one
+    term). ``funded_amnt`` is kept as a separate field so the funded-basis
+    reconciliation remains possible.
+    """
+    out = df.copy()
+    funded = pd.to_numeric(out["funded_amnt"], errors="coerce").fillna(0.0)
+    keys = [c for c in ("grade", "term") if c in out.columns and c in rates.columns]
+    if "grade" not in keys:
+        raise ValueError("grade is required to apply the EAD-at-default rate")
+    lookup = rates[keys + ["ead_rate"]].copy()
+    merged = out[keys].merge(lookup, on=keys, how="left", validate="many_to_one")
+    rate = merged["ead_rate"].to_numpy(dtype=float)
+    if np.isnan(rate).any():
+        missing = out.loc[np.isnan(rate), "grade"].astype(str).unique().tolist()
+        raise ValueError(f"missing train EAD rate for grade(s): {missing}")
+    out["ead_rate"] = rate
+    out["ead"] = funded.to_numpy(dtype=float) * rate
+    return out
+
+
+def expected_loss_table(
+    df: pd.DataFrame,
+    pd_hat: np.ndarray,
+    lgd_hat: np.ndarray,
+    ead: np.ndarray | pd.Series | None = None,
+) -> pd.DataFrame:
+    """Per-loan expected loss, ready for aggregation.
+
+    ``ead`` defaults to the pipeline's EAD-at-default column when present. Pass
+    an explicit array (for example ``funded_amnt``) to reproduce the superseded
+    funded-balance calculation for reconciliation.
+    """
+    funded_col = "funded_amnt" if "funded_amnt" in df.columns else "loan_amnt"
+    keep = [c for c in ["grade", "loan_amnt", "funded_amnt", "default_flag"] if c in df.columns]
+    out = df[keep].copy()
     out["pd"] = np.asarray(pd_hat, dtype=float)
     out["lgd"] = np.asarray(lgd_hat, dtype=float)
-    out["ead"] = pd.to_numeric(df[ead_col], errors="coerce").to_numpy()
+    if ead is None:
+        if "ead" in df.columns:
+            ead_values = pd.to_numeric(df["ead"], errors="coerce").to_numpy()
+        else:
+            ead_values = pd.to_numeric(df[funded_col], errors="coerce").to_numpy()
+    else:
+        ead_values = np.asarray(ead, dtype=float)
+    out["ead"] = ead_values
+    if "funded_amnt" not in out.columns:
+        out["funded_amnt"] = pd.to_numeric(df[funded_col], errors="coerce").to_numpy()
     out["el"] = out["pd"].to_numpy() * out["lgd"].to_numpy() * out["ead"].to_numpy()
     out["grade"] = out["grade"].astype(str)
     return out
@@ -332,12 +400,14 @@ def aggregate_el(el_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
             mean_pd=("pd", "mean"),
             mean_lgd=("lgd", "mean"),
             ead=("ead", "sum"),
+            funded=("funded_amnt", "sum"),
             expected_loss=("el", "sum"),
             realised_defaults=("default_flag", "sum"),
         )
         .reset_index()
     )
     by_grade["el_rate"] = by_grade["expected_loss"] / by_grade["ead"]
+    by_grade["el_rate_funded"] = by_grade["expected_loss"] / by_grade["funded"]
     portfolio = pd.DataFrame(
         [
             {
@@ -345,8 +415,10 @@ def aggregate_el(el_df: pd.DataFrame) -> Dict[str, pd.DataFrame]:
                 "mean_pd": float(el_df["pd"].mean()),
                 "mean_lgd": float(el_df["lgd"].mean()),
                 "ead": float(el_df["ead"].sum()),
+                "funded": float(el_df["funded_amnt"].sum()),
                 "expected_loss": float(el_df["el"].sum()),
                 "el_rate": float(el_df["el"].sum() / el_df["ead"].sum()),
+                "el_rate_funded": float(el_df["el"].sum() / el_df["funded_amnt"].sum()),
                 "realised_defaults": int(el_df["default_flag"].sum()),
             }
         ]

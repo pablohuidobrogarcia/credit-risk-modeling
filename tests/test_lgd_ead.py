@@ -50,6 +50,52 @@ def test_expected_loss_is_pd_times_lgd_times_ead():
     assert len(agg["by_grade"]) == 2
 
 
+def test_ead_at_default_is_bounded_by_funded():
+    df = pd.DataFrame(
+        {
+            "funded_amnt": [10_000.0, 5_000.0, 2_000.0],
+            "total_rec_prncp": [4_000.0, 500.0, 2_000.0],
+            "recoveries": [1_000.0, 0.0, 100.0],
+            "default_flag": [1, 1, 0],
+        }
+    )
+    out = lgd_ead.compute_lgd_ead(df)
+    defaults = out[out["default_flag"] == 1]
+    assert (defaults["ead"] >= 0).all()
+    assert (defaults["ead"] <= defaults["funded_amnt"]).all()
+    rates = lgd_ead.ead_rate_by_grade(out.assign(grade=["A", "B", "A"]))
+    applied = lgd_ead.apply_ead_at_default(out.assign(grade=["A", "B", "A"]), rates)
+    assert (applied["ead"] >= 0).all()
+    assert (applied["ead"] <= applied["funded_amnt"] + 1e-9).all()
+
+
+def test_ead_rate_uses_train_defaults_not_oot():
+    train = pd.DataFrame(
+        {
+            "grade": ["A", "A", "B"],
+            "funded_amnt": [100.0, 100.0, 100.0],
+            "total_rec_prncp": [80.0, 70.0, 50.0],
+            "recoveries": [0.0, 0.0, 0.0],
+            "default_flag": [1, 1, 1],
+        }
+    )
+    oot = pd.DataFrame(
+        {
+            "grade": ["A", "A", "B", "B"],
+            "funded_amnt": [200.0, 100.0, 300.0, 50.0],
+            "total_rec_prncp": [20.0, 10.0, 30.0, 5.0],
+            "recoveries": [0.0, 0.0, 0.0, 0.0],
+            "default_flag": [1, 0, 1, 0],
+        }
+    )
+    train_rates = lgd_ead.ead_rate_by_grade(lgd_ead.compute_lgd_ead(train))
+    # Train EAD rates are 0.25 for A and 0.50 for B; the OOT defaults are
+    # deliberately much higher (0.90 / 0.90) and must not influence the lookup.
+    applied = lgd_ead.apply_ead_at_default(oot, train_rates)
+    assert applied.loc[applied["grade"] == "A", "ead"].tolist() == [50.0, 25.0]
+    assert applied.loc[applied["grade"] == "B", "ead"].tolist() == [150.0, 25.0]
+
+
 def test_regression_metrics_perfect():
     y = np.array([0.0, 0.5, 1.0])
     m = lgd_ead.regression_metrics(y, y)

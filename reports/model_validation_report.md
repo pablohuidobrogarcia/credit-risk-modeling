@@ -7,7 +7,7 @@ the customer segmentation and the Monte Carlo portfolio loss simulation produced
 **Evidence base.** Every figure in this report is read from
 [`reports/results/summary.json`](results/summary.json) and the CSV artifacts in
 `reports/results/`. Nothing is quoted from memory or from a different run.
-Run seed: **42**; full pipeline wall time **2850.4 s**.
+Run seed: **42**; the EAD refresh (`pd lgd simulation`) took **2113.6 s**; the last full pipeline run took 2850.4 s.
 
 **Verdict in one paragraph.** The pipeline is reproducible and leakage-controlled, and the
 validation design **removes right-censoring from the headline metrics by construction**:
@@ -22,7 +22,7 @@ out-of-time R² (all three candidates). Probability calibration, honestly, **doe
 the test-window Brier here**. The portfolio forecast is weak and loses to naive benchmarks.
 The Monte Carlo layer is sound, its dominant assumption (asset correlation) is disclosed and
 swept, and its importance-sampling estimator is **verified against a closed-form benchmark**
-and shown to cut the tail-VaR RMSE by **5.11×** at equal paths.
+and shown to cut the tail-VaR RMSE by **5.14×** at equal paths.
 
 > **What changed in this revision.** This report was updated to reflect a rework that grew the
 > modeling sample to the full resolved population, moved the challengers onto the wide
@@ -236,8 +236,7 @@ marginal — they are not interchangeable.
 
 ## 4. LGD / EAD
 
-Sample: defaults in train **20,622**; defaults in OOT **64,445** (the mature OOT window has
-*more* defaults than the train window because 2014–2015 were worse vintages).
+Sample: defaults in train **20,622**; LGD-observable defaults in OOT **64,445**. The PD window has **64,447** defaults: two Charged Off loans (IDs 62724310 and 63155120) repaid principal in full before charge-off, so realised EAD and LGD are zero/undefined. They remain in PD/default counts and carry zero realised loss; the EAD-at-default basis assigns them their grade EAD rate. The OOT window has *more* defaults than train because 2014-2015 were worse vintages.
 
 | | Train | OOT |
 |---|---|---|
@@ -271,21 +270,58 @@ confirms the model carries little grade-level differentiation.
 
 ## 5. Expected loss
 
-OOT portfolio (primary window): EAD **$5,670,341,550**; mean PD 0.1218 (calibrated) /
-0.1233 (raw); mean LGD 0.8663.
+OOT portfolio (primary window): EAD at default **$3,226,694,628**;
+funded amount **$5,670,341,550**; mean PD 0.1218
+(calibrated) / 0.1233 (raw); mean LGD 0.8663.
 
-| PD basis | Expected loss | EL / EAD |
-|---|---|---|
-| isotonic-calibrated champion PD (primary) | **$574,794,646** | **0.1014** |
-| raw champion PD (secondary) | $579,736,269 | 0.1022 |
+<!-- EAD-RECON:START -->
+#### EAD-at-default reconciliation
 
-By grade (`el_by_grade`): EL rate rises monotonically **0.0657 (A) → 0.1874 (G)** while
-mean LGD stays almost flat (0.8672 → 0.8690), i.e. **the EL ranking is essentially a PD
-ranking** — consistent with L-1/L-2.
+**The issue and the fix.** The superseded calculation applied LGD to the full funded amount, so it treated every loan as if its entire principal were still outstanding at default. LGD is defined on the outstanding principal, so the pipeline now estimates a mean EAD rate on **training defaults only** (2010-2013, 36-month loans) and sets `EAD = funded_amnt x` that grade rate for every primary OOT loan. The OOT rate below is a diagnostic, never an input.
 
-**Finding E-1 (Medium).** A 10.14 % EL rate is high in absolute terms and is a direct
-consequence of the ~14 % default rate in this (resolved-only) sample; it should not be
-read as the EL of a fresh, still-performing book.
+The new EL is $332.1M (10.29 % of EAD, 5.86 % of funded). Realised loss on the OOT portfolio is $400.2M (7.06 % of funded); the new EL / realised ratio is 0.830x. The superseded funded-basis EL was $574.8M (10.14 % of funded). Predicted PD is 2.29 pp below the observed default rate, which explains 91.65 % of the remaining new-EL gap.
+
+**Two-row discrepancy.** The PD window has 64,447 defaults, while the LGD sample has 64,445. The 2 missing rows are loans 62724310, 63155120: both are Charged Off after repaying principal in full, so realised EAD and LGD are zero/undefined. They are included in PD and default counts, excluded from the LGD fit, and carry zero realised loss; the new expected-EAD basis assigns them their grade EAD rate.
+
+| Item | Value |
+|---|---|
+| Defaults, train / OOT | 20,622 / 64,445 |
+| EAD at default, OOT | $3,226.7M |
+| Funded amount, OOT | $5,670.3M |
+| Realised loss on funded basis | $400.2M (7.06 % of funded) |
+| EL, EAD basis (current) | $332.1M (10.29 % of EAD; 5.86 % of funded) |
+| EL, funded basis (superseded) | $574.8M (10.14 % of funded) |
+| New EL / realised loss | 0.830x |
+| PD under-prediction (observed - predicted) | 2.29 pp |
+| PD-scaled EL / unexplained gap | $394.5M / $5.7M |
+| Share of new-EL gap explained by PD under-prediction | 91.65 % |
+
+| Grade | Train defaults | Train EAD rate | OOT defaults | OOT EAD rate (diagnostic) |
+|---|---:|---:|---:|---:|
+| A | 2,024 | 53.47 % | 5,704 | 50.11 % |
+| B | 6,804 | 55.35 % | 16,643 | 53.57 % |
+| C | 6,093 | 58.96 % | 22,624 | 57.96 % |
+| D | 4,432 | 61.55 % | 13,124 | 62.36 % |
+| E | 1,035 | 65.13 % | 5,011 | 65.53 % |
+| F | 215 | 69.66 % | 1,161 | 68.26 % |
+| G | 19 | 78.18 % | 178 | 73.26 % |
+<!-- EAD-RECON:END -->
+
+| PD basis | Expected loss | EL / EAD | EL / funded |
+|---|---|---|---|
+| isotonic-calibrated champion PD (primary) | **$332,137,180** | **0.1029** | 0.0586 |
+| raw champion PD (secondary) | $336,015,646 | 0.1041 | 0.0593 |
+
+By grade (`el_by_grade`): EL rate still rises monotonically from
+**0.0657 (A)** to **0.1874 (G)**
+while mean LGD stays almost flat (0.8672 to
+0.8690); the ranking is essentially a PD ranking.
+
+**Finding E-1 (Medium).** The superseded funded-basis EL rate was 10.14 %; applying EAD at
+default gives **10.29 % of EAD** and **5.86 % of
+funded**. It remains above the realised funded-basis loss of
+7.06 %; the remaining gap is mainly the 2.29 pp PD
+under-prediction, not the exposure basis.
 
 ---
 
@@ -353,7 +389,7 @@ corroborates a two-group split at sample scale.
 | `TypeError: Must provide 'func' or tuples` in `profile_segments` | Mixing named-tuple aggregation with plain `col="mean"` kwargs in `DataFrame.agg`. | Rebuilt the aggregation with `groupby()[cols].mean()` + `insert`. |
 | Hierarchical profile length mismatch | Linkage computed on a 5,000-loan subsample while labels were applied to 120,000 rows. | Subsample once and profile the *same* rows. |
 | Scorecard points all zero; SHAP/coefficient merge broken | `reset_index(names=…)` on an ndarray gave positional integers as variable names. | Use `res.model.exog_names` / `res.params.index`. |
-| Importance sampling appeared to increase variance | The reported SE used `se_plain/√ESS`, which is valid for weighted *means* but not for a weighted empirical **quantile**; it inflated the IS error and invited a wrong "granular ⇒ idiosyncratic" explanation. | Replaced with a batched-quantile SE plus a replication-based RMSE study; added a closed-form Vasicek unbiasedness unit test. IS now measures a **5.11×** RMSE reduction. |
+| Importance sampling appeared to increase variance | The reported SE used `se_plain/√ESS`, which is valid for weighted *means* but not for a weighted empirical **quantile**; it inflated the IS error and invited a wrong "granular ⇒ idiosyncratic" explanation. | Replaced with a batched-quantile SE plus a replication-based RMSE study; added a closed-form Vasicek unbiasedness unit test. IS now measures a **5.14×** RMSE reduction. |
 | Degenerate risk from `MiniBatchKMeans` as default | Exact `KMeans` measured better *and* faster on the 120k sample. | MiniBatch kept as an opt-in fallback above 250k rows; exact KMeans is the default for both the study and the shipped fit. |
 | SHAP crashed on the champion | The monotone-constrained LightGBM is wrapped in `MonotoneLGBMClassifier`; `TreeExplainer` received the wrapper, not the booster. | `interpret.py` unwraps via `getattr(clf, "model_", clf)` before explainer construction. |
 | Monotone constraints broke inside the sklearn pipeline | The constraint vector must match the post-`ColumnTransformer` width, which is only known at fit time. | New `MonotoneLGBMClassifier` resolves the vector at fit time and declares `estimator_type="classifier"` via `__sklearn_tags__`. |
@@ -361,7 +397,7 @@ corroborates a two-group split at sample scale.
 | Forecast benchmark was silently broken | The vintage series had interior holes (months below the resolved-loan volume threshold), which made MASE `NaN`, Holt-Winters non-convergent and Ljung-Box `NaN`. | New `_contiguous_monthly` keeps the longest gap-free monthly block (85 months) so all four forecast arms are scored on the same grid; ETS/MASE/Ljung-Box now populate. |
 | All-NaN warning path / SHAP list-type output | Newer SHAP returns a list of ndarray for binary LightGBM; the code assumed an array. | Output type handled; `shap_top` now populates. |
 
-Test suite: all unit tests pass on synthetic data; `ruff check src tests` clean;
+Test suite: all unit tests pass on synthetic data; `ruff check .` clean;
 CI runs lint + tests on Python 3.10 and 3.11 without the dataset. The live count is read
 from `summary.json` (`test_count`, written by
 `python -m src.report_tables --write-test-count` from the pytest collection) and reappears
@@ -375,42 +411,45 @@ winsorization bounds, WoE encoders and the calibrator are fitted on train only, 
 
 ## 8. Monte Carlo portfolio loss simulation
 
-Portfolio: **70 buckets** (grade × PD decile), total EAD **$5,670,341,550**,
-EAD-weighted PD **0.1172**, EAD-weighted LGD **0.8625**. PDs are the out-of-time
-calibrated champion scores; LGDs are the champion LGD model output per loan.
+Portfolio: **70 buckets** (grade x PD decile), total EAD
+**$3,226,694,628**, EAD-weighted PD **0.1190**,
+EAD-weighted LGD **0.8625**. PDs are the out-of-time calibrated
+champion scores; LGDs are the champion LGD model output per loan.
 
-Base case, 100,000 paths, **stratified** sampling of the systematic factor, ρ = 0.12:
+Base case, 100,000 paths, **stratified** sampling of the systematic factor,
+rho = 0.12:
 
 | Metric | Amount | % of EAD |
 |---|---|---|
-| Expected loss | $574,731,161 | 10.1 % |
-| Unexpected loss (std) | $333,542,731 | 5.9 % |
-| VaR 99 % | $1,617,286,614 | 28.5 % |
-| ES 99 % | $1,837,432,176 | 32.4 % |
-| VaR 99.9 % | $2,120,320,304 | 37.4 % |
-| ES 99.9 % | $2,306,245,549 | 40.7 % |
-| Economic capital (99 %) | $1,042,555,453 | 18.4 % |
-| Economic capital (99.9 %) | $1,545,589,143 | 27.3 % |
+| Expected loss | $332,101,084 | 10.3 % |
+| Unexpected loss (std) | $191,777,338 | 5.9 % |
+| VaR 99 % | $930,169,040 | 28.8 % |
+| ES 99 % | $1,055,841,302 | 32.7 % |
+| VaR 99.9 % | $1,217,356,570 | 37.7 % |
+| ES 99.9 % | $1,323,112,528 | 41.0 % |
+| Economic capital (99 %) | $598,067,956 | 18.5 % |
+| Economic capital (99.9 %) | $885,255,486 | 27.4 % |
 
 ### 8.1 Asset correlation (the dominant assumption)
 
-The Basel IRB PD-dependent retail formula, evaluated at the portfolio PD (0.1172),
-implies ρ = **0.0322**. The base case is ρ = 0.12. Both are inside the retail band; the
-grid makes the choice transparent:
+The Basel IRB PD-dependent retail formula, evaluated at the portfolio PD
+(0.1190), implies rho = **0.0320**. The base
+case is rho = 0.12. Both are inside the retail band; the grid
+makes the choice transparent:
 
-| ρ | EL (% EAD) | UL (% EAD) | VaR 99 % | VaR 99.9 % |
+| rho | EL (% EAD) | UL (% EAD) | VaR 99 % | VaR 99.9 % |
 |---|---|---|---|---|
-| 0.02 | 10.1 % | 2.3 % | 16.4 % | **18.9 %** |
-| 0.0322 (Basel implied) | 10.1 % | 3.0 % | 18.3 % | 21.8 % |
-| 0.05 | 10.1 % | 3.7 % | 20.8 % | 25.5 % |
-| 0.10 | 10.1 % | 5.3 % | 26.5 % | 34.2 % |
-| **0.12 (base)** | **10.1 %** | **5.9 %** | **28.5 %** | **37.4 %** |
-| 0.15 | 10.1 % | 6.6 % | 31.4 % | **41.7 %** |
+| 0.02 | 10.3 % | 2.4 % | 16.6 % | 19.1 % |
+| 0.032 (Basel implied) | 10.3 % | 3.0 % | 18.5 % | 22.0 % |
+| 0.05 | 10.3 % | 3.8 % | 21.0 % | 25.8 % |
+| 0.10 | 10.3 % | 5.4 % | 26.8 % | 34.5 % |
+| **0.120 (base)** | 10.3 % | 5.9 % | 28.8 % | 37.7 % |
+| 0.15 | 10.3 % | 6.7 % | 31.7 % | 42.0 % |
 
-**Finding M-1 (High).** EL is essentially invariant to ρ, while VaR 99.9 % moves from
-**18.9 % to 41.7 % of EAD** — more than a doubling — purely from the correlation
-assumption. Any capital number from this model is only meaningful together with its ρ;
-the repository therefore never quotes one in isolation.
+**Finding M-1 (High).** EL is essentially invariant to rho, while VaR 99.9 % moves from
+**19.15 % to 42.02 % of EAD** purely from the correlation assumption. Any
+capital number from this model is only meaningful together with its rho; the repository
+therefore never quotes one in isolation.
 
 ### 8.2 Convergence and variance reduction
 
@@ -421,10 +460,10 @@ and `sim_convergence_stratified.csv`; the loss distribution stabilises as paths 
 |---|---|---|
 | plain | — | — |
 | antithetic | — | **0.18 %** |
-| stratified | — | **0.50 %** |
+| stratified | — | **0.49 %** |
 
 **Finding M-2 (Medium).** **Neither antithetic nor stratified sampling gives a meaningful
-variance reduction here** (0.18 % and 0.50 % respectively). The reason is structural: with
+variance reduction here** (0.18 % and 0.49 % respectively). The reason is structural: with
 ~70 buckets the idiosyncratic per-bucket default noise dominates the single systematic
 factor, so stratifying `Z` barely moves the total-loss variance, and the antithetic pairing
 is a no-op on bucketed binomial draws. A replication test confirms stratified sampling
@@ -439,9 +478,9 @@ likelihood ratio `w(z) = φ(z)/φ(z + shift)` yields an unbiased 99.9 % VaR: a u
 estimator converges to the closed-form Vasicek VaR of an infinitely granular homogeneous
 portfolio, and the factor quantile matching the 99.9 % level (`|Φ⁻¹(0.001)| ≈ 3.09`) is
 reported alongside each run. On the real 70-bucket portfolio the single-run estimates are
-IS $2,120.4M vs naive $2,144.7M (shift 1.5), and — using a **replication-based RMSE study**
-over 40 replications — IS reduces the tail-VaR RMSE by **5.11×** at equal paths (RMSE 9.25M
-vs 47.28M); the batched standard error agrees (SE ratio **0.19×**). The real cost is the
+IS $1,217.3M vs naive $1,231.1M (shift 1.5), and — using a **replication-based RMSE study**
+over 40 replications — IS reduces the tail-VaR RMSE by **5.14×** at equal paths (RMSE 5.24M
+vs 26.95M); the batched standard error agrees (SE ratio **0.19×**). The real cost is the
 effective sample size: it falls to **2,276 of 20,000 paths (11.4 %)**, and pushing the shift
 to the factor quantile (≈ 3.09) collapses it further and biases the weighted quantile
 **upward**, which is why the shift is tuned to 1.5. The shift curve is in
@@ -452,11 +491,11 @@ to the factor quantile (≈ 3.09) collapses it further and biases the weighted q
 
 | Scenario | EAD-weighted PD | Mean LGD | EL | EL % EAD | VaR 99.9 % |
 |---|---|---|---|---|---|
-| baseline | 0.1172 | 0.8625 | $575,061,033 | 10.1 % | $2,124,846,785 |
-| PD +30 % | 0.1523 | 0.8625 | $747,468,417 | 13.2 % | $2,445,639,962 |
-| PD +50 % | 0.1758 | 0.8625 | $862,414,536 | 15.2 % | $2,630,254,724 |
-| LGD +10 % | 0.1172 | 0.9488 | $632,567,136 | 11.2 % | $2,337,331,464 |
-| PD +50 % & LGD +10 % | 0.1758 | 0.9488 | $948,655,990 | 16.7 % | $2,893,280,197 |
+| baseline | 0.1190 | 0.8625 | $332,289,900 | 10.3 % | $1,219,886,285 |
+| PD +30% | 0.1547 | 0.8625 | $431,912,466 | 13.4 % | $1,403,440,325 |
+| PD +50% | 0.1785 | 0.8625 | $498,332,274 | 15.4 % | $1,508,864,286 |
+| LGD +10% | 0.1190 | 0.9487 | $365,518,890 | 11.3 % | $1,341,874,913 |
+| PD +50% & LGD +10% | 0.1785 | 0.9487 | $548,165,501 | 17.0 % | $1,659,750,715 |
 
 **Finding M-4 (Low).** Stress is close to linear in PD and LGD (EL = PD × LGD × EAD), as
 expected. That is a property of the Vasicek formulation, worth stating explicitly to avoid
@@ -471,12 +510,12 @@ over-reading the stress grid.
 | **C-0** | **High** | Testing on the censored 2017–2018 window inflates AUC by +0.0580 (0.7152 vs 0.6572). The primary split now removes this by construction. |
 | **P-2** | **High** | Lender `grade`/`int_rate` add +0.0227 AUC / +0.0455 Gini over our best application-data model, even when the benchmark gets the same wide feature set and recipe. |
 | **L-1 / L-2** | **High** | LGD R² is negative for all three models; the `LGD=1` boundary mass shifts 5.20 % → 26.86 % across windows; LGD is usable only as a grade/portfolio average. |
-| **M-1** | **High** | VaR 99.9 % spans 18.9 %–41.7 % of EAD across the ρ grid; ρ dominates the capital figure. |
+| **M-1** | **High** | VaR 99.9 % spans 19.1 %-42.0 % of EAD across the rho grid; rho dominates the capital figure. |
 | **C-2** | **High** | k-means segmentation separates almost nothing (0.54 pp DR spread); the Gaussian-mixture alternative is materially better (6.28 pp) but still descriptive. |
-| **E-1** | Medium | EL of 10.14 % of EAD reflects a high (~14 %) default rate in a resolved-only sample. |
+| **E-1** | Medium | The superseded funded-basis EL was 10.14 %; EAD at default gives 10.29 % of EAD / 5.86 % of funded. The remaining gap to realised 7.06 % is mostly PD under-prediction. |
 | **P-4** | Medium | Calibration does **not** improve the test-window Brier (raw 0.11950 vs isotonic 0.11970); the model still under-predicts by ~2.3 pp. |
 | **P-1** | Medium | Absolute discrimination is moderate (Gini 0.3144); the tree champion beats the logit scorecard by only +0.0354 AUC. |
-| **M-2** | Medium | Antithetic (+0.18 %) and stratified (+0.50 %) variance reduction are negligible on this bucketed portfolio; importance sampling is the technique that works. |
+| **M-2** | Medium | Antithetic (+0.18 %) and stratified (+0.49 %) variance reduction are negligible on this bucketed portfolio; importance sampling is the technique that works. |
 | **P-3** | Low | Score PSI 0.0145 on the mature window: stable population. |
 | **P-5** | Low | Cutoff is statistical, not economic (32.39 % bad rate among approved). |
 | **S-1** | Low | Accepted-only sample; reject inference now quantifies the gap (+0.058 illustrative PD) but does not fix it. |
@@ -493,7 +532,7 @@ over-reading the stress grid.
 3. **Do not use** the SARIMAX forecast for planning — it loses to naive and ETS benchmarks;
    if vintage trend monitoring is required, restrict it to vintages with a resolved share
    above ~90 % (≤ 2015 here) and always report the naive benchmark alongside.
-4. **Report every capital figure with its ρ**, using the Basel implied ρ (0.0322 at this
+4. **Report every capital figure with its ρ**, using the Basel implied ρ (0.0320 at this
    PD) as the reference and 0.12–0.15 as a stress band.
 5. **Prefer the Gaussian-mixture segmentation** over k-means for any behavioral use, but
    treat it as descriptive — not a calibrated rating.

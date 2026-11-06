@@ -666,7 +666,20 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
         print("Portfolio explorer skipped: empty primary test window")
         return None
 
-    test["ead"] = pd.to_numeric(test["loan_amnt"], errors="coerce").fillna(0.0).clip(lower=0.0)
+    lgd_summary = summary.get("lgd", {})
+    rate_rows = lgd_summary.get("ead_rate_by_grade") or []
+    try:
+        rate_rows = json.load(open(results / "ead_rate_by_grade.json", encoding="utf-8")).get("rates", rate_rows)
+    except OSError:
+        pass
+    ead_rates = {
+        str(row.get("grade")): _finite(row.get("ead_rate_train", row.get("ead_rate")), 1.0)
+        for row in rate_rows
+    }
+    funded_col = "funded_amnt" if "funded_amnt" in test.columns else "loan_amnt"
+    test["funded_amnt"] = pd.to_numeric(test[funded_col], errors="coerce").fillna(0.0).clip(lower=0.0)
+    test["ead_rate"] = test["grade"].astype(str).map(ead_rates).fillna(1.0)
+    test["ead"] = test["funded_amnt"] * test["ead_rate"]
     test["pd_calibrated"] = pd.to_numeric(test.get("pd_calibrated", test["default_flag"]), errors="coerce")
     test["pd_calibrated"] = test["pd_calibrated"].fillna(test["default_flag"]).clip(0.0, 1.0)
     test["default_flag"] = pd.to_numeric(test["default_flag"], errors="coerce").fillna(0).astype(int)
@@ -686,8 +699,8 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
 
     total_n = int(len(test))
     total_ead = float(test["ead"].sum())
+    total_funded = float(test["funded_amnt"].sum())
     total_dr = float(test["default_flag"].mean())
-    lgd_summary = summary.get("lgd", {})
     headline_el = None
     if lgd_summary.get("expected_loss_oot") is not None and lgd_summary.get("ead_total_oot"):
         headline_el = float(lgd_summary["expected_loss_oot"]) / float(lgd_summary["ead_total_oot"])
@@ -863,9 +876,12 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
             "n_total": total_n,
             "default_rate_total": round(total_dr, 8),
             "ead_total": round(total_ead, 2),
+            "funded_total": round(total_funded, 2),
+            "ead_basis": "expected EAD at default = funded_amnt x train grade ead_rate",
             "mean_pd": round(total_pd, 8),
             "mean_lgd": round(effective_lgd, 8),
             "el_pct_ead": round(headline_el, 8),
+            "el_pct_funded": round((total_ead * headline_el) / total_funded, 8) if total_funded else None,
             "el_amount": round(total_ead * headline_el, 2),
             "min_n": 500,
             "score_bins": [round(float(x), 4) for x in score_edges],
@@ -1184,6 +1200,8 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
         "el_rate": pct(lgd.get("el_rate_oot"), 2),
         "el_amount": usdm(lgd.get("expected_loss_oot")),
         "portfolio_ead": usdm(ead),
+        "funded_total": usdm(lgd.get("funded_total_oot")),
+        "el_rate_funded": pct(lgd.get("el_rate_funded_oot"), 2),
         "realized_lgd": f4(lgd.get("realised_lgd_oot")),
         "boundary_train": pct(lgd.get("boundary_rate_train")),
         "boundary_oot": pct(lgd.get("boundary_rate_oot")),
@@ -1335,6 +1353,16 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
             "el_rate_oot": lgd.get("el_rate_oot"),
             "expected_loss_oot": lgd.get("expected_loss_oot"),
             "ead_total_oot": lgd.get("ead_total_oot"),
+            "funded_total_oot": lgd.get("funded_total_oot"),
+            "el_rate_funded_oot": lgd.get("el_rate_funded_oot"),
+            "old_expected_loss_oot": lgd.get("old_expected_loss_oot"),
+            "old_el_rate_oot": lgd.get("old_el_rate_oot"),
+            "realised_loss_oot": lgd.get("realised_loss_oot"),
+            "realised_loss_rate_funded_oot": lgd.get("realised_loss_rate_funded_oot"),
+            "el_to_realised_ratio": lgd.get("el_to_realised_ratio"),
+            "pd_underprediction_pp": lgd.get("pd_underprediction_pp"),
+            "gap_explained_by_pd_share": lgd.get("gap_explained_by_pd_share"),
+            "ead_rate_by_grade": lgd.get("ead_rate_by_grade"),
             "realised_lgd_oot": lgd.get("realised_lgd_oot"),
             "median_lgd_oot": lgd.get("median_lgd_oot"),
             "boundary_rate_train": lgd.get("boundary_rate_train"),

@@ -760,7 +760,7 @@ def _run_pd_window(
         _out["pd_calibrated"] = np.asarray(pd_oot_cal, dtype=float)
         _out["score"] = np.asarray(score_oot, dtype=float)
         _keep = [c for c in ["addr_state", "grade", "purpose", "issue_d", "term",
-                             "home_ownership", "loan_amnt", "default_flag",
+                             "home_ownership", "loan_amnt", "funded_amnt", "default_flag",
                              "pd_raw", "pd_calibrated", "score"] if c in _out.columns]
         from pathlib import Path
         _p = Path(__file__).resolve().parents[1] / "reports" / "results" / "oot_predictions.parquet"
@@ -939,6 +939,26 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
     train_def = defaults.loc[defaults.index.intersection(train.index)]
     oot_def = defaults.loc[defaults.index.intersection(oot.index)]
 
+    # EAD at default is a realised outcome that is only observed on defaults.
+    # Estimate the mean ead_rate on the TRAIN defaults only, then apply it to
+    # every primary-OOT loan. The OOT rate is kept as a diagnostic, never used
+    # to define the exposure.
+    ead_rates_train = lgd_ead.ead_rate_by_grade(train_def)
+    ead_rates_oot = lgd_ead.ead_rate_by_grade(oot_def)
+    ead_rate_table = ead_rates_train.merge(
+        ead_rates_oot, on="grade", how="left", suffixes=("_train", "_oot")
+    )
+    save_table(ead_rate_table.round(6), "ead_rate_by_grade.csv")
+    # Full-precision lookup for the site aggregation; the CSV/summary copies are
+    # rounded for display, but EAD totals must reconcile exactly.
+    save_json(
+        {
+            "basis": "mean ead_rate on train defaults, by grade",
+            "rates": ead_rate_table.to_dict(orient="records"),
+        },
+        "ead_rate_by_grade.json",
+    )
+
     X_tr, y_tr = lgd_ead.prepare_lgd_matrix(train_def, num, cat)
     X_te, y_te = lgd_ead.prepare_lgd_matrix(oot_def, num, cat)
     save_json(
@@ -1041,7 +1061,10 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
 
     pd_raw = np.asarray(pd_result["pd_oot"], dtype=float)
     pd_cal = np.asarray(pd_result.get("pd_oot_calibrated", pd_raw), dtype=float)
-    el_loan = lgd_ead.expected_loss_table(oot_frame, pd_cal, lgd_hat)
+
+    # New basis: EAD at default, using the train grade rate only.
+    oot_ead_frame = lgd_ead.apply_ead_at_default(oot_frame, ead_rates_train)
+    el_loan = lgd_ead.expected_loss_table(oot_ead_frame, pd_cal, lgd_hat)
     el = lgd_ead.aggregate_el(el_loan)
     save_table(el["by_grade"], "el_by_grade.csv")
     save_table(el["portfolio"], "el_portfolio.csv")
@@ -1049,12 +1072,53 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
 
     portfolio = el["portfolio"].iloc[0]
     portfolio_raw_pd = lgd_ead.aggregate_el(
-        lgd_ead.expected_loss_table(oot_frame, pd_raw, lgd_hat)
+        lgd_ead.expected_loss_table(oot_ead_frame, pd_raw, lgd_hat)
     )["portfolio"].iloc[0]
+
+    # Superseded funded-basis EL, retained for reconciliation only.
+    funded_ead = pd.to_numeric(oot_frame["funded_amnt"], errors="coerce").to_numpy()
+    old_el = lgd_ead.aggregate_el(
+        lgd_ead.expected_loss_table(oot_frame, pd_cal, lgd_hat, ead=funded_ead)
+    )
+    old_portfolio = old_el["portfolio"].iloc[0]
+    save_table(old_el["by_grade"], "el_by_grade_funded_superseded.csv")
+
+    # Realised loss uses the observed EAD at default on OOT defaults, and the
+    # funded denominator requested by the validation report.
+    oot_observed = lgd_ead.compute_lgd_ead(oot_frame)
+    realised_defaults = oot_observed["default_flag"].astype(int) == 1
+    realised_loss = float(
+        (
+            oot_observed.loc[realised_defaults, "ead"]
+            - oot_observed.loc[realised_defaults, "recovery_amount"]
+        ).sum()
+    )
+    funded_total = float(funded_ead.sum())
+    new_el = float(portfolio["expected_loss"])
+    observed_dr = float(oot_observed["default_flag"].mean())
+    mean_pd = float(pd_cal.mean())
+    pd_scaled_el = new_el * (observed_dr / mean_pd) if mean_pd > 0 else float("nan")
+    gap = realised_loss - new_el
+    explained = pd_scaled_el - new_el
     return {
         "pd_basis": "champion score, probability-calibrated on a held-out temporal slice",
         "n_defaults_train": int(len(y_tr)),
         "n_defaults_oot": int(len(y_te)),
+        "n_defaults_oot_pd": int(oot["default_flag"].astype(int).sum()),
+        "n_defaults_oot_zero_ead": int(
+            (
+                (oot_observed["default_flag"].astype(int) == 1)
+                & (oot_observed["ead"].fillna(0) <= 0)
+            ).sum()
+        ),
+        "zero_ead_default_ids": [
+            int(x)
+            for x in oot_observed.loc[
+                (oot_observed["default_flag"].astype(int) == 1)
+                & (oot_observed["ead"].fillna(0) <= 0),
+                "id",
+            ].tolist()
+        ],
         "realised_lgd_train": round(float(y_tr.mean()), 4),
         "realised_lgd_oot": round(float(y_te.mean()), 4),
         "median_lgd_oot": round(float(y_te.median()), 4),
@@ -1065,30 +1129,54 @@ def stage_lgd(df: pd.DataFrame, pd_result: Dict[str, Any], cfg: Config) -> Dict[
         "grade_calibration": observed_by_grade,
         "grade_gap_mae": {k: round(v, 5) for k, v in grade_mae.items()},
         "best_lgd_model": best,
+        "ead_basis": "expected EAD at default = funded_amnt x mean train ead_rate by grade",
         "ead_total_oot": round(float(portfolio["ead"]), 2),
+        "funded_total_oot": round(funded_total, 2),
         "mean_pd_oot": round(float(portfolio["mean_pd"]), 4),
         "mean_pd_oot_raw": round(float(portfolio_raw_pd["mean_pd"]), 4),
         "mean_lgd_oot": round(float(portfolio["mean_lgd"]), 4),
-        "expected_loss_oot": round(float(portfolio["expected_loss"]), 2),
+        "expected_loss_oot": round(new_el, 2),
         "expected_loss_oot_raw_pd": round(float(portfolio_raw_pd["expected_loss"]), 2),
         "el_rate_oot": round(float(portfolio["el_rate"]), 4),
+        "el_rate_funded_oot": round(new_el / funded_total, 6) if funded_total else None,
         "el_rate_oot_raw_pd": round(float(portfolio_raw_pd["el_rate"]), 4),
+        "old_expected_loss_oot": round(float(old_portfolio["expected_loss"]), 2),
+        "old_el_rate_oot": round(float(old_portfolio["el_rate"]), 4),
+        "old_ead_total_oot": round(float(old_portfolio["ead"]), 2),
+        "realised_loss_oot": round(realised_loss, 2),
+        "realised_loss_rate_funded_oot": round(realised_loss / funded_total, 6) if funded_total else None,
+        "el_to_realised_ratio": round(new_el / realised_loss, 6) if realised_loss else None,
+        "observed_default_rate_oot": round(observed_dr, 6),
+        "pd_underprediction_pp": round((observed_dr - mean_pd) * 100.0, 4),
+        "pd_scaled_expected_loss_oot": round(pd_scaled_el, 2),
+        "unexplained_gap_oot": round(realised_loss - pd_scaled_el, 2),
+        "gap_explained_by_pd_share": round(explained / gap, 6) if gap else None,
+        "ead_rate_by_grade": ead_rate_table,
         "el_by_grade": el["by_grade"],
+        "el_by_grade_funded_superseded": old_el["by_grade"],
         "lgd_hat_oot": np.asarray(lgd_hat, dtype=float),
+        "ead_oot": oot_ead_frame["ead"].to_numpy(dtype=float),
     }
 
 
 def _summarise_lgd(res: Dict[str, Any]) -> Dict[str, Any]:
     return {k: _jsonable(v) for k, v in res.items() if k in {
-        "pd_basis", "n_defaults_train", "n_defaults_oot", "realised_lgd_train", "realised_lgd_oot",
-        "median_lgd_oot", "boundary_rate_train", "boundary_rate_oot", "best_lgd_model", "ead_total_oot",
-        "mean_pd_oot", "mean_pd_oot_raw", "mean_lgd_oot", "expected_loss_oot", "expected_loss_oot_raw_pd",
-        "el_rate_oot", "el_rate_oot_raw_pd", "grade_gap_mae",
+        "pd_basis", "n_defaults_train", "n_defaults_oot", "n_defaults_oot_pd",
+        "n_defaults_oot_zero_ead", "zero_ead_default_ids", "realised_lgd_train", "realised_lgd_oot",
+        "median_lgd_oot", "boundary_rate_train", "boundary_rate_oot", "best_lgd_model", "ead_basis",
+        "ead_total_oot", "funded_total_oot", "mean_pd_oot", "mean_pd_oot_raw", "mean_lgd_oot",
+        "expected_loss_oot", "expected_loss_oot_raw_pd", "el_rate_oot", "el_rate_funded_oot",
+        "el_rate_oot_raw_pd", "old_expected_loss_oot", "old_el_rate_oot", "old_ead_total_oot",
+        "realised_loss_oot", "realised_loss_rate_funded_oot", "el_to_realised_ratio",
+        "observed_default_rate_oot", "pd_underprediction_pp", "pd_scaled_expected_loss_oot",
+        "unexplained_gap_oot", "gap_explained_by_pd_share", "grade_gap_mae",
     }} | {
         "model_comparison": _records(res["model_comparison"]),
         "portfolio_calibration": _records(res["portfolio_calibration"]),
         "grade_calibration": _records(res["grade_calibration"]),
+        "ead_rate_by_grade": _records(res["ead_rate_by_grade"]),
         "el_by_grade": _records(res["el_by_grade"]),
+        "el_by_grade_funded_superseded": _records(res["el_by_grade_funded_superseded"]),
     }
 
 
@@ -1133,11 +1221,12 @@ def stage_simulation(df: pd.DataFrame, ctx: Dict[str, Any], cfg: Config) -> Dict
     """Single-factor Vasicek loss simulation, convergence, variance reduction, stress."""
     print("[simulation] Monte Carlo portfolio loss distribution ...")
     pd_res, lgd_res = ctx["pd"], ctx["lgd"]
-    oot = pd_res["oot_frame"]
+    oot = pd_res["oot_frame"].copy()
+    oot["ead"] = np.asarray(lgd_res["ead_oot"], dtype=float)
     pd_base = np.asarray(pd_res.get("pd_oot_calibrated", pd_res["pd_oot"]), dtype=float)
 
     portfolio = sim.build_portfolio(
-        oot, pd_base, lgd_res["lgd_hat_oot"], ead_col="funded_amnt", n_detile=10
+        oot, pd_base, lgd_res["lgd_hat_oot"], ead_col="ead", n_detile=10
     )
     save_table(portfolio.summary().round(6), "sim_portfolio_buckets.csv")
     ead_w_pd = float(np.average(portfolio.pd, weights=portfolio.ead))

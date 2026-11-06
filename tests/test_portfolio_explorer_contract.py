@@ -102,6 +102,27 @@ def test_total_reconciles_with_headline_summary(pe, summary):
     assert total["el_amount"] == pytest.approx(summary["lgd"]["expected_loss_oot"], rel=1e-4)
 
 
+def test_ead_at_default_reconciliation(summary):
+    lgd = summary["lgd"]
+    assert lgd["ead_total_oot"] < lgd["funded_total_oot"]
+    assert lgd["expected_loss_oot"] == pytest.approx(
+        lgd["el_rate_oot"] * lgd["ead_total_oot"], rel=5e-4
+    )
+    assert lgd["expected_loss_oot"] == pytest.approx(
+        lgd["el_rate_funded_oot"] * lgd["funded_total_oot"], rel=5e-4
+    )
+    assert lgd["old_expected_loss_oot"] > lgd["expected_loss_oot"]
+    assert lgd["el_to_realised_ratio"] == pytest.approx(
+        lgd["expected_loss_oot"] / lgd["realised_loss_oot"], rel=1e-4
+    )
+    rates = lgd["ead_rate_by_grade"]
+    assert {row["grade"] for row in rates} == set("ABCDEFG")
+    for row in rates:
+        assert 0.0 < row["ead_rate_train"] <= 1.0
+        assert 0.0 < row["ead_rate_oot"] <= 1.0
+    assert lgd["n_defaults_oot"] + lgd["n_defaults_oot_zero_ead"] == lgd["n_defaults_oot_pd"]
+
+
 def test_tilemap_covers_every_state_and_flags_small_n(pe):
     states = pe["tilemap"]["states"]
     state_items = pe["dimensions"]["state"]

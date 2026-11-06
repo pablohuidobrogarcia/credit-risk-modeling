@@ -31,12 +31,12 @@
       "tab": "3 Expected loss",
       "title": "Expected loss",
       "headline": "{el_pct_ead} of EAD",
-      "headline_label": "expected loss on total exposure",
-      "computation": "EL is {el_amount} on {ead_total} of exposure. LGD is {mean_lgd_pct}: about that share is lost when a loan defaults.",
-      "reading": "EL = PD × LGD × EAD, weighted by each loan's exposure; about ${el_per_100} per $100.",
-      "caveat": "The headline is exposure-weighted, not an average PD times LGD.",
+      "headline_label": "expected loss on EAD at default",
+      "computation": "EL is {el_amount} on {ead_total} of EAD. The funded amount is {funded_total}; EL is {el_pct_funded} of funded. LGD is {mean_lgd_pct}.",
+      "reading": "EL = PD × LGD × EAD, where EAD is funded amount × the train grade EAD rate; about ${el_per_100} per $100 of EAD.",
+      "caveat": "EAD at default is estimated on train defaults, not assumed equal to the full funded amount.",
       "visual": "expected-loss",
-      "visual_label": "$100 of exposure"
+      "visual_label": "$100 of EAD"
     }
   ]
 }

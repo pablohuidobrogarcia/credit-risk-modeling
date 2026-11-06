@@ -29,8 +29,11 @@ from .config import project_root
 from .utils import RESULTS_DIR
 
 README_PATH = project_root() / "README.md"
+REPORT_PATH = project_root() / "reports" / "model_validation_report.md"
 START_MARKER = "<!-- RESULTS:START -->"
 END_MARKER = "<!-- RESULTS:END -->"
+EAD_START_MARKER = "<!-- EAD-RECON:START -->"
+EAD_END_MARKER = "<!-- EAD-RECON:END -->"
 
 
 # ---------------------------------------------------------------------------
@@ -236,9 +239,16 @@ def render_results_block(summary: Dict[str, Any]) -> str:
             f"**{_pct(boundary_train)}** train / **{_pct(boundary_oot)}** OOT |"
         )
     if el_amount is not None:
+        funded_total = lgd.get("funded_total_oot")
+        el_rate_funded = lgd.get("el_rate_funded_oot")
+        funded_bit = (
+            f"; {_usd_m(funded_total)} funded -> **{_pct(el_rate_funded)}** of funded"
+            if funded_total is not None and el_rate_funded is not None
+            else ""
+        )
         lines.append(
-            f"| **Expected loss** | **{_usd_m(el_amount)}** on {_usd_m(ead_total)} EAD → "
-            f"**{_pct(el_rate)}** of EAD (primary OOT portfolio) |"
+            f"| **Expected loss** | **{_usd_m(el_amount)}** on {_usd_m(ead_total)} EAD -> "
+            f"**{_pct(el_rate)}** of EAD{funded_bit} (primary OOT portfolio) |"
         )
     if chosen_k is not None:
         lines.append(
@@ -271,7 +281,7 @@ def render_results_block(summary: Dict[str, Any]) -> str:
     if test_count is not None:
         lines.append(
             f"| **Test suite** | **{test_count}** unit tests on synthetic data, "
-            f"`ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |"
+            f"`ruff check .` clean, run on Python 3.10 and 3.11 in CI |"
         )
 
     # Primary vs secondary PD comparison.
@@ -343,6 +353,77 @@ def render_results_block(summary: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_ead_reconciliation(summary: Dict[str, Any]) -> str:
+    """Render the EAD-at-default reconciliation block from ``summary.json``."""
+    lgd = summary.get("lgd", {}) or {}
+    rows = lgd.get("ead_rate_by_grade", []) or []
+    lines = [
+        "#### EAD-at-default reconciliation",
+        "",
+        "**The issue and the fix.** The superseded calculation applied LGD to the full "
+        "funded amount, so it treated every loan as if its entire principal were still "
+        "outstanding at default. LGD is defined on the outstanding principal, so the "
+        "pipeline now estimates a mean EAD rate on **training defaults only** (2010-2013, "
+        "36-month loans) and sets `EAD = funded_amnt x` that grade rate for every primary "
+        "OOT loan. The OOT rate below is a diagnostic, never an input.",
+        "",
+        f"The new EL is {_usd_m(lgd.get('expected_loss_oot'))} ({_pct(lgd.get('el_rate_oot'))} of EAD, "
+        f"{_pct(lgd.get('el_rate_funded_oot'))} of funded). Realised loss on the OOT portfolio is "
+        f"{_usd_m(lgd.get('realised_loss_oot'))} ({_pct(lgd.get('realised_loss_rate_funded_oot'))} of "
+        f"funded); the new EL / realised ratio is {_num(lgd.get('el_to_realised_ratio'), 3)}x. "
+        f"The superseded funded-basis EL was {_usd_m(lgd.get('old_expected_loss_oot'))} "
+        f"({_pct(lgd.get('old_el_rate_oot'))} of funded). Predicted PD is "
+        f"{_num(lgd.get('pd_underprediction_pp'), 2)} pp below the observed default rate, which "
+        f"explains {_pct(lgd.get('gap_explained_by_pd_share'))} of the remaining new-EL gap.",
+        "",
+        f"**Two-row discrepancy.** The PD window has {int(lgd.get('n_defaults_oot_pd') or 0):,} "
+        f"defaults, while the LGD sample has {int(lgd.get('n_defaults_oot') or 0):,}. The "
+        f"{int(lgd.get('n_defaults_oot_zero_ead') or 0)} missing rows are loans "
+        f"{', '.join(str(x) for x in (lgd.get('zero_ead_default_ids') or []))}: both are "
+        "Charged Off after repaying principal in full, so realised EAD and LGD are zero/undefined. "
+        "They are included in PD and default counts, excluded from the LGD fit, and carry zero "
+        "realised loss; the new expected-EAD basis assigns them their grade EAD rate.",
+        "",
+        "| Item | Value |",
+        "|---|---|",
+        f"| Defaults, train / OOT | {sum(int(r.get('n_defaults_train') or 0) for r in rows):,} / "
+        f"{sum(int(r.get('n_defaults_oot') or 0) for r in rows):,} |",
+        f"| EAD at default, OOT | {_usd_m(lgd.get('ead_total_oot'))} |",
+        f"| Funded amount, OOT | {_usd_m(lgd.get('funded_total_oot'))} |",
+        f"| Realised loss on funded basis | {_usd_m(lgd.get('realised_loss_oot'))} "
+        f"({_pct(lgd.get('realised_loss_rate_funded_oot'))} of funded) |",
+        f"| EL, EAD basis (current) | {_usd_m(lgd.get('expected_loss_oot'))} "
+        f"({_pct(lgd.get('el_rate_oot'))} of EAD; {_pct(lgd.get('el_rate_funded_oot'))} of funded) |",
+        f"| EL, funded basis (superseded) | {_usd_m(lgd.get('old_expected_loss_oot'))} "
+        f"({_pct(lgd.get('old_el_rate_oot'))} of funded) |",
+        f"| New EL / realised loss | {_num(lgd.get('el_to_realised_ratio'), 3)}x |",
+        f"| PD under-prediction (observed - predicted) | {_num(lgd.get('pd_underprediction_pp'), 2)} pp |",
+        f"| PD-scaled EL / unexplained gap | {_usd_m(lgd.get('pd_scaled_expected_loss_oot'))} / "
+        f"{_usd_m(lgd.get('unexplained_gap_oot'))} |",
+        f"| Share of new-EL gap explained by PD under-prediction | "
+        f"{_pct(lgd.get('gap_explained_by_pd_share'))} |",
+        "",
+        "| Grade | Train defaults | Train EAD rate | OOT defaults | OOT EAD rate (diagnostic) |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row.get('grade')} | {int(row.get('n_defaults_train') or 0):,} | "
+            f"{_pct(row.get('ead_rate_train'))} | {int(row.get('n_defaults_oot') or 0):,} | "
+            f"{_pct(row.get('ead_rate_oot'))} |"
+        )
+    return "\n".join(lines)
+
+
+_EAD_MARKER_RE = re.compile(
+    re.escape(EAD_START_MARKER) + r".*?" + re.escape(EAD_END_MARKER), re.DOTALL
+)
+
+
+def render_ead_with_markers(summary: Dict[str, Any]) -> str:
+    return f"{EAD_START_MARKER}\n{render_ead_reconciliation(summary)}\n{EAD_END_MARKER}"
+
+
 # ---------------------------------------------------------------------------
 # Documentation IO
 # ---------------------------------------------------------------------------
@@ -363,17 +444,36 @@ def sync_docs(summary: Dict[str, Any] | None = None, path: Path | None = None) -
     Raises ``ValueError`` if the markers are missing.
     """
     summary = summary or load_summary()
-    target = path or README_PATH
-    text = target.read_text(encoding="utf-8")
-    if not _MARKER_RE.search(text):
-        raise ValueError(
-            f"Markers {START_MARKER} / {END_MARKER} not found in {target}"
-        )
-    new_text = _MARKER_RE.sub(lambda _: render_with_markers(summary), text, count=1)
-    if new_text == text:
-        return False
-    target.write_text(new_text, encoding="utf-8", newline="\n")
-    return True
+    if path is not None:
+        target = path
+        text = target.read_text(encoding="utf-8")
+        if not _MARKER_RE.search(text):
+            raise ValueError(f"Markers {START_MARKER} / {END_MARKER} not found in {target}")
+        new_text = _MARKER_RE.sub(lambda _: render_with_markers(summary), text, count=1)
+        if new_text == text:
+            return False
+        target.write_text(new_text, encoding="utf-8", newline="\n")
+        return True
+
+    changed = False
+    readme = README_PATH.read_text(encoding="utf-8")
+    if not _MARKER_RE.search(readme):
+        raise ValueError(f"Markers {START_MARKER} / {END_MARKER} not found in {README_PATH}")
+    new_readme = _MARKER_RE.sub(lambda _: render_with_markers(summary), readme, count=1)
+    if _EAD_MARKER_RE.search(new_readme):
+        new_readme = _EAD_MARKER_RE.sub(lambda _: render_ead_with_markers(summary), new_readme, count=1)
+    if new_readme != readme:
+        README_PATH.write_text(new_readme, encoding="utf-8", newline="\n")
+        changed = True
+
+    if REPORT_PATH.exists():
+        report = REPORT_PATH.read_text(encoding="utf-8")
+        if _EAD_MARKER_RE.search(report):
+            new_report = _EAD_MARKER_RE.sub(lambda _: render_ead_with_markers(summary), report, count=1)
+            if new_report != report:
+                REPORT_PATH.write_text(new_report, encoding="utf-8", newline="\n")
+                changed = True
+    return changed
 
 
 def check_docs(summary: Dict[str, Any] | None = None, path: Path | None = None) -> str:
@@ -405,6 +505,22 @@ def check_docs(summary: Dict[str, Any] | None = None, path: Path | None = None) 
             "README results block is out of sync with summary.json.\n"
             "Run `python -m src.report_tables --write` to regenerate it.\n\n" + diff
         )
+    if path is None:
+        ead_expected = render_ead_with_markers(summary)
+        for target in (README_PATH, REPORT_PATH):
+            if not target.exists():
+                continue
+            body = target.read_text(encoding="utf-8")
+            ead_match = _EAD_MARKER_RE.search(body)
+            if not ead_match:
+                raise AssertionError(
+                    f"EAD markers {EAD_START_MARKER} / {EAD_END_MARKER} not found in {target}"
+                )
+            if ead_match.group(0) != ead_expected:
+                raise AssertionError(
+                    f"EAD reconciliation block is out of sync in {target}.\n"
+                    "Run `python -m src.report_tables --write` to regenerate it."
+                )
     return expected
 
 

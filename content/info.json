@@ -1,79 +1,31 @@
 {
-  "dimension-tabs": {
-    "title": "Dimension tabs",
-    "text": "These tabs change the whole explorer. State shows a US tile map; other dimensions show one tile per segment. Every tab uses the same primary mature test window: {primary_window}, {n_oot} resolved loans.",
-    "try": "Switch to Grade, then click the tile with the highest expected loss.",
-    "term": "primary-window"
-  },
-  "metric-tabs": {
-    "title": "Color metric",
-    "text": "The color metric decides how tiles and bars are ordered and colored. Observed default is what actually happened; predicted PD is the model's calibrated estimate; expected loss combines PD, LGD and EAD.",
-    "try": "Choose Predicted PD and compare the ranking with observed default.",
-    "term": "pd"
-  },
-  "map": {
-    "title": "Segment map",
-    "text": "Click a tile to see its details.",
-    "try": "Select California and compare its 95% interval with a small state.",
-    "term": "small-segment-masking"
-  },
   "ranked-list": {
     "title": "Ranked segments",
-    "text": "This list sorts the same segments by the selected metric. Longer bars mean a higher value on that metric. A row and its map tile stay linked, so clicking either one selects the same segment.",
+    "text": "A row and its map shape or staircase step stay linked, so clicking either selects the same segment.",
     "try": "Click the top row, then use the browser Back button.",
     "term": "default"
   },
   "filter": {
     "title": "Filter segments",
     "text": "Type part of a state, grade, purpose, vintage, term or home-ownership label. The filter only hides rows; it does not change the selected segment or the portfolio totals.",
-    "try": "Type CA, then clear the box.",
+    "try": "Type California, then clear the box.",
     "term": "loan"
-  },
-  "kpi-loans": {
-    "title": "Resolved loans (2007–2018)",
-    "text": "This is the full analysis sample: {n_rows} loans with a final outcome anywhere in the 2007–2018 snapshot. It is not the same as the primary test window.",
-    "try": "Compare it with the {n_oot} loans in the explorer below.",
-    "term": "resolved-loan"
-  },
-  "kpi-observed": {
-    "title": "Observed default rate",
-    "text": "The share of loans in the segment that ended as Charged Off or Default. This is a descriptive historical rate, not a causal effect and not a forecast.",
-    "try": "Select a segment and compare its rate with the portfolio rate of {default_rate_oot}.",
-    "term": "default"
   },
   "kpi-ci": {
     "title": "95% confidence interval",
     "text": "The Wilson interval shows the sampling uncertainty around the observed default rate. A small segment can have a wide interval even when its point estimate looks dramatic.",
-    "try": "Select a state with fewer than {min_n} loans and compare its interval width.",
+    "try": "Select a small state and compare its interval with the portfolio in Selection.",
     "term": "wilson-ci"
   },
-  "kpi-pd": {
-    "title": "Predicted PD",
-    "text": "The mean calibrated probability of default for the segment. It is a model output on the mature test window, not the observed default rate; the two can differ.",
-    "try": "Switch between Observed default and Predicted PD and watch the ranking move.",
-    "term": "pd"
-  },
-  "kpi-el": {
-    "title": "Expected loss % of EAD",
-    "text": "Expected loss is PD × LGD, expressed as a share of exposure. It turns a probability into an average loss estimate. The portfolio total is reconciled to the headline EL rate of {el_rate}.",
-    "try": "Compare the selected segment with the portfolio total.",
-    "term": "el"
-  },
-  "kpi-ead": {
-    "title": "EAD share",
-    "text": "Exposure at default is the loan amount at risk. EAD share shows how much of the portfolio's exposure sits in this segment; a high default rate in a tiny segment may matter less than a small rate in a large one.",
-    "try": "Find the segment with the largest EAD share.",
-    "term": "ead"
-  },
-  "score-distribution": {
-    "title": "Score distribution",
-    "text": "The bars count test-window loans by scorecard score for the selected segment. Higher scores mean lower risk. The shape matters: two segments with the same average can have very different tails.",
-    "try": "Compare the distribution of a high-loss grade with the portfolio.",
-    "term": "score"
+  "model-check": {
+    "title": "Model check",
+    "text": "Compares the model's predicted PD with the observed default of this segment. Outside the interval means the model is miscalibrated here.",
+    "try": "Find a segment where predicted PD sits outside the interval.",
+    "term": "calibration"
   },
   "risk-rho": {
     "title": "Asset correlation (ρ)",
-    "text": "ρ controls how much loans move together through the systematic factor. A higher ρ makes defaults cluster in bad years and pushes the tail of the loss distribution up. The slider snaps to a precomputed grid.",
+    "text": "ρ controls how much loans move together through the systematic factor. A higher ρ makes defaults cluster in bad years and pushes the tail of the loss distribution up.",
     "try": "Drag ρ from its base case toward the right and watch VaR 99.9%.",
     "term": "rho"
   },
@@ -85,109 +37,67 @@
   },
   "risk-lgd": {
     "title": "LGD stress",
-    "text": "This multiplies loss given default before simulation. It asks what happens if recoveries are worse than the portfolio-level assumption. PD stress and LGD stress can be combined.",
+    "text": "This multiplies loss given default before simulation. It asks what happens if recoveries are worse than the portfolio-level assumption.",
     "try": "Raise both PD and LGD stress and watch the loss histogram shift right.",
     "term": "lgd"
   },
   "play-rho": {
     "title": "Play the rho sweep",
-    "text": "The sweep moves ρ through the precomputed grid so you can see the tail respond. It does not re-simulate in the browser. With reduced motion enabled it advances one step per activation instead of animating.",
+    "text": "The sweep moves ρ through the precomputed grid so you can see the tail respond. It does not re-simulate in the browser.",
     "try": "Start the sweep, then pause it on a high-ρ point.",
     "term": "rho"
   },
-  "risk-el": {
-    "title": "Expected loss in the simulation",
-    "text": "The average loss across simulated paths. It should sit near the headline expected loss; small differences come from the finite number of paths and the scenario grid.",
-    "try": "Compare this with the headline EL of {el_rate}.",
-    "term": "el"
-  },
-  "risk-ul": {
-    "title": "Unexpected loss",
-    "text": "The standard deviation of simulated losses around expected loss. It measures how much the loss typically varies, before looking at the extreme tail.",
-    "try": "Increase PD stress and watch UL rise.",
-    "term": "ul"
-  },
-  "risk-var99": {
-    "title": "VaR 99%",
-    "text": "In 99 of 100 simulated years, the portfolio loss stays below this share of EAD. It is a quantile of the simulated loss distribution, not a maximum possible loss.",
-    "try": "Compare VaR 99% with VaR 99.9%.",
-    "term": "var"
-  },
-  "risk-var999": {
-    "title": "VaR 99.9%",
-    "text": "In 999 of 1,000 simulated years, the portfolio loss stays below this share of EAD. It is more sensitive to the tail and to asset correlation than VaR 99%.",
-    "try": "Move ρ and watch how much more VaR 99.9% changes than VaR 99%.",
-    "term": "var"
-  },
-  "risk-es99": {
-    "title": "Expected Shortfall 99%",
-    "text": "The average loss in the worst 1% of simulated years. Unlike VaR, ES averages the tail instead of stopping at one quantile.",
-    "try": "Compare ES 99% with VaR 99%.",
-    "term": "es"
-  },
-  "risk-es999": {
-    "title": "Expected Shortfall 99.9%",
-    "text": "The average loss in the worst 0.1% of simulated years. This is the most tail-sensitive number in the Risk Lab.",
-    "try": "Raise ρ and PD stress together and watch ES 99.9%.",
-    "term": "es"
-  },
   "gauge": {
     "title": "VaR gauge",
-    "text": "The gauge places VaR 99.9% on a 0–60% loss scale so the current scenario has a visual reference. The scale is descriptive; it is not a regulatory limit or an appetite statement.",
-    "try": "Use the surface to pick a high-stress point and watch the needle.",
+    "text": "The gauge puts the current VaR 99.9% on a fixed 0–60% loss scale. It is a visual reference, not a regulatory limit or an appetite statement.",
+    "try": "Use the sliders to pick a high-stress scenario and watch the needle.",
     "term": "var"
   },
   "loss-histogram": {
     "title": "Loss distribution",
-    "text": "Each bar counts simulated portfolio losses for the current scenario. The vertical lines mark EL, VaR 99%, VaR 99.9% and ES 99%; the legend lists their values so the labels never collide.",
+    "text": "Each bar counts simulated portfolio losses for the current scenario. The vertical lines mark EL, VaR 99%, VaR 99.9%, ES 99% and ES 99.9%; the legend lists their values so the labels never collide.",
     "try": "Increase LGD stress and see how far the whole distribution moves right.",
     "term": "loss-distribution"
   },
+  "gauge-ratio": {
+    "title": "VaR / EL ratio",
+    "text": "VaR 99.9% divided by expected loss for the same scenario. It shows how far the bad-year tail sits above the average simulated loss.",
+    "try": "Move PD or LGD stress and watch both the ratio and the gauge.",
+    "term": "var"
+  },
   "surface": {
     "title": "VaR surface",
-    "text": "The surface shows the selected risk metric across ρ and PD stress on the precomputed grid. The dark marker is the current scenario and the outlined marker is the base case. Click or tap a point to move the sliders.",
-    "try": "Click a high-ρ, high-PD point and then read the histogram.",
+    "text": "The surface shows the selected risk metric across ρ and PD stress on the precomputed grid. The dark marker is the current scenario and the outlined marker is the base case. It does not change the sliders.",
+    "try": "Rotate the surface to a high-ρ, high-PD corner, then use the sliders and read the histogram.",
     "term": "vasicek"
   },
   "surface-metric": {
     "title": "Surface metric",
-    "text": "Switch the vertical axis between VaR 99.9%, ES 99.9% and expected loss. The surface uses the same simulation grid, so only the displayed metric changes.",
+    "text": "All three options use the same simulation grid, so only the displayed metric changes.",
     "try": "Compare the shape of EL with the shape of ES 99.9%.",
     "term": "var"
   },
-  "sim-annual_inc": {
-    "title": "Annual income",
-    "text": "Gross yearly income reported at application. In the scorecard, higher income generally earns more points because it is associated with lower observed risk.",
-    "try": "Choose the typical preset, then lower income one bin.",
-    "term": "annual-income"
-  },
   "sim-dti": {
     "title": "Debt-to-income ratio",
-    "text": "Monthly debt payments divided by monthly income. Higher DTI means less room for a new payment; the scorecard contribution reflects that relationship.",
+    "text": "Higher DTI means less room for a new payment; the scorecard contribution reflects that relationship.",
     "try": "Move DTI up and watch the point contribution change.",
     "term": "dti"
   },
   "sim-revol_util": {
     "title": "Credit card utilization",
-    "text": "The share of available revolving credit currently used. High utilization is associated with higher observed risk in this project.",
+    "text": "High utilization is associated with higher observed risk in this project.",
     "try": "Compare low and high utilization presets.",
     "term": "revolving-utilization"
   },
   "sim-inq_last_6mths": {
     "title": "Credit inquiries",
-    "text": "How many lenders checked the applicant's credit in the last six months. More inquiries are associated with higher risk here.",
+    "text": "More inquiries are associated with higher risk here.",
     "try": "Set inquiries to the highest bin and read the score.",
     "term": "scorecard"
   },
-  "sim-home_ownership": {
-    "title": "Home ownership",
-    "text": "Whether the applicant rents, owns, or has a mortgage. Categories are ordered by frequency in the test window; the score impact comes from the published points table.",
-    "try": "Compare Rent with Mortgage.",
-    "term": "home-ownership"
-  },
   "sim-purpose": {
     "title": "Loan purpose",
-    "text": "The reason the borrower gave for the loan. Categories are grouped into the published scorecard bins, with rare categories combined under “Other / rare categories.”",
+    "text": "Categories are grouped into the published scorecard bins, with rare categories combined under “Other / rare categories.”",
     "try": "Compare Debt consolidation with Credit card.",
     "term": "loan-purpose"
   },
@@ -197,35 +107,17 @@
     "try": "Raise the payment share and watch the score fall.",
     "term": "dti"
   },
-  "sim-score": {
-    "title": "Score",
-    "text": "The score adds a fixed base to the points for each selected bin. Higher score means lower implied risk. The breakdown below the result lists every contribution.",
-    "try": "Open “Why this score?” and check the arithmetic.",
-    "term": "score"
-  },
-  "sim-pd": {
-    "title": "Implied PD",
-    "text": "The score is mapped to a probability of default through the published scorecard scaling. The text also translates it into “about N out of 100 similar applicants” and compares it with the portfolio default rate of {default_rate_oot}.",
-    "try": "Compare the typical and higher-risk presets.",
-    "term": "pd"
-  },
-  "sim-percentile": {
-    "title": "Percentile",
-    "text": "This says how many test-window loans have a lower score. It is phrased as “scores higher than X%” so the direction is unambiguous: a higher percentile is better.",
-    "try": "Move one input and watch the percentile shift.",
-    "term": "percentile"
-  },
-  "sim-breakdown": {
-    "title": "Why this score?",
-    "text": "The breakdown lists the fixed base points and each variable's contribution. The base plus every contribution equals the displayed score, so the arithmetic is auditable.",
-    "try": "Change one input and confirm that only its row moves.",
-    "term": "points"
-  },
   "sim-presets": {
     "title": "Applicant presets",
-    "text": "Typical picks the most common test-window bin for each variable. Lower-risk picks the highest-points bin; higher-risk picks the lowest-points bin; Reset returns to Typical.",
+    "text": "Typical picks the most common test-window bin; lower-risk picks the highest-points bin; higher-risk picks the lowest-points bin.",
     "try": "Load Lower-risk, then Higher-risk, and compare the PD.",
     "term": "scorecard"
+  },
+  "cutoff-tabs": {
+    "title": "Cutoff diagnostics",
+    "text": "The Trade-off tab plots approval and approved bad rates against the cutoff. The KS curve plots cumulative good and bad shares; the largest gap is the binned KS statistic.",
+    "try": "Move the cutoff and compare the dots with the KPI cards.",
+    "term": "ks"
   },
   "cutoff-slider": {
     "title": "Score cutoff",
@@ -233,34 +125,40 @@
     "try": "Find the approximate cutoff where the bad rate rises sharply.",
     "term": "cutoff"
   },
-  "cutoff-approval": {
-    "title": "Approval rate",
-    "text": "The share of test-window loans that would be approved at this cutoff. It is a historical what-if, not a business decision.",
-    "try": "Compare this with “approve everyone.”",
-    "term": "approval-rate"
+  "state-map": {
+    "title": "US state map",
+    "text": "Hovering shows only the state name; hatched states cannot be selected, and the Selection block holds the numbers.",
+    "try": "Select California and read its observed default, interval and rank in Selection.",
+    "term": "default"
   },
-  "cutoff-bad": {
-    "title": "Bad rate (approved)",
-    "text": "The default rate among approved loans at this cutoff. A higher cutoff usually lowers this number but also rejects more good borrowers.",
-    "try": "Compare it with the overall default rate.",
-    "term": "bad-rate"
+  "grade-staircase": {
+    "title": "Grade risk staircase",
+    "text": "Step height and color show observed default by grade. Hovering shows only the grade; clicking or tapping a step links it to the ranked list and Selection.",
+    "try": "Compare grade A with grade F, then read the Selection block.",
+    "term": "grade"
   },
-  "cutoff-approved-good": {
-    "title": "Approved good loans",
-    "text": "Loans that would be approved and did not default. This is the good volume retained by the cutoff.",
-    "try": "Raise the cutoff and watch this count fall.",
-    "term": "confusion-matrix"
+  "map-zoom": {
+    "title": "Map zoom",
+    "text": "Ctrl + scroll or pinch zooms between 1x and 6x. Drag to pan, double-click to zoom in, or use the +, − and reset buttons. With the map focused, + / − / 0 also work. Zoom resets when you leave State.",
+    "try": "Zoom into the northeast and select a small state.",
+    "term": "small-segment-masking"
   },
-  "cutoff-approved-bad": {
-    "title": "Approved bad loans",
-    "text": "Loans that would be approved and did default. These are the false negatives of the approval rule from the lender's perspective.",
-    "try": "Lower the cutoff and watch this count rise.",
-    "term": "confusion-matrix"
+  "small-states": {
+    "title": "Small states",
+    "text": "The compact strip repeats states that are too small to read reliably on the map. Hovering shows the full name; clicking selects the same segment as its map shape.",
+    "try": "Use the strip to select Rhode Island, then read its numbers in Selection.",
+    "term": "small-segment-masking"
   },
-  "provenance": {
-    "title": "How do we know?",
-    "text": "Opens the provenance drawer: data source, window, sample size, formulas, small-n masking and the limitations that remain. It is the audit trail for the numbers on screen.",
-    "try": "Read the limitations before quoting a segment.",
-    "term": "dashboard"
+  "masked-states": {
+    "title": "Masked states",
+    "text": "Hatching marks segments with fewer than {min_n} loans. Their rates are too noisy to rank, so they are not selectable and do not receive a fill color. Hovering or focusing shows only the state name; the Selection block holds the numbers.",
+    "try": "Hover Iowa for its name, then select California to compare the figures in Selection.",
+    "term": "small-segment-masking"
+  },
+  "el-note": {
+    "title": "Expected loss ranking",
+    "text": "Expected loss is PD x LGD x EAD, where EAD is the expected outstanding principal at default. The portfolio total is {el_amount} on {portfolio_ead} of EAD, so it ranks segments almost like Predicted PD.",
+    "try": "Switch between Expected loss and Predicted PD and compare the order.",
+    "term": "el"
   }
 }

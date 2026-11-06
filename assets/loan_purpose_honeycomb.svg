@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 432" width="800" height="432" class="loan-purpose-honeycomb" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <polygon id="hexshape" points="0,-78 67.5,-39 67.5,39 0,78 -67.5,39 -67.5,-39"/>
+
+    <!-- Iconos: heredan trazo/relleno del elemento que los usa -->
+    <g id="ic-small_business">
+      <path d="M-20 -6 L-16 -20 H16 L20 -6 Q15 2 10 -6 Q5 2 0 -6 Q-5 2 -10 -6 Q-15 2 -20 -6 Z"/>
+      <path d="M-16 -1 V18 H16 V-1"/>
+      <rect x="-5" y="4" width="10" height="14"/>
+    </g>
+    <g id="ic-renewable_energy">
+      <circle cx="0" cy="-4" r="3" fill="currentColor"/>
+      <line x1="0" y1="-4" x2="0" y2="-24"/>
+      <line x1="0" y1="-4" x2="-17" y2="6"/>
+      <line x1="0" y1="-4" x2="17" y2="6"/>
+      <path d="M0 -1 V22 M-9 22 H9"/>
+    </g>
+    <g id="ic-house">
+      <path d="M-22 -2 L0 -22 L22 -2"/>
+      <path d="M-16 -6 V20 H16 V-6"/>
+      <rect x="-5" y="4" width="10" height="16"/>
+    </g>
+    <g id="ic-moving">
+      <rect x="-22" y="-14" width="26" height="22"/>
+      <path d="M4 -6 H14 L22 2 V8 H4 Z"/>
+      <circle cx="-11" cy="12" r="4.5" fill="currentColor"/>
+      <circle cx="14" cy="12" r="4.5" fill="currentColor"/>
+    </g>
+    <g id="ic-medical">
+      <path d="M-6 -22 H6 V-6 H22 V6 H6 V22 H-6 V6 H-22 V-6 H-6 Z"/>
+    </g>
+    <g id="ic-other">
+      <circle cx="0" cy="0" r="22"/>
+      <circle cx="-10" cy="0" r="2.6" fill="currentColor"/>
+      <circle cx="0" cy="0" r="2.6" fill="currentColor"/>
+      <circle cx="10" cy="0" r="2.6" fill="currentColor"/>
+    </g>
+    <g id="ic-vacation">
+      <path d="M-22 -4 A22 20 0 0 1 22 -4 Z"/>
+      <line x1="0" y1="-4" x2="0" y2="20"/>
+      <path d="M-16 23 Q0 15 16 23"/>
+    </g>
+    <g id="ic-debt_consolidation">
+      <line x1="-22" y1="-16" x2="-2" y2="0"/>
+      <line x1="-22" y1="0" x2="-2" y2="0"/>
+      <line x1="-22" y1="16" x2="-2" y2="0"/>
+      <line x1="-2" y1="0" x2="20" y2="0"/>
+      <polyline points="12,-8 20,0 12,8"/>
+    </g>
+    <g id="ic-major_purchase">
+      <rect x="-17" y="-8" width="34" height="30" rx="3"/>
+      <path d="M-8 -8 V-14 A8 8 0 0 1 8 -14 V-8"/>
+    </g>
+    <g id="ic-home_improvement">
+      <g transform="rotate(45)">
+        <rect x="-3.5" y="-4" width="7" height="30"/>
+        <rect x="-15" y="-16" width="30" height="12" fill="currentColor"/>
+      </g>
+    </g>
+    <g id="ic-car">
+      <path d="M-24 8 V-1 L-16 -3 L-9 -14 H9 L16 -3 L24 -1 V8 Z"/>
+      <circle cx="-12" cy="9" r="5.5" fill="currentColor"/>
+      <circle cx="12" cy="9" r="5.5" fill="currentColor"/>
+    </g>
+    <g id="ic-credit_card">
+      <rect x="-24" y="-15" width="48" height="30" rx="4"/>
+      <rect x="-24" y="-8" width="48" height="8" fill="currentColor"/>
+      <line x1="-17" y1="8" x2="-5" y2="8"/>
+    </g>
+    <g id="ic-wedding">
+      <circle cx="-9" cy="6" r="12"/>
+      <circle cx="9" cy="6" r="12"/>
+      <polygon points="0,-24 6,-17 0,-10 -6,-17" fill="currentColor"/>
+    </g>
+    <g id="ic-educational">
+      <polygon points="0,-18 -25,-7 0,4 25,-7"/>
+      <path d="M-13 -1 V11 Q0 19 13 11 V-1"/>
+      <line x1="25" y1="-7" x2="25" y2="9"/>
+    </g>
+  </defs>
+
+  <style>
+    .loan-purpose-honeycomb .hex { cursor: pointer; outline: none; }
+    .loan-purpose-honeycomb .hex .bg { fill: transparent; stroke: #000000; stroke-width: 3; transition: fill .15s, stroke-width .15s; }
+    .loan-purpose-honeycomb .hex .ic { color: #000000; stroke: #000000; fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+    .loan-purpose-honeycomb .hex .lbl { font-size: 12px; font-weight: 700; fill: #000000; text-anchor: middle; letter-spacing: .3px; }
+    .loan-purpose-honeycomb .hex:hover .bg, .loan-purpose-honeycomb .hex:focus .bg { fill: rgba(0,0,0,0.08); stroke-width: 5; }
+  </style>
+
+  <rect width="800" height="432" fill="#ffffff"/>
+
+  <!-- ============ FILA 1 ============ -->
+  <a href="#small_business" id="small_business" data-category="small_business"><g class="hex" transform="translate(108 90)">
+    <title>Small Business</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-small_business" class="ic" transform="translate(0 -24)"/>
+    <text class="lbl" y="22"><tspan x="0">Small</tspan><tspan x="0" dy="15">business</tspan></text>
+  </g></a>
+
+  <a href="#renewable_energy" id="renewable_energy" data-category="renewable_energy"><g class="hex" transform="translate(254 90)">
+    <title>Renewable Energy</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-renewable_energy" class="ic" transform="translate(0 -24)"/>
+    <text class="lbl" y="22"><tspan x="0">Renewable</tspan><tspan x="0" dy="15">energy</tspan></text>
+  </g></a>
+
+  <a href="#house" id="house" data-category="house"><g class="hex" transform="translate(400 90)">
+    <title>House</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-house" class="ic" transform="translate(0 -20)"/>
+    <text class="lbl" y="34"><tspan x="0">House</tspan></text>
+  </g></a>
+
+  <a href="#moving" id="moving" data-category="moving"><g class="hex" transform="translate(546 90)">
+    <title>Moving</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-moving" class="ic" transform="translate(0 -20)"/>
+    <text class="lbl" y="34"><tspan x="0">Moving</tspan></text>
+  </g></a>
+
+  <a href="#medical" id="medical" data-category="medical"><g class="hex" transform="translate(692 90)">
+    <title>Medical</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-medical" class="ic" transform="translate(0 -20)"/>
+    <text class="lbl" y="34"><tspan x="0">Medical</tspan></text>
+  </g></a>
+
+  <!-- ============ FILA 2 ============ -->
+  <a href="#other" id="other" data-category="other"><g class="hex" transform="translate(181 216)">
+    <title>Other</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-other" class="ic" transform="translate(0 -20)"/>
+    <text class="lbl" y="34"><tspan x="0">Other</tspan></text>
+  </g></a>
+
+  <a href="#vacation" id="vacation" data-category="vacation"><g class="hex" transform="translate(327 216)">
+    <title>Vacation</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-vacation" class="ic" transform="translate(0 -22)"/>
+    <text class="lbl" y="34"><tspan x="0">Vacation</tspan></text>
+  </g></a>
+
+  <a href="#debt_consolidation" id="debt_consolidation" data-category="debt_consolidation"><g class="hex" transform="translate(473 216)">
+    <title>Debt Consolidation</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-debt_consolidation" class="ic" transform="translate(0 -24)"/>
+    <text class="lbl" y="22"><tspan x="0">Debt</tspan><tspan x="0" dy="15">consolidation</tspan></text>
+  </g></a>
+
+  <a href="#major_purchase" id="major_purchase" data-category="major_purchase"><g class="hex" transform="translate(619 216)">
+    <title>Major Purchase</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-major_purchase" class="ic" transform="translate(0 -24)"/>
+    <text class="lbl" y="22"><tspan x="0">Major</tspan><tspan x="0" dy="15">purchase</tspan></text>
+  </g></a>
+
+  <!-- ============ FILA 3 ============ -->
+  <a href="#home_improvement" id="home_improvement" data-category="home_improvement"><g class="hex" transform="translate(108 342)">
+    <title>Home Improvement</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-home_improvement" class="ic" transform="translate(0 -24)"/>
+    <text class="lbl" y="22"><tspan x="0">Home</tspan><tspan x="0" dy="15">improvement</tspan></text>
+  </g></a>
+
+  <a href="#car" id="car" data-category="car"><g class="hex" transform="translate(254 342)">
+    <title>Car</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-car" class="ic" transform="translate(0 -20)"/>
+    <text class="lbl" y="34"><tspan x="0">Car</tspan></text>
+  </g></a>
+
+  <a href="#credit_card" id="credit_card" data-category="credit_card"><g class="hex" transform="translate(400 342)">
+    <title>Credit Card</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-credit_card" class="ic" transform="translate(0 -24)"/>
+    <text class="lbl" y="22"><tspan x="0">Credit</tspan><tspan x="0" dy="15">card</tspan></text>
+  </g></a>
+
+  <a href="#wedding" id="wedding" data-category="wedding"><g class="hex" transform="translate(546 342)">
+    <title>Wedding</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-wedding" class="ic" transform="translate(0 -20)"/>
+    <text class="lbl" y="34"><tspan x="0">Wedding</tspan></text>
+  </g></a>
+
+  <a href="#educational" id="educational" data-category="educational"><g class="hex" transform="translate(692 342)">
+    <title>Educational</title>
+    <use href="#hexshape" class="bg"/>
+    <use href="#ic-educational" class="ic" transform="translate(0 -20)"/>
+    <text class="lbl" y="34"><tspan x="0">Educational</tspan></text>
+  </g></a>
+</svg>

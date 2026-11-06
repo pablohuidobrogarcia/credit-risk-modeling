@@ -14,7 +14,7 @@
 <meta property="og:url" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/">
 <meta property="og:image" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/assets/og-card.png">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232563eb'/%3E%3Cpath d='M7 22l5-7 4 4 3-5 6 8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f2937'/%3E%3Cpath d='M7 22l5-7 4 4 3-5 6 8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/site.css">
 <noscript><style>#app-skeleton{display:none!important}#app-content[hidden]{display:block!important}</style></noscript>
 </head>
@@ -25,13 +25,10 @@
   <div class="topbar-inner">
     <a class="brand" href="#top" aria-label="Credit Risk Studio home">
       <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="9" fill="url(#bg)"/><path d="M7 22l5-7 4 4 3-5 6 8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2563eb"/><stop offset="1" stop-color="#0d9488"/></linearGradient></defs></svg>
+        <svg viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="9" fill="url(#bg)"/><path d="M7 22l5-7 4 4 3-5 6 8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop style="stop-color:var(--lilac)"/><stop offset="1" style="stop-color:var(--teal)"/></linearGradient></defs></svg>
       </span>
       <span>Credit Risk <em>Studio</em></span>
     </a>
-    <div class="topbar-actions">
-      <button class="text-btn" id="provenance-btn" type="button"><span class="label-long">How do we know?</span><span class="label-short">Why?</span></button>
-    </div>
   </div>
 </header>
 
@@ -51,9 +48,7 @@
           <p class="eyebrow">Portfolio intelligence · Lending Club snapshot</p>
           <h1 id="hero-title">Where does the loss <span class="grad-text">actually live?</span></h1>
           <p class="lead">
-            One linked view of the mature test window. Switch the dimension and the map,
-            the ranking and the summary move together. Click any segment to see its default
-            rate, calibrated PD and expected loss — then take the tail into the risk lab.
+            One linked view of the mature test window.
           </p>
           <div class="hero-actions">
             <button class="btn btn-primary" id="hero-explore" type="button">Explore the portfolio</button>
@@ -66,24 +61,24 @@
     <div class="wrap">
       <section class="kpi-strip" aria-label="Headline results">
         <article class="kpi-card">
-          <p class="mini-label">Resolved loans (2007–2018)</p>
+          <p class="mini-label">Loans analyzed</p>
           <p class="kpi-value" id="kpi-loans" data-countup data-field="display.n_rows">1,345,350</p>
-          <p class="kpi-sub" id="kpi-loans-sub">All resolved loans in the snapshot</p>
+          <p class="kpi-sub" id="kpi-loans-sub">Resolved Lending Club loans, 2007-2018 · 20.0% ended in default</p>
         </article>
         <article class="kpi-card">
-          <p class="mini-label">Champion AUC</p>
+          <p class="mini-label">Model accuracy (AUC)</p>
           <p class="kpi-value" id="kpi-auc" data-countup data-field="display.champion_auc">0.6572</p>
-          <p class="kpi-sub" id="kpi-auc-sub">—</p>
+          <p class="kpi-sub" id="kpi-auc-sub">Ranks a defaulter above a non-defaulter about 66% of the time · tested on 2014-2015 loans</p>
         </article>
         <article class="kpi-card">
           <p class="mini-label">Expected loss</p>
-          <p class="kpi-value" id="kpi-el" data-countup data-field="display.el_rate">10.14%</p>
-          <p class="kpi-sub" id="kpi-el-sub">—</p>
+          <p class="kpi-value" id="kpi-el" data-countup data-field="display.el_rate">10.29%</p>
+          <p class="kpi-sub" id="kpi-el-sub">$332.1M expected loss on $3.23B of EAD</p>
         </article>
         <article class="kpi-card risk">
-          <p class="mini-label">VaR 99.9%</p>
-          <p class="kpi-value" id="kpi-var" data-countup data-field="display.sim_var999">37.39%</p>
-          <p class="kpi-sub" id="kpi-var-sub">—</p>
+          <p class="mini-label">Bad-year loss (VaR 99.9%)</p>
+          <p class="kpi-value" id="kpi-var" data-countup data-field="display.sim_var999">37.73%</p>
+          <p class="kpi-sub" id="kpi-var-sub">Exceeded once in 1,000 simulated years · $1,217.4M</p>
         </article>
       </section>
 
@@ -117,15 +112,115 @@
         </div>
 
         <div class="explorer-grid">
-          <aside class="insight-card" id="insight-card" aria-live="polite">
-            <p class="mini-label" id="insight-kicker">What the data says</p>
-            <div id="insight-text" class="insight-copy"></div>
-          </aside>
+          <section class="panel how-built-panel" id="how-built-panel" aria-labelledby="how-built-title" aria-live="polite">
+            <div class="panel-head">
+              <div>
+                <h3 id="how-built-title">How this was built</h3>
+              </div>
+            </div>
+            <!-- Reference artwork: docs/assets/process-ribbon.svg -->
+            <div class="how-built-picture" id="how-built-picture">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 604" width="380" height="604" class="process-ribbon" focusable="false" aria-hidden="true">
+<style>
+  .process-ribbon {
+    --pr-a1: #d6cdf5; --pr-b1: #a99be0;
+    --pr-a2: #c3cff6; --pr-b2: #8fa6ea;
+    --pr-a3: #b6dcf3; --pr-b3: #7fbbe6;
+    --pr-a4: #acdfd6; --pr-b4: #6fc6b9;
+    --pr-a5: #c9e8b4; --pr-b5: #93d07f;
+    --pr-badge: #1f2937; --pr-badge-text: #ffffff; --pr-label: #1f2937; --pr-ring: #1d4ed8;
+  }
+  @media (prefers-color-scheme: dark) {
+    .process-ribbon:not(.force-light) {
+      --pr-a1: #6a5aa8; --pr-b1: #4b3d8a;
+      --pr-a2: #566fb8; --pr-b2: #3d559c;
+      --pr-a3: #4a86b3; --pr-b3: #356a96;
+      --pr-a4: #3f9a8e; --pr-b4: #2c7c71;
+      --pr-a5: #6aa14f; --pr-b5: #4f8638;
+      --pr-badge: #e2e8f0; --pr-badge-text: #0f172a; --pr-label: #e5e7eb; --pr-ring: #93c5fd;
+    }
+  }
+  .process-ribbon.force-dark {
+    --pr-a1: #6a5aa8; --pr-b1: #4b3d8a; --pr-a2: #566fb8; --pr-b2: #3d559c;
+    --pr-a3: #4a86b3; --pr-b3: #356a96; --pr-a4: #3f9a8e; --pr-b4: #2c7c71;
+    --pr-a5: #6aa14f; --pr-b5: #4f8638;
+    --pr-badge: #e2e8f0; --pr-badge-text: #0f172a; --pr-label: #e5e7eb; --pr-ring: #93c5fd;
+  }
+  .ribbon { fill: none; stroke-width: 48; stroke-linecap: butt; stroke-linejoin: butt; opacity: .94; transition: opacity .2s; }
+  .step.is-selected .ribbon { opacity: 1; filter: saturate(1.4); }
+  .label { font: 700 12px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .06em; fill: var(--pr-label); text-anchor: middle; dominant-baseline: central; }
+  .badge { fill: var(--pr-badge); }
+  .badge-num { font: 700 17px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--pr-badge-text); text-anchor: middle; dominant-baseline: central; }
+  .badge-ring { fill: none; stroke: var(--pr-ring); stroke-width: 0; }
+  .step.is-selected .badge-ring { stroke-width: 4; }
+  @media (prefers-reduced-motion: reduce) { .ribbon { transition: none; } }
+</style>
+<defs>
+  <linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="172"><stop offset="0" style="stop-color:var(--pr-a1)"/><stop offset="1" style="stop-color:var(--pr-b1)"/></linearGradient>
+  <linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="0" y1="124" x2="0" y2="276"><stop offset="0" style="stop-color:var(--pr-a2)"/><stop offset="1" style="stop-color:var(--pr-b2)"/></linearGradient>
+  <linearGradient id="g3" gradientUnits="userSpaceOnUse" x1="0" y1="228" x2="0" y2="380"><stop offset="0" style="stop-color:var(--pr-a3)"/><stop offset="1" style="stop-color:var(--pr-b3)"/></linearGradient>
+  <linearGradient id="g4" gradientUnits="userSpaceOnUse" x1="0" y1="332" x2="0" y2="484"><stop offset="0" style="stop-color:var(--pr-a4)"/><stop offset="1" style="stop-color:var(--pr-b4)"/></linearGradient>
+  <linearGradient id="g5" gradientUnits="userSpaceOnUse" x1="0" y1="436" x2="0" y2="588"><stop offset="0" style="stop-color:var(--pr-a5)"/><stop offset="1" style="stop-color:var(--pr-b5)"/></linearGradient>
+  <linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="110" y2="0"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
+  <mask id="ribbon-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="380" height="604">
+    <rect x="0" y="0" width="380" height="68" fill="url(#fade)"/>
+    <rect x="0" y="68" width="380" height="472" fill="#fff"/>
+    <rect x="0" y="540" width="380" height="64" fill="url(#fade)"/>
+  </mask>
+</defs>
+<g mask="url(#ribbon-mask)">
+  <g class="step" id="step-1" data-step="1"><path class="ribbon" stroke="url(#g1)" d="M40 44 H270 A52 52 0 0 1 270 148"/></g>
+  <g class="step" id="step-2" data-step="2"><path class="ribbon" stroke="url(#g2)" d="M270 148 H110 A52 52 0 0 0 110 252"/></g>
+  <g class="step" id="step-3" data-step="3"><path class="ribbon" stroke="url(#g3)" d="M110 252 H270 A52 52 0 0 1 270 356"/></g>
+  <g class="step" id="step-4" data-step="4"><path class="ribbon" stroke="url(#g4)" d="M270 356 H110 A52 52 0 0 0 110 460"/></g>
+  <g class="step" id="step-5" data-step="5"><path class="ribbon" stroke="url(#g5)" d="M110 460 H270 A52 52 0 0 1 270 564 H40"/></g>
+</g>
+<g class="labels">
+  <text class="label" x="190" y="96">DATA</text>
+  <text class="label" x="190" y="200">VALIDATION</text>
+  <text class="label" x="190" y="304">SCORECARD</text>
+  <text class="label" x="190" y="408">CALIBRATION</text>
+  <text class="label" x="190" y="512">SIMULATION</text>
+</g>
+<g class="badges">
+  <g class="step" id="badge-1" data-step="1"><circle class="badge" cx="346" cy="96" r="21"/><circle class="badge-ring" cx="346" cy="96" r="26"/><text class="badge-num" x="346" y="96">1</text></g>
+  <g class="step" id="badge-2" data-step="2"><circle class="badge" cx="34" cy="200" r="21"/><circle class="badge-ring" cx="34" cy="200" r="26"/><text class="badge-num" x="34" y="200">2</text></g>
+  <g class="step" id="badge-3" data-step="3"><circle class="badge" cx="346" cy="304" r="21"/><circle class="badge-ring" cx="346" cy="304" r="26"/><text class="badge-num" x="346" y="304">3</text></g>
+  <g class="step" id="badge-4" data-step="4"><circle class="badge" cx="34" cy="408" r="21"/><circle class="badge-ring" cx="34" cy="408" r="26"/><text class="badge-num" x="34" y="408">4</text></g>
+  <g class="step" id="badge-5" data-step="5"><circle class="badge" cx="346" cy="512" r="21"/><circle class="badge-ring" cx="346" cy="512" r="26"/><text class="badge-num" x="346" y="512">5</text></g>
+</g>
+</svg>
+            <button type="button" class="how-built-node how-built-node-1" data-step="1" aria-label="Step 1: Data and leakage control" aria-pressed="true">01</button>
+            <button type="button" class="how-built-node how-built-node-2" data-step="2" aria-label="Step 2: An honest validation split" aria-pressed="false">02</button>
+            <button type="button" class="how-built-node how-built-node-3" data-step="3" aria-label="Step 3: Scorecard and challengers" aria-pressed="false">03</button>
+            <button type="button" class="how-built-node how-built-node-4" data-step="4" aria-label="Step 4: Calibration and LGD" aria-pressed="false">04</button>
+            <button type="button" class="how-built-node how-built-node-5" data-step="5" aria-label="Step 5: Portfolio loss simulation" aria-pressed="false">05</button>
+            </div>
+            <div class="how-built-reading" id="how-built-reading" aria-live="polite">
+              <h4 class="how-built-reading-title" id="how-built-reading-title">—</h4>
+              <div id="how-built-reading-body"></div>
+            </div>
+          </section>
+
+          <section class="panel total-panel" id="total-panel" aria-label="Portfolio folder" hidden>
+            <button type="button" class="total-folder-button" id="total-folder-button" aria-label="Open the portfolio folder">
+              <span class="total-folder-art" id="total-folder-art" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="btn btn-ghost total-folder-open" id="total-folder-open">Open the folder</button>
+            <div class="total-tab-guide" id="total-tab-guide" aria-label="What each explorer tab shows">
+              <article class="total-tab-note"><strong>Total</strong><span>The whole portfolio at a glance; open the folder for the three headline views.</span></article>
+              <article class="total-tab-note"><strong>State</strong><span>Compare states on the US map. The small-state buttons make compact states selectable.</span></article>
+              <article class="total-tab-note"><strong>Grade</strong><span>Compare the lender’s A–G risk grades on the staircase.</span></article>
+              <article class="total-tab-note"><strong>Purpose</strong><span>Compare loan purposes as ranked tiles.</span></article>
+              <article class="total-tab-note"><strong>Vintage</strong><span>Explore monthly vintages on a timeline, with year totals.</span></article>
+              <article class="total-tab-note"><strong>Home ownership</strong><span>Compare mortgage, rent and own-home segments.</span></article>
+            </div>
+          </section>
 
           <section class="panel map-panel" aria-labelledby="map-title">
             <div class="panel-head">
               <div>
-                <h3 id="map-title">US state tile map</h3>
+                <h3 id="map-title">US state map</h3>
                 <p id="map-subtitle" class="panel-sub">—</p>
               </div>
               <div class="panel-badge" id="map-metric-badge">—</div>
@@ -134,7 +229,19 @@
               <div class="tilemap" id="tile-map" role="group" aria-label="Segment tile map"></div>
             </div>
             <div class="legend" id="map-legend"></div>
+            <p class="map-narrow" id="map-narrow" hidden></p>
             <p class="panel-foot" id="map-note">—</p>
+          </section>
+
+          <section class="panel selection-panel selection-part-a" aria-labelledby="summary-title">
+            <div class="selection-head">
+              <h3 id="summary-title">Portfolio</h3>
+            </div>
+            <div class="selection-context" id="summary-context"></div>
+            <div class="selection-metrics" id="summary-kpis"></div>
+            <div class="selection-model-check">
+              <span id="summary-model-check" data-testid="summary-model-check">—</span>
+            </div>
           </section>
 
           <section class="panel list-panel" aria-labelledby="rank-title">
@@ -145,28 +252,12 @@
               </div>
               <span class="sort-pill" id="sort-pill">—</span>
             </div>
-            <div class="rank-list" id="rank-list" role="listbox" aria-label="Ranked segments"></div>
+            <div class="rank-list" id="rank-list" role="group" aria-label="Ranked segments"></div>
             <p class="empty-state" id="list-empty" hidden>No segment matches that filter.</p>
           </section>
         </div>
-
-        <section class="summary-card" id="summary-card" aria-labelledby="summary-title">
-          <div class="summary-head">
-            <div>
-              <p class="eyebrow">Selection</p>
-              <h2 id="summary-title">Portfolio</h2>
-              <p class="section-lead" id="summary-subtitle">—</p>
-            </div>
-            <div class="summary-gap" id="summary-gap">—</div>
-          </div>
-          <div class="summary-body">
-            <div class="summary-kpis" id="summary-kpis"></div>
-            <figure class="score-figure">
-              <figcaption id="score-hist-caption">Score distribution</figcaption>
-              <div id="score-hist" class="score-hist" role="img" aria-label="Score distribution for the selected segment"></div>
-            </figure>
-          </div>
-        </section>
+      </div>
+    </section>
       </div>
     </section>
 
@@ -179,8 +270,8 @@
             <h2>Move the assumptions, watch the tail</h2>
             <p class="section-lead">
               Every slider snaps to a precomputed simulation grid. The histogram and the 3D
-              surface share the same state; click the surface to move the sliders. The page
-              never re-simulates.
+              surface share the same state; drag the surface to rotate and scroll to zoom. It
+              does not change the sliders. The page never re-simulates.
             </p>
           </div>
           <button class="btn btn-primary" id="play-rho" type="button" aria-pressed="false">Play ρ sweep</button>
@@ -212,6 +303,7 @@
             </label>
           </div>
           <div class="risk-kpis" id="risk-kpis"></div>
+          <p class="risk-bar-note" id="risk-bar-note"></p>
         </section>
 
         <div class="risk-grid">
@@ -224,6 +316,7 @@
                 <div class="gauge" id="risk-gauge" role="img" aria-label="VaR 99.9 percent gauge"></div>
                 <p class="panel-foot gauge-note" id="gauge-caption">—</p>
               </div>
+              <p class="gauge-ratio" id="gauge-ratio">—</p>
             </section>
 
             <section class="panel" aria-labelledby="loss-title">
@@ -232,7 +325,6 @@
                   <h3 id="loss-title">Loss distribution</h3>
                   <p class="panel-sub" id="loss-sub">—</p>
                 </div>
-                <span class="warning-pill" id="tail-pill">Tail risk</span>
               </div>
               <div class="chart-host" id="loss-chart" role="img" aria-label="Simulated portfolio loss histogram with expected loss and tail markers"></div>
               <div class="chart-legend" id="loss-legend" aria-label="Loss marker legend"></div>
@@ -246,10 +338,10 @@
                 <h3 id="surface-title">VaR surface</h3>
                 <p class="panel-sub" id="surface-sub">—</p>
               </div>
-              <div class="segmented surface-toggle compact" id="surface-metrics" role="tablist" aria-label="Surface metric">
-                <button type="button" data-metric="var_0.999" aria-selected="true">VaR 99.9%</button>
-                <button type="button" data-metric="es_0.999">ES 99.9%</button>
-                <button type="button" data-metric="el">EL</button>
+              <div class="segmented surface-toggle compact" id="surface-metrics" role="group" aria-label="Surface metric">
+                <button type="button" data-metric="var_0.999" aria-pressed="true">VaR 99.9%</button>
+                <button type="button" data-metric="es_0.999" aria-pressed="false">ES 99.9%</button>
+                <button type="button" data-metric="el" aria-pressed="false">EL</button>
               </div>
             </div>
             <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional surface of portfolio risk across correlation and PD stress"></div>
@@ -262,7 +354,7 @@
             <div class="panel-head">
               <div>
                 <h3 id="sim-title">Applicant simulator</h3>
-                <p class="panel-sub">Educational illustration of the published scorecard. Not a lending decision.</p>
+                <p class="panel-sub">Educational illustration of the published scorecard. Not a lending decision. Shares are from the 2014-2015 test window.</p>
               </div>
               <span class="panel-badge" id="sim-gini">—</span>
             </div>
@@ -274,7 +366,7 @@
             </div>
             <div class="sim-controls" id="sim-controls"></div>
             <div class="sim-outputs">
-              <div><p class="mini-label">Score</p><p class="sim-value" id="sim-score">—</p><p class="sub" id="sim-score-note">Higher score = lower risk</p></div>
+              <div><p class="mini-label">Score</p><p class="sim-value" id="sim-score">—</p></div>
               <div><p class="mini-label">Implied PD</p><p class="sim-value" id="sim-pd">—</p><p class="sub" id="sim-pd-note">—</p></div>
               <div><p class="mini-label">Percentile</p><p class="sim-value" id="sim-pct">—</p><p class="sub" id="sim-pct-note">—</p></div>
             </div>
@@ -284,7 +376,6 @@
               <summary>Why this score?</summary>
               <div id="sim-breakdown"></div>
             </details>
-            <p class="panel-foot">Gini <span id="sim-gini-foot">—</span>. A higher score means lower implied risk.</p>
           </section>
 
           <section class="panel" aria-labelledby="cutoff-title">
@@ -302,6 +393,15 @@
             </label>
             <div class="cutoff-kpis" id="cutoff-kpis"></div>
             <div class="chart-host small" id="cutoff-chart" role="img" aria-label="Score distributions for goods and bads with the selected cutoff"></div>
+            <p class="cutoff-legend-note" id="cutoff-legend-note">Muted = rejected at this cutoff.</p>
+            <div class="cutoff-tabs" id="cutoff-tabs" role="tablist" aria-label="Cutoff diagnostics">
+              <button type="button" role="tab" data-cutoff-tab="tradeoff" aria-selected="true">Trade-off</button>
+              <button type="button" role="tab" data-cutoff-tab="ks" aria-selected="false">KS curve</button>
+            </div>
+            <div class="cutoff-tab-panel" id="cutoff-tab-panel">
+              <div class="chart-host cutoff-extra" id="cutoff-extra-chart" role="img" aria-label="Cutoff trade-off or KS curve"></div>
+              <p class="cutoff-caption" id="cutoff-caption">—</p>
+            </div>
             <p class="chart-fallback" id="cutoff-fallback" hidden></p>
           </section>
         </div>
@@ -321,67 +421,64 @@
               assumptions are reported as they are.
             </p>
           </div>
-          <button class="btn btn-ghost" id="evidence-provenance" type="button">Open provenance drawer</button>
         </div>
 
-        <div class="evidence-grid">
-          <section class="panel">
-            <h3>Headline statistics</h3>
-            <div class="evidence-kpis" id="evidence-kpis"></div>
-            <p class="panel-foot" id="evidence-window"></p>
-          </section>
-          <section class="panel">
-            <h3>Model comparison</h3>
-            <div class="table-scroll">
-              <table id="model-table">
-                <caption>Mature out-of-time window (★ = selected champion)</caption>
-                <thead><tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr></thead>
-                <tbody><tr><td>lightgbm ★</td><td>0.6572</td><td>0.3144</td><td>0.2274</td><td>30</td></tr><tr><td>random_forest</td><td>0.6468</td><td>0.2936</td><td>0.2088</td><td>30</td></tr><tr><td>probit</td><td>0.6219</td><td>0.2438</td><td>0.1770</td><td>8</td></tr><tr><td>logit_l2</td><td>0.6218</td><td>0.2436</td><td>0.1766</td><td>8</td></tr><tr><td>logit</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>logit_l1</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>decision_tree</td><td>0.5509</td><td>0.1018</td><td>0.1018</td><td>30</td></tr></tbody>
-              </table>
-            </div>
-            <p class="panel-foot" id="benchmark-note"></p>
-          </section>
-        </div>
+        <div class="evidence-columns">
+          <div class="evidence-column">
+            <section class="panel">
+              <h3>Model comparison</h3>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Model comparison table">
+                <table id="model-table">
+                  <caption>Mature out-of-time window (★ = selected champion)</caption>
+                  <thead><tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr></thead>
+                  <tbody><tr><td>lightgbm ★</td><td>0.6572</td><td>0.3144</td><td>0.2274</td><td>30</td></tr><tr><td>random_forest</td><td>0.6468</td><td>0.2936</td><td>0.2088</td><td>30</td></tr><tr><td>probit</td><td>0.6219</td><td>0.2438</td><td>0.1770</td><td>8</td></tr><tr><td>logit_l2</td><td>0.6218</td><td>0.2436</td><td>0.1766</td><td>8</td></tr><tr><td>logit</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>logit_l1</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>decision_tree</td><td>0.5509</td><td>0.1018</td><td>0.1018</td><td>30</td></tr></tbody>
+                </table>
+              </div>
+              <p class="panel-foot" id="benchmark-note"></p>
+            </section>
 
-        <div class="evidence-grid">
-          <section class="panel">
-            <h3>Calibration and LGD</h3>
-            <p class="note-copy" id="calibration-note"></p>
-            <div class="table-scroll">
-              <table id="lgd-table">
-                <caption>Loan-level LGD models, out of time</caption>
-                <thead><tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr></thead>
-                <tbody><tr><td>gamma_glm</td><td>0.1004</td><td>0.1572</td><td>-0.0758</td></tr><tr><td>lightgbm ★</td><td>0.1015</td><td>0.1538</td><td>-0.0294</td></tr><tr><td>two_part</td><td>0.1000</td><td>0.1559</td><td>-0.0578</td></tr></tbody>
-              </table>
-            </div>
-            <p class="note-copy" id="lgd-note"></p>
-          </section>
-          <section class="panel">
-            <h3>Censoring and the test window</h3>
-            <p class="note-copy" id="censoring-note"></p>
-            <div class="table-scroll">
-              <table id="window-table">
-                <caption>Mature vs censored validation window</caption>
-                <thead><tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr></thead>
-                <tbody></tbody>
-              </table>
-            </div>
-            <p class="note-copy" id="forecast-note"></p>
-            <div class="table-scroll">
-              <table id="forecast-table">
-                <caption>Monthly default-rate forecast, benchmark comparison</caption>
-                <thead><tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr></thead>
-                <tbody><tr><td>last value naive</td><td>0.0132</td><td>0.0112</td><td>0.5543</td></tr><tr><td>ets</td><td>0.0140</td><td>0.0119</td><td>0.5903</td></tr><tr><td>sarimax</td><td>0.0246</td><td>0.0229</td><td>1.1319</td></tr><tr><td>seasonal naive</td><td>0.0363</td><td>0.0344</td><td>1.7036</td></tr></tbody>
-              </table>
-            </div>
-          </section>
-        </div>
+            <section class="panel">
+              <h3>Calibration and LGD</h3>
+              <p class="note-copy" id="calibration-note"></p>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="LGD model comparison table">
+                <table id="lgd-table">
+                  <caption>Loan-level LGD models, out of time</caption>
+                  <thead><tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr></thead>
+                  <tbody><tr><td>gamma_glm</td><td>0.1004</td><td>0.1572</td><td>-0.0758</td></tr><tr><td>lightgbm ★</td><td>0.1015</td><td>0.1538</td><td>-0.0294</td></tr><tr><td>two_part</td><td>0.1000</td><td>0.1559</td><td>-0.0578</td></tr></tbody>
+                </table>
+              </div>
+              <p class="note-copy" id="lgd-note"></p>
+            </section>
+          </div>
 
-        <section class="panel limitations-panel">
-          <h3>What did not work, and limitations</h3>
-          <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
-          <p class="note-copy" id="segments-note"></p>
-        </section>
+          <div class="evidence-column">
+            <section class="panel">
+              <h3>Censoring and the test window</h3>
+              <p class="note-copy" id="censoring-note"></p>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Validation window comparison table">
+                <table id="window-table">
+                  <caption>Mature vs censored validation window</caption>
+                  <thead><tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <p class="note-copy" id="forecast-note"></p>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Forecast benchmark table">
+                <table id="forecast-table">
+                  <caption>Monthly default-rate forecast, benchmark comparison</caption>
+                  <thead><tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr></thead>
+                  <tbody><tr><td>last value naive</td><td>0.0132</td><td>0.0112</td><td>0.5543</td></tr><tr><td>ets</td><td>0.0140</td><td>0.0119</td><td>0.5903</td></tr><tr><td>sarimax</td><td>0.0246</td><td>0.0229</td><td>1.1319</td></tr><tr><td>seasonal naive</td><td>0.0363</td><td>0.0344</td><td>1.7036</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel limitations-panel">
+              <h3>What did not work, and limitations</h3>
+              <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
+              <p class="note-copy" id="segments-note"></p>
+            </section>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -392,7 +489,7 @@
           <div>
             <p class="eyebrow">Learn</p>
             <h2>Start here: a 5-minute guide</h2>
-            <p class="section-lead">Plain-English definitions, the project's own examples and a link from every term back to the widget that uses it.</p>
+            <p class="section-lead">This dashboard is a descriptive view over historical Lending Club data, not a lending decision system, forecast or causal model; segment differences are correlations, not causal effects.</p>
           </div>
         </div>
         <div class="guide-grid" id="learn-guide"></div>
@@ -423,6 +520,7 @@
         </p>
         <div class="links">
           <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">Source code</a>
+          <span class="footer-command">Reproduce: <code>python -m src.pipeline all</code></span>
           <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Validation report</a>
           <a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club">Dataset</a>
           <a href="#top">Back to top</a>
@@ -434,47 +532,6 @@
 </main>
 
 <div class="welcome-backdrop" id="welcome-overlay" hidden></div>
-
-<div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
-<aside class="drawer" id="provenance-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
-  <div class="drawer-head">
-    <div>
-      <p class="eyebrow">Provenance</p>
-      <h2 id="drawer-title">How do we know?</h2>
-    </div>
-    <button class="icon-btn" id="drawer-close" type="button" aria-label="Close provenance drawer">Close</button>
-  </div>
-  <div class="drawer-body">
-    <section>
-      <h3>Data source</h3>
-      <p>Lending Club public loan-level snapshot (2007–2018), resolved loans only. The dashboard is descriptive: it does not estimate a causal effect of any segment.</p>
-    </section>
-    <section>
-      <h3>Window and sample</h3>
-      <p id="drawer-window">—</p>
-      <p id="drawer-sample">—</p>
-    </section>
-    <section>
-      <h3>How the rates are computed</h3>
-      <p>Observed default rate = defaults ÷ loans in the segment. The selection summary shows a Wilson 95% confidence interval. Predicted PD is the mean calibrated champion prediction for the segment; expected loss uses the EAD-weighted PD × the effective portfolio LGD, reconciled to the headline EL rate.</p>
-    </section>
-    <section>
-      <h3>Small-n masking</h3>
-      <p id="drawer-smalln">—</p>
-    </section>
-    <section>
-      <h3>Limitations</h3>
-      <ul id="drawer-limitations" class="limitations compact-list"></ul>
-      <p>Segments are correlated with grade and term, so the differences are descriptive, not causal. Small segments carry wide intervals and are masked in the map.</p>
-    </section>
-    <section>
-      <h3>Reproduce it</h3>
-      <pre><code>python -m src.pipeline all
-python -m src.pipeline figures
-python -m pytest</code></pre>
-    </section>
-  </div>
-</aside>
 
 <noscript><p class="noscript">This dashboard needs JavaScript to load <code>data.json</code>. The static figures in <code>assets/</code> remain available.</p></noscript>
 

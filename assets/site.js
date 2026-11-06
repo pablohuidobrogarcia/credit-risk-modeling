@@ -8,6 +8,54 @@
 const DATA_URL = "data.json";
 const PLOTLY_URL = "https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js";
 const PLOTLY_SRI = "sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7";
+const USE_TILE_MAP = false;
+const SMALL_STATES = ["RI", "DE", "DC", "CT", "NJ", "MD", "MA", "NH", "VT"];
+
+/* The state lookup is populated from the aria-label values in assets/us-map.svg.
+   Codes stay as ids internally, in data-state attributes and in the URL hash. */
+const STATE_NAMES = new Map();
+const SEGMENT_LABELS = {
+  small_business: "Small business",
+  other: "Other",
+  renewable_energy: "Renewable energy",
+  house: "House",
+  medical: "Medical",
+  moving: "Moving",
+  wedding: "Wedding",
+  vacation: "Vacation",
+  educational: "Educational",
+  debt_consolidation: "Debt consolidation",
+  major_purchase: "Major purchase",
+  car: "Car",
+  home_improvement: "Home improvement",
+  credit_card: "Credit card",
+  RENT: "Rent",
+  OWN: "Own",
+  MORTGAGE: "Mortgage",
+  ANY: "Any",
+};
+function stateName(id) { return STATE_NAMES.get(id) || id; }
+function segmentLabel(id) {
+  if (SEGMENT_LABELS[id]) return SEGMENT_LABELS[id];
+  const month = String(id).match(/^(\d{4})-(\d{2})$/);
+  if (month) {
+    const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    return `${names[Number(month[2]) - 1]} ${month[1]}`;
+  }
+  if (/^[A-G]$/.test(id)) return `Grade ${id}`;
+  return id;
+}
+function itemName(item) {
+  if (!item) return "";
+  return state.dim === "state" ? stateName(item.id) : segmentLabel(item.id);
+}
+function rememberStateNames(svgText) {
+  if (!svgText || typeof DOMParser === "undefined") return;
+  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  doc.querySelectorAll("path.st[data-state][aria-label]").forEach((path) => {
+    STATE_NAMES.set(path.getAttribute("data-state"), path.getAttribute("aria-label"));
+  });
+}
 
 const DIMENSIONS = [
   { id: "state", label: "State" },
@@ -22,11 +70,56 @@ const METRICS = [
   { id: "pred_pd", label: "Predicted PD", short: "Predicted PD" },
   { id: "el_pct_ead", label: "Expected loss % of EAD", short: "Expected loss" },
 ];
+const ILLUSTRATED_MAPS = {
+  home_ownership: { file: "home_ownership_credit_risk.svg", className: "home-ownership-map" },
+  purpose: { file: "loan_purpose_honeycomb.svg", className: "purpose-map" },
+};
+const MAP_NOTES = {
+  state: {
+    default_rate: "Hover for the state name; the fill is observed default, and hatched states have too few loans to rank. Selection holds the exact numbers.",
+    pred_pd: "Hover for the state name; the fill is the model's predicted PD, not the realized default rate. Hatched states are too small to rank.",
+    el_pct_ead: "Hover for the state name; the fill is expected loss as a share of EAD, combining PD and LGD. Hatched states are too small to rank.",
+  },
+  grade: {
+    default_rate: "Step height and color show observed default by grade. Hover for the grade; select a step to link the ranked list and Selection.",
+    pred_pd: "Step height and color show the model's predicted PD by grade. Compare the steps with observed default; select one for the linked numbers.",
+    el_pct_ead: "Step height and color show expected loss as a share of EAD by grade. PD and LGD both shape this view; select a step to inspect it.",
+  },
+  purpose: {
+    default_rate: "Hover a category for its name; the fill is observed default. Select a category to link the ranked list and read its numbers in Selection.",
+    pred_pd: "Hover a category for its name; the fill is predicted PD, so the order can differ from observed default. Select one to read its numbers.",
+    el_pct_ead: "Hover a category for its name; the fill is expected loss as a share of EAD. Select a category to see how PD and LGD combine.",
+  },
+  vintage: {
+    default_rate: "Each node is an origination month, filled by observed default; year circles select the aggregate. Select a month to compare it with the portfolio.",
+    pred_pd: "Each node is an origination month, filled by predicted PD; year circles select the aggregate. Select a month to read its model risk in Selection.",
+    el_pct_ead: "Each node is an origination month, filled by expected loss as a share of EAD; year circles select the aggregate. Select a month to inspect it.",
+  },
+  home_ownership: {
+    default_rate: "Hover a category for its name; the fill is observed default. Select Rent, Own, Mortgage or Any to read the linked numbers in Selection.",
+    pred_pd: "Hover a category for its name; the fill is predicted PD, the model's view rather than the realized rate. Select a card to inspect it.",
+    el_pct_ead: "Hover a category for its name; the fill is expected loss as a share of EAD. Select a card to see the PD and LGD behind it.",
+  },
+};
 const SURFACE_METRICS = {
   "var_0.999": "VaR 99.9%",
   "es_0.999": "ES 99.9%",
   el: "Expected loss",
 };
+const CUTOFF_STATISTICS = [
+  { id: "cut-approval", label: "Approval rate", color: "sky", meaning: "Share accepted." },
+  { id: "cut-bad", label: "Bad rate (approved)", color: "lilac", meaning: "Defaults among approved." },
+  { id: "cut-good", label: "Approved good", color: "teal", meaning: "Good loans kept." },
+  { id: "cut-bad-n", label: "Approved bad", color: "lilacDark", meaning: "Bad loans kept." },
+];
+const LOSS_STATISTICS = [
+  { id: "expected-loss", label: "EL", key: "expected_loss_pct_ead", color: "ink", dash: "solid", meaning: "Average loss across simulated paths." },
+  { id: "unexpected-loss", label: "UL", key: "unexpected_loss_pct_ead", color: "ink", dash: null, meaning: "Typical variation around expected loss." },
+  { id: "var-99", label: "VaR 99%", key: "var_0.99_pct_ead", color: "teal", dash: "dash", meaning: "Loss stays below this in 99 of 100 simulated years." },
+  { id: "var-999", label: "VaR 99.9%", key: "var_0.999_pct_ead", color: "lilacDark", dash: "dash", meaning: "Loss stays below this in 999 of 1,000 simulated years." },
+  { id: "es-99", label: "ES 99%", key: "es_0.99_pct_ead", color: "sky", dash: "dot", meaning: "Average loss in the worst 1% of simulated years." },
+  { id: "es-999", label: "ES 99.9%", key: "es_0.999_pct_ead", color: "green", dash: "dot", meaning: "Average loss in the worst 0.1% of simulated years." },
+];
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -55,6 +148,7 @@ const state = {
   risk: { rho: null, pd: null, lgd: null },
   surfaceMetric: "var_0.999",
   cutoff: null,
+  cutoffTab: "tradeoff",
   sim: {},
   term: null,
   glossaryQuery: "",
@@ -63,16 +157,26 @@ const state = {
 
 let D = null;
 let PLOTLY = null;
+let US_MAP_SVG = null;
+let US_MAP_PROMISE = null;
+let US_MAP_FAILED = false;
 let plotlyTried = false;
 let sweepTimer = null;
-let lastFocus = null;
+const MAP_WIDTH = 960;
+const MAP_HEIGHT = 600;
+const MAP_MAX_ZOOM = 6;
+let mapView = { scale: 1, x: 0, y: 0 };
+let mapPointers = new Map();
+let mapDrag = null;
+let mapPinch = null;
+let mapSuppressClick = false;
 
 /* ------------------------------------------------------------------ state */
 function readHash() {
   const params = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const read = (key, fallback) => (params.has(key) ? params.get(key) : fallback);
   state.view = ["explorer", "risk", "evidence", "learn"].includes(read("view", "explorer")) ? read("view", "explorer") : "explorer";
-  state.dim = read("dim", "state");
+  state.dim = read("dim", "total");
   state.metric = read("metric", "default_rate");
   state.sel = read("sel", null);
   state.search = read("q", "");
@@ -117,7 +221,10 @@ function applyHashState() {
   if (!dims[state.dim] || (state.dim !== "total" && dims[state.dim].length < 2)) state.dim = dims.state?.length >= 2 ? "state" : "total";
   if (!METRICS.some((m) => m.id === state.metric)) state.metric = "default_rate";
   if (state.dim === "total") state.sel = null;
-  else if (state.sel && !dims[state.dim].some((item) => item.id === state.sel)) state.sel = null;
+  else if (state.sel) {
+    const selected = dims[state.dim].find((item) => item.id === state.sel);
+    if (!selected || isMasked(selected)) state.sel = null;
+  }
   if (state.search && !D.portfolio_explorer.dimensions[state.dim]) state.search = "";
   if (state.term && !(LEARN.terms || []).some((entry) => entry.id === state.term)) state.term = null;
   const sc = D.interactive && D.interactive.scenario_explorer;
@@ -166,6 +273,13 @@ function applyTheme() {
 function metricMeta(id) {
   return METRICS.find((m) => m.id === id) || METRICS[0];
 }
+function metricColorLabel() {
+  return metricMeta(state.metric).short.replace(/^./, (char) => char.toLowerCase());
+}
+function mapNote(dim = state.dim, metric = state.metric) {
+  const notes = MAP_NOTES[dim];
+  return (notes && notes[metric]) || "";
+}
 function metricValue(item, metric = state.metric) {
   return num(item ? item[metric] : null);
 }
@@ -179,35 +293,79 @@ function dimMeta(id) {
 
 /* ------------------------------------------------------------ info popovers */
 let INFO = {};
+let EXPLORER = { captions: {} };
+let FOLDER = { sheets: [] };
+let FOLDER_SVG = null;
+const ILLUSTRATED_SVGS = {};
+const ILLUSTRATED_PROMISES = {};
+const ILLUSTRATED_FAILED = new Set();
 let LEARN = { guide: [], terms: [] };
+let PROCESS = { steps: [] };
 let WELCOME = {};
 let infoReturnFocus = null;
 let infoAnchor = null;
 let welcomeOpen = false;
 let welcomeLastFocus = null;
+let folderOpen = false;
+let folderLastFocus = null;
+let folderActive = 0;
+let folderTouch = null;
 const WELCOME_STORAGE_KEY = "credit-risk-studio:welcome-dismissed";
 
 function infoButton(id, label, extraClass = "") {
   return `<button type="button" class="info-btn ${extraClass}" data-info="${esc(id)}" aria-label="About: ${esc(label)}" aria-expanded="false" aria-controls="info-popover">i</button>`;
 }
 
+function lgdRangeLabel() {
+  const values = dimItems().map((item) => num(item.mean_lgd)).filter((value) => value != null);
+  if (!values.length) return fmtNum(pe() && pe().meta ? pe().meta.mean_lgd : null, 3);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  return hi - lo < 0.0005 ? fmtNum((lo + hi) / 2, 3) : `${fmtNum(lo, 3)}–${fmtNum(hi, 3)}`;
+}
+
 function infoContext() {
   const meta = pe() ? pe().meta : {};
   const stats = (D && D.simulation && D.simulation.statistics) || {};
+  const total = (dims().total || [])[0] || {};
+  const observedDefaults = Math.round((meta.n_total || 0) * (meta.default_rate_total || 0));
+  const gapPp = ((meta.default_rate_total || 0) - (meta.mean_pd || 0)) * 100;
   return {
     primary_window: meta.years ? `${meta.years.join("-")} ${meta.term}-month` : "the primary test window",
     n_oot: fmtInt(meta.n_total),
+    n_total: fmtInt(meta.n_total),
+    test_years: meta.years ? meta.years.join("-") : "2014-2015",
+    term: meta.term || "36",
+    default_rate_total: fmtPct(meta.default_rate_total, 2),
+    observed_defaults: fmtInt(observedDefaults),
+    ci_low: fmtPct(total.ci_low, 2),
+    ci_high: fmtPct(total.ci_high, 2),
+    defaults_per_100: num(meta.default_rate_total) == null ? "—" : (meta.default_rate_total * 100).toFixed(2),
+    gap_pp: gapPp.toFixed(2),
+    mean_lgd_pct: fmtPct(meta.mean_lgd, 2),
+    el_pct_ead: fmtPct(meta.el_pct_ead, 2),
+    el_per_100: num(meta.el_pct_ead) == null ? "—" : (meta.el_pct_ead * 100).toFixed(2),
+    ead_total: fmtMoney(meta.ead_total),
+    funded_total: fmtMoney(meta.funded_total),
+    el_pct_funded: fmtPct(meta.el_pct_funded, 2),
+    champion: (D && D.pd && D.pd.champion) || "champion",
     default_rate_oot: fmtPct(meta.default_rate_total, 2),
     el_rate: fmtPct(meta.el_pct_ead, 2),
     min_n: fmtInt(meta.min_n),
     n_rows: fmtInt(D && D.data ? D.data.n_rows : null),
+    data_years: (D && D.display && D.display.data_years) || "2007–2018",
+    train_years: (D && D.display && D.display.train_years) || "2010–2013",
     champion_auc: fmtNum(D && D.pd ? D.pd.champion_auc : null, 4),
-    var999: fmtPct(stats["var_0.999_pct_ead"], 2),
+    window_immature_auc: (D && D.display && D.display.window_immature_auc) || "—",
+    var999: fmtPct(stats["var_0.999_pct_ead"], 1),
     mean_pd: fmtPct(meta.mean_pd, 2),
     portfolio_ead: fmtMoney(meta.ead_total),
     realized_lgd: fmtNum(D && D.lgd ? D.lgd.realised_lgd_oot : null, 4),
+    lgd: lgdRangeLabel(),
     auc_gap: (D && D.display && D.display.auc_gap_vs_benchmark) || "—",
+    rho_basel: (D && D.display && D.display.rho_basel) || "—",
     el_amount: fmtMoney(meta.el_amount),
+    metric: metricColorLabel(),
   };
 }
 
@@ -322,24 +480,18 @@ function bindInfoDelegation() {
 }
 
 const STATIC_INFO = [
-  ["#dimension-tabs", "dimension-tabs", "Dimension tabs", "after"],
-  ["#metric-tabs", "metric-tabs", "Color metric", "after"],
   ["#segment-search", "filter", "Filter segments", "after"],
-  ["#map-title", "map", "Segment map", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
-  ["#score-hist-caption", "score-distribution", "Score distribution", "after"],
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
   ["#play-rho", "play-rho", "Play rho sweep", "after"],
   ["#risk-gauge", "gauge", "VaR gauge", "after"],
+  ["#gauge-ratio", "gauge-ratio", "VaR / EL ratio", "after"],
   ["#loss-title", "loss-histogram", "Loss distribution", "after"],
   ["#surface-title", "surface", "VaR surface", "after"],
   ["#surface-metrics", "surface-metric", "Surface metric", "before"],
   ["#sim-title", "sim-presets", "Applicant simulator", "after"],
-  ["#sim-score", "sim-score", "Score", "after"],
-  ["#sim-pd", "sim-pd", "Implied PD", "after"],
-  ["#sim-pct", "sim-percentile", "Percentile", "after"],
   ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
-  ["#provenance-btn", "provenance", "How do we know?", "after"],
+  ["#cutoff-tabs", "cutoff-tabs", "Cutoff diagnostics", "after"],
 ];
 
 function injectStaticInfo() {
@@ -353,6 +505,7 @@ function injectStaticInfo() {
     } else {
       const wrapper = document.createElement(heading ? "div" : "span");
       wrapper.className = `control-with-info${heading ? " heading-with-info" : ""}`;
+      wrapper.dataset.infoWrap = id;
       target.parentNode.insertBefore(wrapper, target);
       wrapper.appendChild(target);
       wrapper.insertAdjacentHTML(where === "before" ? "afterbegin" : "beforeend", infoButton(id, label));
@@ -404,6 +557,23 @@ function countUp(el, value, formatter) {
 }
 
 /* ---------------------------------------------------------------- colors */
+function palette() {
+  const style = getComputedStyle(document.documentElement);
+  const token = (name) => style.getPropertyValue(name).trim();
+  const risk = [token("--risk-low"), token("--risk-2"), token("--risk-3"), token("--risk-4"), token("--risk-5"), token("--risk-high")];
+  return {
+    lilacLight: token("--lilac-light"), lilac: token("--lilac"), lilacDark: token("--lilac-dark"),
+    periwinkleLight: token("--periwinkle-light"), periwinkle: token("--periwinkle"),
+    skyLight: token("--sky-light"), sky: token("--sky"),
+    tealLight: token("--teal-light"), teal: token("--teal"),
+    greenLight: token("--green-light"), green: token("--green"),
+    ink: token("--ink"), onPastel: token("--on-pastel"), accent: token("--accent"), fg: token("--fg"), muted: token("--fg-muted"),
+    border: token("--border"), surface: token("--surface"), bg: token("--bg"),
+    risk,
+    riskScale: risk.map((color, index) => [index / (risk.length - 1), color]),
+  };
+}
+
 function hexToRgb(hex) {
   const h = hex.replace("#", "");
   const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
@@ -415,20 +585,42 @@ function mix(a, b, t) {
   return `rgb(${Math.round(A[0] + (B[0] - A[0]) * t)}, ${Math.round(A[1] + (B[1] - A[1]) * t)}, ${Math.round(A[2] + (B[2] - A[2]) * t)})`;
 }
 function scaleColor(t) {
-  const stops = [[0, "#0f766e"], [0.5, "#eab308"], [1, "#b91c1c"]];
-  if (t <= 0.5) return mix(stops[0][1], stops[1][1], t / 0.5);
-  return mix(stops[1][1], stops[2][1], (t - 0.5) / 0.5);
+  const risk = palette().risk;
+  const scaled = clamp(t, 0, 1) * (risk.length - 1);
+  const index = Math.min(risk.length - 2, Math.floor(scaled));
+  return mix(risk[index], risk[index + 1], scaled - index);
 }
 function colorFor(value, lo, hi) {
-  if (num(value) == null || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return "#64748b";
+  if (num(value) == null || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return palette().muted;
   return scaleColor(clamp((value - lo) / (hi - lo), 0, 1));
 }
 function readableText(background) {
+  const p = palette();
+  if (background.startsWith("#")) {
+    const [r, g, b] = hexToRgb(background);
+    return readableText(`rgb(${r}, ${g}, ${b})`);
+  }
   const match = background.match(/\d+/g);
-  if (!match) return "#fff";
+  if (!match) return p.surface;
   const [r, g, b] = match.map(Number);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.62 ? "#111827" : "#ffffff";
+  const relative = (value) => {
+    const channel = value / 255;
+    return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+  };
+  const luminance = (color) => 0.2126 * relative(color.r) + 0.7152 * relative(color.g) + 0.0722 * relative(color.b);
+  const ratio = (a, b) => {
+    const l1 = luminance(a);
+    const l2 = luminance(b);
+    return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+  };
+  const bg = { r, g, b };
+  const toObject = (hex) => {
+    const [rr, gg, bb] = hexToRgb(hex);
+    return { r: rr, g: gg, b: bb };
+  };
+  const candidates = [p.onPastel, "#000000", "#ffffff"].map((color) => ({ color, value: ratio(bg, toObject(color)) }));
+  candidates.sort((a, b) => b.value - a.value);
+  return candidates[0].color;
 }
 
 /* ----------------------------------------------------------------- plotly */
@@ -451,16 +643,16 @@ function loadPlotly() {
   });
 }
 function plotTheme() {
-  const dark = effectiveTheme() === "dark";
+  const p = palette();
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 11, color: dark ? "#e2e8f0" : "#1f2937" },
+    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 11, color: p.fg },
     margin: { l: 58, r: 18, t: 26, b: 46 },
-    xaxis: { gridcolor: dark ? "rgba(226,232,240,0.12)" : "rgba(20,27,45,0.1)", zerolinecolor: "rgba(0,0,0,0)", color: dark ? "#cbd5e1" : "#4b5563" },
-    yaxis: { gridcolor: dark ? "rgba(226,232,240,0.12)" : "rgba(20,27,45,0.1)", zerolinecolor: "rgba(0,0,0,0)", color: dark ? "#cbd5e1" : "#4b5563" },
-    legend: { orientation: "h", y: 1.12, x: 0, font: { color: dark ? "#e2e8f0" : "#1f2937" } },
-    colorway: ["#2563eb", "#0d9488", "#b45309", "#b91c1c", "#7c3aed"],
+    xaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
+    yaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
+    legend: { orientation: "h", y: 1.12, x: 0, font: { color: p.fg } },
+    colorway: [p.periwinkle, p.teal, p.sky, p.lilac, p.lilacDark],
   };
 }
 function plotlyConfig() {
@@ -530,9 +722,10 @@ function selectedItem() {
 }
 function summaryItem() { return selectedItem() || totalItem(); }
 function minN() { return (pe() && pe().meta && pe().meta.min_n) || 500; }
-function histFor(dim, id) {
-  const h = pe() && pe().score_histograms;
-  return h && (h[`${dim}:${id}`] || h["total:total"]);
+function isMasked(item) {
+  if (!item) return true;
+  const n = num(item.n);
+  return item.insufficient === true || item.immature === true || (n != null && n < minN());
 }
 
 /* ------------------------------------------------------------------ shell */
@@ -544,14 +737,14 @@ function renderShell() {
   $("#hero-risk").onclick = () => setView("risk");
 
   countUp($("#kpi-loans"), D.data.n_rows, fmtInt);
-  $("#kpi-loans-sub").textContent = `All resolved loans in the ${disp.data_years || "2007–2018"} snapshot`;
+  $("#kpi-loans-sub").textContent = `Resolved Lending Club loans, ${disp.data_years || "2007-2018"} · ${fmtPct(D.data.default_rate, 1)} ended in default`;
   countUp($("#kpi-auc"), D.pd.champion_auc, (v) => fmtNum(v, 4));
-  $("#kpi-auc-sub").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)} · ${disp.oot_years || "2014–2015"} OOT`;
+  $("#kpi-auc-sub").textContent = `Ranks a defaulter above a non-defaulter about ${Math.round(D.pd.champion_auc * 100)}% of the time · tested on ${disp.oot_years || "2014-2015"} loans`;
   countUp($("#kpi-el"), D.lgd.el_rate_oot, (v) => fmtPct(v, 2));
-  $("#kpi-el-sub").textContent = `${fmtMoney(D.lgd.expected_loss_oot)} of EAD`;
+  $("#kpi-el-sub").textContent = `${fmtMoney(D.lgd.expected_loss_oot)} expected loss on ${fmtMoney(pe().meta.ead_total)} of EAD`;
   const stats = D.simulation.statistics;
-  countUp($("#kpi-var"), stats["var_0.999_pct_ead"], (v) => fmtPct(v, 2));
-  $("#kpi-var-sub").textContent = `${fmtMoney(stats["var_0.999"])} · ρ = ${fmtNum(D.simulation.asset_correlation, 2)}`;
+  countUp($("#kpi-var"), stats["var_0.999_pct_ead"], (v) => fmtPct(v, 1));
+  $("#kpi-var-sub").textContent = `Exceeded once in 1,000 simulated years · ${fmtMoney(stats["var_0.999"])}`;
 
   $$(".view-tab").forEach((tab) => {
     const on = tab.dataset.view === state.view;
@@ -592,6 +785,15 @@ function setView(view) {
 }
 
 /* ---------------------------------------------------------------- explorer */
+function pulseExplorerFade() {
+  const view = $("#view-explorer");
+  if (!view || prefersReduced()) return;
+  view.classList.remove("is-dim-switching");
+  void view.offsetWidth;
+  view.classList.add("is-dim-switching");
+  window.setTimeout(() => view.classList.remove("is-dim-switching"), 180);
+}
+
 function renderDimensionTabs() {
   const host = $("#dimension-tabs");
   const available = ["total", ...DIMENSIONS.map((d) => d.id).filter((id) => dims()[id] && dims()[id].length >= 2)];
@@ -605,6 +807,7 @@ function renderDimensionTabs() {
       state.sel = null;
       state.search = "";
       commit({ push: true });
+      pulseExplorerFade();
     };
   });
   host.onkeydown = (event) => {
@@ -636,16 +839,626 @@ const STATE_POSITIONS = {
   HI: [0, 6], TX: [4, 6], FL: [9, 6],
 };
 
+function selectExplorerItem(item) {
+  if (!item || isMasked(item)) return;
+  state.sel = state.sel === item.id ? null : item.id;
+  commit({ push: true });
+}
+
+function showGeoTooltip(host, text) {
+  const tip = host.querySelector(".geo-tooltip");
+  if (!tip) return;
+  tip.textContent = text;
+  tip.hidden = false;
+}
+
+function hideGeoTooltip(host) {
+  const tip = host.querySelector(".geo-tooltip");
+  if (tip) tip.hidden = true;
+}
+
+function highlightGeo(host, id, on) {
+  $$(`[data-id="${CSS.escape(id)}"]`, host).forEach((node) => node.classList.toggle("is-hovered", on));
+}
+
+function bindGeoItem(host, element, item, label, selectable = true) {
+  element.dataset.id = item.id;
+  element.classList.toggle("is-selected", state.sel === item.id);
+  element.setAttribute("aria-label", label);
+  if (selectable) {
+    element.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+    element.addEventListener("click", (event) => {
+      event.preventDefault();
+      selectExplorerItem(item);
+    });
+    element.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectExplorerItem(item);
+      }
+    });
+  } else {
+    element.setAttribute("aria-disabled", "true");
+    element.setAttribute("tabindex", "-1");
+  }
+  const show = () => {
+    element.classList.add("is-hovered");
+    highlightGeo(host, item.id, true);
+    showGeoTooltip(host, label);
+  };
+  const hide = () => {
+    element.classList.remove("is-hovered");
+    highlightGeo(host, item.id, false);
+    hideGeoTooltip(host);
+  };
+  element.addEventListener("mouseenter", show);
+  element.addEventListener("mouseleave", hide);
+  element.addEventListener("focus", show);
+  element.addEventListener("blur", hide);
+}
+
+function loadFolderSvg() {
+  if (FOLDER_SVG) return Promise.resolve(FOLDER_SVG);
+  return fetch("assets/portfolio-folder.svg", { cache: "no-cache" })
+    .then((response) => (response.ok ? response.text() : null))
+    .then((text) => { FOLDER_SVG = text; return text; })
+    .catch(() => null);
+}
+
+function loadUsMap() {
+  if (US_MAP_SVG || US_MAP_FAILED) return Promise.resolve(US_MAP_SVG);
+  if (!US_MAP_PROMISE) {
+    US_MAP_PROMISE = fetch("assets/us-map.svg", { cache: "no-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`us-map.svg ${response.status}`);
+        return response.text();
+      })
+      .then((text) => { US_MAP_SVG = text; rememberStateNames(text); return text; })
+      .catch(() => { US_MAP_FAILED = true; return null; });
+  }
+  return US_MAP_PROMISE;
+}
+
+function loadIllustratedMap(dim) {
+  const config = ILLUSTRATED_MAPS[dim];
+  if (!config) return Promise.resolve(null);
+  if (ILLUSTRATED_SVGS[dim]) return Promise.resolve(ILLUSTRATED_SVGS[dim]);
+  if (ILLUSTRATED_FAILED.has(dim)) return Promise.resolve(null);
+  if (!ILLUSTRATED_PROMISES[dim]) {
+    ILLUSTRATED_PROMISES[dim] = fetch(`assets/${config.file}`, { cache: "no-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`${config.file} ${response.status}`);
+        return response.text();
+      })
+      .then((text) => { ILLUSTRATED_SVGS[dim] = text; return text; })
+      .catch(() => { ILLUSTRATED_FAILED.add(dim); return null; });
+  }
+  return ILLUSTRATED_PROMISES[dim];
+}
+
+function setGeoMeta(title, subtitle, note) {
+  $("#map-title").textContent = title;
+  $("#map-subtitle").textContent = subtitle;
+  $("#map-metric-badge").textContent = metricMeta(state.metric).short;
+  $("#map-note").textContent = note;
+}
+
+function setGeoLegend(lo, hi, showHatch = true) {
+  const meta = pe().meta;
+  $("#map-legend").innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span>${showHatch ? `<span class="legend-swatch" aria-hidden="true"></span><span>hatched = insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>` : ""}`;
+  const narrow = $("#map-narrow");
+  if (narrow) {
+    const text = (EXPLORER && EXPLORER.narrowRange) || "Narrow range: colors exaggerate small differences.";
+    narrow.hidden = !(Number.isFinite(lo) && Number.isFinite(hi) && hi - lo < 0.03);
+    narrow.textContent = text;
+  }
+}
+
+function geoRange(items) {
+  const eligible = items.filter((item) => !isMasked(item) && num(item[state.metric]) != null);
+  const values = eligible.map((item) => item[state.metric]);
+  return {
+    eligible,
+    lo: values.length ? Math.min(...values) : 0,
+    hi: values.length ? Math.max(...values) : 1,
+  };
+}
+
+function resetMapView() {
+  mapView = { scale: 1, x: 0, y: 0 };
+  mapPointers = new Map();
+  mapDrag = null;
+  mapPinch = null;
+}
+
+function mapViewSize(scale = mapView.scale) {
+  return { w: MAP_WIDTH / scale, h: MAP_HEIGHT / scale };
+}
+
+function clampMapView() {
+  const { w, h } = mapViewSize();
+  mapView.x = clamp(mapView.x, 0, MAP_WIDTH - w);
+  mapView.y = clamp(mapView.y, 0, MAP_HEIGHT - h);
+}
+
+function applyMapView(svg) {
+  if (!svg) return;
+  const { w, h } = mapViewSize();
+  svg.setAttribute("viewBox", `${mapView.x.toFixed(3)} ${mapView.y.toFixed(3)} ${w.toFixed(3)} ${h.toFixed(3)}`);
+  const host = svg.closest("#tile-map");
+  if (!host) return;
+  const minus = host.querySelector('[data-map-zoom="out"]');
+  const plus = host.querySelector('[data-map-zoom="in"]');
+  const reset = host.querySelector('[data-map-zoom="reset"]');
+  if (minus) minus.disabled = mapView.scale <= 1.0001;
+  if (reset) reset.disabled = mapView.scale <= 1.0001;
+  if (plus) plus.disabled = mapView.scale >= MAP_MAX_ZOOM - 0.0001;
+}
+
+function zoomMapAt(svg, factor, clientX, clientY) {
+  if (!svg) return;
+  const rect = svg.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const { w, h } = mapViewSize();
+  const fx = clamp((clientX - rect.left) / rect.width, 0, 1);
+  const fy = clamp((clientY - rect.top) / rect.height, 0, 1);
+  const anchorX = mapView.x + fx * w;
+  const anchorY = mapView.y + fy * h;
+  const scale = clamp(mapView.scale * factor, 1, MAP_MAX_ZOOM);
+  if (Math.abs(scale - mapView.scale) < 1e-6) return;
+  const next = mapViewSize(scale);
+  mapView.scale = scale;
+  mapView.x = anchorX - fx * next.w;
+  mapView.y = anchorY - fy * next.h;
+  clampMapView();
+  applyMapView(svg);
+}
+
+function zoomMapCenter(svg, factor) {
+  const rect = svg.getBoundingClientRect();
+  zoomMapAt(svg, factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
+function bindMapZoom(host, svg) {
+  const wrap = $(".state-map-wrap", host);
+  if (!wrap) return;
+  applyMapView(svg);
+  $$(".map-zoom-btn", host).forEach((button) => {
+    button.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const action = button.dataset.mapZoom;
+      if (action === "in") zoomMapCenter(svg, 1.45);
+      else if (action === "out") zoomMapCenter(svg, 1 / 1.45);
+      else { resetMapView(); applyMapView(svg); }
+    };
+  });
+
+  wrap.setAttribute("tabindex", "0");
+  wrap.setAttribute("aria-label", "US state map. Use plus and minus to zoom, 0 to reset, or drag to move.");
+  wrap.addEventListener("keydown", (event) => {
+    if (["+", "="].includes(event.key)) { event.preventDefault(); zoomMapCenter(svg, 1.45); }
+    else if (["-", "_"].includes(event.key)) { event.preventDefault(); zoomMapCenter(svg, 1 / 1.45); }
+    else if (event.key === "0") { event.preventDefault(); resetMapView(); applyMapView(svg); }
+  });
+  wrap.addEventListener("wheel", (event) => {
+    if (!event.ctrlKey && !event.metaKey) return;
+    event.preventDefault();
+    zoomMapAt(svg, event.deltaY < 0 ? 1.18 : 1 / 1.18, event.clientX, event.clientY);
+  }, { passive: false });
+  wrap.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    zoomMapAt(svg, 1.5, event.clientX, event.clientY);
+  });
+  wrap.addEventListener("click", (event) => {
+    if (!mapSuppressClick) return;
+    event.preventDefault();
+    event.stopPropagation();
+    mapSuppressClick = false;
+  }, true);
+
+  const pointerDistance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  wrap.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".map-zoom")) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    mapPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (mapPointers.size === 1) {
+      mapDrag = { startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false, captured: false };
+    } else if (mapPointers.size === 2) {
+      const [a, b] = [...mapPointers.values()];
+      mapDrag = null;
+      mapPinch = { distance: pointerDistance(a, b), scale: mapView.scale };
+      mapPointers.forEach((_point, id) => {
+        try { wrap.setPointerCapture(id); } catch (err) { /* pointer already gone */ }
+      });
+    }
+  });
+  wrap.addEventListener("pointermove", (event) => {
+    if (!mapPointers.has(event.pointerId)) return;
+    mapPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const rect = svg.getBoundingClientRect();
+    if (mapPointers.size >= 2 && mapPinch) {
+      const [a, b] = [...mapPointers.values()];
+      const midpointX = (a.x + b.x) / 2;
+      const midpointY = (a.y + b.y) / 2;
+      const target = clamp(mapPinch.scale * (pointerDistance(a, b) / mapPinch.distance), 1, MAP_MAX_ZOOM);
+      zoomMapAt(svg, target / mapView.scale, midpointX, midpointY);
+      mapDrag = { startX: midpointX, startY: midpointY, lastX: midpointX, lastY: midpointY, moved: true };
+      return;
+    }
+    if (!mapDrag || !rect.width || !rect.height) return;
+    const dx = event.clientX - mapDrag.lastX;
+    const dy = event.clientY - mapDrag.lastY;
+    if (Math.hypot(event.clientX - mapDrag.startX, event.clientY - mapDrag.startY) > 4) {
+      mapDrag.moved = true;
+      if (!mapDrag.captured) {
+        try { wrap.setPointerCapture(event.pointerId); } catch (err) { /* pointer already gone */ }
+        mapDrag.captured = true;
+      }
+    }
+    mapView.x -= dx * (mapViewSize().w / rect.width);
+    mapView.y -= dy * (mapViewSize().h / rect.height);
+    clampMapView();
+    applyMapView(svg);
+    mapDrag.lastX = event.clientX;
+    mapDrag.lastY = event.clientY;
+  });
+  const finishPointer = (event) => {
+    if (!mapPointers.has(event.pointerId)) return;
+    try { wrap.releasePointerCapture(event.pointerId); } catch (err) { /* not captured */ }
+    mapPointers.delete(event.pointerId);
+    if (mapPointers.size < 2) mapPinch = null;
+    if (mapPointers.size === 0) {
+      if (mapDrag && mapDrag.moved) {
+        mapSuppressClick = true;
+        setTimeout(() => { mapSuppressClick = false; }, 250);
+      }
+      mapDrag = null;
+    } else if (mapPointers.size === 1) {
+      const point = [...mapPointers.values()][0];
+      mapDrag = { startX: point.x, startY: point.y, lastX: point.x, lastY: point.y, moved: false };
+    }
+  };
+  wrap.addEventListener("pointerup", finishPointer);
+  wrap.addEventListener("pointercancel", finishPointer);
+}
+
+function renderStateMap(host, items, meta) {
+  const { lo, hi } = geoRange(items);
+  setGeoMeta("US state map",
+    `${items.filter((item) => item.id !== "DC").length} states and District of Columbia · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
+    mapNote());
+  setGeoLegend(lo, hi);
+  host.className = "geo-visual state-visual";
+  if (!US_MAP_SVG) {
+    host.innerHTML = `<p class="geo-loading">Loading state map…</p>`;
+    loadUsMap().then(() => {
+      if (state.view === "explorer" && state.dim === "state") {
+        renderMap();
+        renderList();
+        renderSummary();
+      }
+    });
+    return;
+  }
+
+  const svg = US_MAP_SVG.replace(/<svg([^>]*)>/, (match, attrs) => `<svg${attrs} class="us-map-svg" preserveAspectRatio="xMidYMid meet"><defs><pattern id="state-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern></defs>`);
+  host.innerHTML = `<div class="state-map-wrap">
+      ${svg}
+      <div class="map-zoom" role="group" aria-label="Map zoom controls">
+        <button type="button" class="map-zoom-btn" data-map-zoom="in" aria-label="Zoom in">+</button>
+        <button type="button" class="map-zoom-btn" data-map-zoom="out" aria-label="Zoom out">−</button>
+        <button type="button" class="map-zoom-btn map-zoom-reset" data-map-zoom="reset" aria-label="Reset zoom">reset</button>
+      </div>
+    </div>
+    <p class="map-zoom-hint" id="map-zoom-hint">Ctrl + scroll or + / − to zoom; drag to move · hover shows the name ${infoButton("map-zoom", "Map zoom")}${infoButton("masked-states", "Masked states")}</p>
+    <div class="state-small-strip" role="group" aria-label="Small states"></div>
+    <div class="state-all-grid" role="group" aria-label="All states"></div>
+    <div class="geo-tooltip" role="status" hidden></div>`;
+  bindMapZoom(host, $(".us-map-svg", host));
+
+  const paths = $$(".us-map-svg .st", host);
+  const byId = new Map(items.map((item) => [item.id, item]));
+  paths.forEach((path) => {
+    const item = byId.get(path.dataset.state);
+    if (!item) { path.style.display = "none"; return; }
+    path.dataset.id = item.id;
+    const name = stateName(item.id);
+    if (isMasked(item)) {
+      path.classList.add("is-masked");
+      path.setAttribute("role", "button");
+      bindGeoItem(host, path, item, name, false);
+      return;
+    }
+    path.style.setProperty("--state-fill", colorFor(item[state.metric], lo, hi));
+    path.setAttribute("tabindex", "0");
+    path.setAttribute("role", "button");
+    bindGeoItem(host, path, item, name, true);
+  });
+
+  const chip = (item) => {
+    const name = stateName(item.id);
+    if (isMasked(item)) {
+      return `<button type="button" class="state-chip is-masked" data-id="${esc(item.id)}" aria-disabled="true" tabindex="-1" title="${esc(name)}">${esc(name)}</button>`;
+    }
+    const bg = colorFor(item[state.metric], lo, hi);
+    return `<button type="button" class="state-chip" data-id="${esc(item.id)}" aria-pressed="${state.sel === item.id}" style="--state-fill:${bg};color:${readableText(bg)}" title="${esc(name)}">${esc(name)}</button>`;
+  };
+  const smallHost = $(".state-small-strip", host);
+  smallHost.innerHTML = SMALL_STATES.map((id) => byId.get(id)).filter(Boolean).map(chip).join("") + infoButton("small-states", "Small states");
+  const allHost = $(".state-all-grid", host);
+  allHost.innerHTML = items.slice().sort((a, b) => a.id.localeCompare(b.id)).map(chip).join("");
+
+  $$(".state-chip", host).forEach((button) => {
+    const item = byId.get(button.dataset.id);
+    if (!item) return;
+    bindGeoItem(host, button, item, stateName(item.id), !isMasked(item));
+  });
+
+  if (state.sel) {
+    const selected = host.querySelector(`.us-map-svg .st[data-state="${CSS.escape(state.sel)}"]`);
+    if (selected) selected.parentNode.appendChild(selected);
+  }
+}
+
+function renderGradeStaircase(host, items, meta) {
+  const { lo, hi } = geoRange(items);
+  setGeoMeta("Grade risk staircase",
+    `${items.length} grades · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
+    mapNote());
+  setGeoLegend(lo, hi);
+  host.className = "geo-visual grade-visual";
+  const ordered = items.slice().sort((a, b) => a.id.localeCompare(b.id));
+  const width = Math.max(320, Math.round(host.clientWidth || 560));
+  const height = Math.max(260, Math.round(host.clientHeight || 360));
+  const margin = 14;
+  const gap = 8;
+  const baseline = height - 38;
+  const top = 38;
+  const stepWidth = Math.max(28, (width - margin * 2 - gap * (ordered.length - 1)) / ordered.length);
+  const maxValue = Math.max(...ordered.filter((item) => !isMasked(item)).map((item) => num(item[state.metric]) || 0), 0.0001);
+  const maxHeight = baseline - top;
+
+  const groups = ordered.map((item, index) => {
+    const value = num(item[state.metric]) || 0;
+    const stepHeight = clamp(22 + (value / maxValue) * (maxHeight - 22), 22, maxHeight);
+    const masked = isMasked(item);
+    const selected = state.sel === item.id;
+    const raise = selected ? 6 : 0;
+    const x = margin + index * (stepWidth + gap);
+    const y = baseline - stepHeight - raise;
+    const cx = x + stepWidth / 2;
+    const bg = colorFor(value, lo, hi);
+    const cls = `grade-step${masked ? " is-masked" : ""}${selected ? " is-selected" : ""}`;
+    const fill = masked ? "url(#grade-hatch)" : bg;
+    const tabindex = masked ? -1 : 0;
+    return `<g class="${cls}" data-id="${esc(item.id)}" tabindex="${tabindex}" role="button">
+      <rect class="grade-step-face" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${stepWidth.toFixed(1)}" height="${stepHeight.toFixed(1)}" rx="7" style="fill:${fill}"></rect>
+      <text class="grade-step-letter" x="${cx.toFixed(1)}" y="${(y - 12).toFixed(1)}" text-anchor="middle">${esc(item.id)}</text>
+    </g>`;
+  }).join("");
+
+  host.innerHTML = `<svg class="grade-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Grade risk staircase">
+    <defs><pattern id="grade-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern></defs>
+    ${groups}
+  </svg><div class="geo-tooltip" role="status" hidden></div>`;
+
+  $$(".grade-step", host).forEach((step) => {
+    const item = ordered.find((entry) => entry.id === step.dataset.id);
+    if (!item) return;
+    bindGeoItem(host, step, item, `Grade ${item.id}`, !isMasked(item));
+    step.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      const steps = $$(".grade-step:not(.is-masked)", host);
+      const index = steps.indexOf(step);
+      const next = event.key === "ArrowRight" ? steps[index + 1] : steps[index - 1];
+      if (next) next.focus();
+    });
+  });
+}
+
+function renderIllustratedMap(host, items, meta, config) {
+  const dim = state.dim;
+  const dimLabel = dimMeta(dim).label;
+  const metricLabel = metricMeta(state.metric).short.toLowerCase();
+  const { lo, hi } = geoRange(items);
+  $("#map-title").textContent = `${dimLabel} segment map`;
+  $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricLabel}`;
+  $("#map-metric-badge").textContent = metricMeta(state.metric).short;
+  $("#map-legend").hidden = false;
+  setGeoLegend(lo, hi);
+  $("#map-note").textContent = mapNote();
+
+  host.className = `tilemap illustrated-map ${config.className}`;
+  const svg = ILLUSTRATED_SVGS[dim];
+  if (!svg) {
+    host.innerHTML = `<p class="geo-loading">Loading ${esc(dimLabel)} map.</p>`;
+    loadIllustratedMap(dim).then(() => {
+      if (state.view === "explorer" && state.dim === dim) renderMap();
+    });
+    return;
+  }
+
+  host.innerHTML = svg;
+  const root = host.querySelector("svg");
+  if (root) {
+    root.classList.add("segment-svg");
+    root.setAttribute("role", "group");
+    root.setAttribute("aria-label", `${dimLabel} segment map`);
+    const ns = "http://www.w3.org/2000/svg";
+    const defs = document.createElementNS(ns, "defs");
+    defs.innerHTML = '<pattern id="illustrated-hatch" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><rect class="hatch-bg" width="9" height="9"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="9"></line></pattern>';
+    root.insertBefore(defs, root.firstChild);
+  }
+  const byId = new Map(items.map((item) => [String(item.id).toLowerCase(), item]));
+  $$("[data-category]", host).forEach((node) => {
+    const item = byId.get(String(node.dataset.category || "").toLowerCase());
+    if (!item) return;
+    node.removeAttribute("href");
+    node.removeAttribute("xlink:href");
+    const masked = isMasked(item);
+    node.dataset.id = item.id;
+    node.setAttribute("role", "button");
+    node.setAttribute("tabindex", masked ? "-1" : "0");
+    node.setAttribute("title", itemName(item));
+    node.setAttribute("aria-label", itemName(item));
+    if (masked) {
+      node.setAttribute("aria-disabled", "true");
+    } else {
+      node.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+    }
+    node.classList.toggle("is-masked", masked);
+    node.classList.toggle("is-selected", state.sel === item.id);
+    const bgNode = node.querySelector(".bg");
+    const fill = masked ? "url(#illustrated-hatch)" : colorFor(num(item[state.metric]), lo, hi);
+    const textColor = masked ? palette().muted : readableText(fill);
+    if (bgNode) bgNode.style.fill = fill;
+    $$("text", node).forEach((text) => { text.style.fill = textColor; });
+    $$(".ic", node).forEach((icon) => { icon.style.color = textColor; icon.style.stroke = textColor; });
+    $$("g[stroke]", node).forEach((group) => { group.style.stroke = textColor; });
+    $$('[fill="#000000"], [fill="black"]', node).forEach((el) => { el.style.fill = textColor; });
+    $$('[stroke="#000000"], [stroke="black"]', node).forEach((el) => { el.style.stroke = textColor; });
+    $$('[fill="#ffffff"], [fill="white"]', node).forEach((el) => { if (el.tagName.toLowerCase() === "text") el.style.fill = fill; });
+    $$('[stroke="#ffffff"], [stroke="white"]', node).forEach((el) => { el.style.stroke = masked ? textColor : fill; });
+    if (!masked) {
+      const activate = () => {
+        state.sel = state.sel === item.id ? null : item.id;
+        commit({ push: true });
+      };
+      node.addEventListener("click", (event) => { event.preventDefault(); activate(); });
+      node.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        activate();
+      });
+    }
+  });
+}
+
+/* Reference design: docs/assets/vintage-timeline.svg (viewBox 0 0 720 300). */
+function renderVintageTimeline(host, items, meta) {
+  const months = items.filter((item) => item.segment_type === "month");
+  const years = items.filter((item) => item.segment_type === "year").sort((a, b) => a.id.localeCompare(b.id));
+  if (!months.length || !years.length) {
+    renderTileMap(host, items, meta);
+    return;
+  }
+  const { lo, hi } = geoRange(months);
+  setGeoMeta("Vintage timeline",
+    `${months.length} monthly vintages + ${years.length} year totals · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricColorLabel()}`,
+    mapNote());
+  setGeoLegend(lo, hi);
+  host.className = "vintage-visual";
+  const mobile = window.matchMedia && window.matchMedia("(max-width: 599px)").matches;
+  const byYear = new Map();
+  months.forEach((item) => {
+    const year = item.id.slice(0, 4);
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year).push(item);
+  });
+  const rows = mobile
+    ? ["2014", "2015"].flatMap((year) => [
+        { year, half: "H1", items: (byYear.get(year) || []).filter((item) => Number(item.id.slice(5)) <= 6) },
+        { year, half: "H2", items: (byYear.get(year) || []).filter((item) => Number(item.id.slice(5)) > 6) },
+      ])
+    : ["2014", "2015"].map((year) => ({ year, half: "", items: byYear.get(year) || [] }));
+  const rowY = mobile ? [48, 124, 200, 276] : [95, 215];
+  const yearX = mobile ? 36 : 48;
+  const yearR = mobile ? 22 : 28;
+  const barX = mobile ? 90 : 84;
+  const barWidth = mobile ? 600 : 620;
+  const monthStart = mobile ? 142 : 124;
+  const monthStep = mobile ? 96 : 50;
+  const monthR = mobile ? 18 : 20;
+
+  const node = (item, cx, cy, r, yearNode = false) => {
+    const masked = isMasked(item);
+    const selected = state.sel === item.id;
+    const name = itemName(item);
+    const fill = yearNode
+      ? "var(--ink)"
+      : masked
+        ? "url(#vintage-hatch)"
+        : colorFor(item[state.metric], lo, hi);
+    const textColor = yearNode ? "var(--surface)" : masked ? "var(--fg-muted)" : readableText(fill);
+    const label = yearNode ? item.id : item.name.slice(0, 3);
+    const ring = selected ? `<circle class="vintage-ring" cx="${cx}" cy="${cy}" r="${r + 3.5}"></circle>` : "";
+    if (yearNode) {
+      return `<g class="vintage-year" data-id="${esc(item.id)}" role="button" tabindex="0" aria-label="${esc(name)}" title="${esc(name)}">
+        ${ring}<circle class="vintage-year-circle" cx="${cx}" cy="${cy}" r="${r}"></circle>
+        <text class="vintage-year-label" x="${cx}" y="${cy + 5}" text-anchor="middle">${esc(item.id)}</text>
+        <title>${esc(name)}</title>
+      </g>`;
+    }
+    return `<g class="vintage-node${masked ? " is-masked" : ""}${selected ? " is-selected" : ""}" data-id="${esc(item.id)}" role="button" tabindex="${masked ? "-1" : "0"}" aria-label="${esc(name)}"${masked ? ' aria-disabled="true"' : ""}>
+      ${ring}<circle class="vintage-month-circle" cx="${cx}" cy="${cy}" r="${r}" style="fill:${fill}"></circle>
+      <text class="vintage-month-label" x="${cx}" y="${cy + 4}" text-anchor="middle" style="fill:${textColor}">${esc(label)}</text>
+      <title>${esc(name)}</title>
+    </g>`;
+  };
+
+  const groups = rows.map((row, rowIndex) => {
+    const cy = rowY[rowIndex];
+    const yearItem = years.find((item) => item.id === row.year);
+    const halfLabel = mobile ? `<text class="vintage-half-label" x="68" y="${cy + 4}">${row.year} ${row.half}</text>` : "";
+    const monthsMarkup = row.items.map((item, index) => node(item, monthStart + index * monthStep, cy, monthR)).join("");
+    return `<g class="vintage-row" data-year="${row.year}">
+      <rect class="vintage-track" x="${barX}" y="${cy - (mobile ? 14 : 19)}" width="${barWidth}" height="${mobile ? 28 : 38}" rx="${mobile ? 14 : 19}"></rect>
+      <path class="vintage-arrow" d="M692 ${cy - 8} l10 8 -10 8"></path>
+      ${yearItem ? node(yearItem, yearX, cy, yearR, true) : ""}
+      ${halfLabel}${monthsMarkup}
+    </g>`;
+  }).join("");
+
+  host.innerHTML = `<svg class="vintage-svg" viewBox="0 0 720 300" preserveAspectRatio="xMidYMid meet" role="group" aria-label="Vintage timeline">
+    <defs><pattern id="vintage-hatch" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)"><rect class="hatch-bg" width="7" height="7"></rect><line class="hatch-line" x1="0" y1="0" x2="0" y2="7"></line></pattern></defs>
+    ${groups}
+  </svg><div class="geo-tooltip" role="status" hidden></div>`;
+
+  const byId = new Map(items.map((item) => [item.id, item]));
+  $$(".vintage-year, .vintage-node", host).forEach((element) => {
+    const item = byId.get(element.dataset.id);
+    if (!item) return;
+    bindGeoItem(host, element, item, itemName(item), !isMasked(item));
+  });
+}
+
 function renderMap() {
   const host = $("#tile-map");
+  if (!host) return;
+  if (state.dim !== "state") resetMapView();
   const items = dimItems();
   const meta = pe().meta;
-  const eligible = items.filter((item) => !item.insufficient && num(item[state.metric]) != null);
-  const values = eligible.map((item) => item[state.metric]);
-  const lo = values.length ? Math.min(...values) : 0;
-  const hi = values.length ? Math.max(...values) : 1;
+  const legend = $("#map-legend");
+  if (legend) legend.hidden = false;
+  const geo = !USE_TILE_MAP && !US_MAP_FAILED && (state.dim === "state" || state.dim === "grade" || state.dim === "vintage");
+  const panel = host.closest(".map-panel");
+  if (panel) panel.classList.toggle("geo-mode", geo);
+  if (geo && state.dim === "state") {
+    renderStateMap(host, items, meta);
+    return;
+  }
+  if (geo && state.dim === "grade") {
+    renderGradeStaircase(host, items, meta);
+    return;
+  }
+  if (geo && state.dim === "vintage") {
+    renderVintageTimeline(host, items, meta);
+    return;
+  }
+  const illustrated = ILLUSTRATED_MAPS[state.dim];
+  if (illustrated && !ILLUSTRATED_FAILED.has(state.dim)) {
+    renderIllustratedMap(host, items, meta, illustrated);
+    return;
+  }
+  renderTileMap(host, items, meta);
+}
+
+function renderTileMap(host, items, meta) {
+  const { lo, hi } = geoRange(items);
   const dimLabel = state.dim === "total" ? "Portfolio" : dimMeta(state.dim).label;
-  $("#map-title").textContent = state.dim === "state" ? "US state tile map" : state.dim === "total" ? "Portfolio tile" : `${dimLabel} segment map`;
+  $("#map-title").textContent = state.dim === "state" ? "US state map" : state.dim === "total" ? "Portfolio tile" : `${dimLabel} segment map`;
   $("#map-subtitle").textContent = `${items.length} segment${items.length === 1 ? "" : "s"} · ${meta.n_total.toLocaleString("en-US")} loans · color = ${metricMeta(state.metric).short.toLowerCase()}`;
   $("#map-metric-badge").textContent = metricMeta(state.metric).short;
 
@@ -672,10 +1485,9 @@ function renderMap() {
     sorted.forEach((item) => host.appendChild(makeTile(item, lo, hi)));
   }
 
-  const legend = $("#map-legend");
-  legend.innerHTML = `<span class="legend-num">${metricText(lo, state.metric, 1)}</span><span class="legend-bar" aria-hidden="true"></span><span class="legend-num">${metricText(hi, state.metric, 1)}</span><span class="legend-swatch" aria-hidden="true"></span><span>insufficient data (n &lt; ${fmtInt(meta.min_n)})</span>`;
+  setGeoLegend(lo, hi);
   const mobileHint = window.matchMedia && window.matchMedia("(max-width: 700px)").matches ? " On phones, the ranked list is the main touch interface; the map is a compact overview." : "";
-  $("#map-note").textContent = (eligible.length < items.length ? `${items.length - eligible.length} segment${items.length - eligible.length === 1 ? "" : "s"} masked for small n. Click a tile to link the list and summary.` : "Click a tile to link the list and summary. Small segments are masked automatically.") + mobileHint;
+  $("#map-note").textContent = mapNote() + mobileHint;
   if (state.sel) {
     const selected = host.querySelector(`[data-id="${CSS.escape(state.sel)}"]`);
     if (selected) selected.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -684,79 +1496,141 @@ function renderMap() {
 
 function makeTile(item, lo, hi) {
   const tile = document.createElement("button");
+  const masked = isMasked(item);
   tile.type = "button";
-  tile.className = `tile${item.insufficient ? " insufficient" : ""}${state.sel === item.id ? " selected" : ""}`;
+  tile.className = `tile${masked ? " insufficient" : ""}${state.sel === item.id ? " selected" : ""}`;
   tile.dataset.id = item.id;
-  tile.setAttribute("aria-label", `${item.name}: ${metricText(item[state.metric])} ${metricMeta(state.metric).short}; n=${fmtInt(item.n)}${item.insufficient ? "; insufficient data" : ""}`);
-  tile.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
-  if (!item.insufficient) {
+  const label = itemName(item);
+  tile.setAttribute("aria-label", label);
+  tile.title = label;
+  if (masked) {
+    tile.setAttribute("aria-disabled", "true");
+    tile.setAttribute("tabindex", "-1");
+  } else {
+    tile.setAttribute("aria-pressed", state.sel === item.id ? "true" : "false");
+  }
+  if (!masked) {
     const bg = colorFor(item[state.metric], lo, hi);
     tile.style.setProperty("--tile-bg", bg);
     tile.style.color = readableText(bg);
   }
-  tile.textContent = state.dim === "state" ? item.id : item.name.length > 16 ? `${item.name.slice(0, 15)}…` : item.name;
-  tile.onclick = () => {
-    if (state.dim === "total") return;
-    state.sel = state.sel === item.id ? null : item.id;
-    commit({ push: true });
-  };
-  tile.onkeydown = (event) => {
-    if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
-    const tiles = $$(".tile:not(.empty)", $("#tile-map"));
-    const idx = tiles.indexOf(tile);
-    const cols = state.dim === "state" ? 12 : Math.max(1, Math.round($("#tile-map").clientWidth / 80));
-    let next = idx;
-    if (event.key === "ArrowRight") next = idx + 1;
-    if (event.key === "ArrowLeft") next = idx - 1;
-    if (event.key === "ArrowDown") next = idx + cols;
-    if (event.key === "ArrowUp") next = idx - cols;
-    if (next >= 0 && next < tiles.length) { event.preventDefault(); tiles[next].focus(); }
-  };
+  tile.textContent = label;
+  if (!masked) {
+    tile.onclick = () => {
+      if (state.dim === "total") return;
+      state.sel = state.sel === item.id ? null : item.id;
+      commit({ push: true });
+    };
+    tile.onkeydown = (event) => {
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+      const tiles = $$(".tile:not(.empty):not(.insufficient)", $("#tile-map"));
+      const idx = tiles.indexOf(tile);
+      const cols = state.dim === "state" ? 12 : Math.max(1, Math.round($("#tile-map").clientWidth / 80));
+      let next = idx;
+      if (event.key === "ArrowRight") next = idx + 1;
+      if (event.key === "ArrowLeft") next = idx - 1;
+      if (event.key === "ArrowDown") next = idx + cols;
+      if (event.key === "ArrowUp") next = idx - cols;
+      if (next >= 0 && next < tiles.length) { event.preventDefault(); tiles[next].focus(); }
+    };
+  }
   return tile;
 }
 
 function renderList() {
   const host = $("#rank-list");
   const query = state.search.trim().toLowerCase();
-  let items = dimItems().filter((item) => !query || item.name.toLowerCase().includes(query) || item.id.toLowerCase().includes(query));
-  items = items.slice().sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0));
-  const maxValue = items.reduce((max, item) => Math.max(max, num(item[state.metric]) || 0), 0);
+  const items = dimItems()
+    .filter((item) => !query || itemName(item).toLowerCase().includes(query) || item.id.toLowerCase().includes(query))
+    .sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0));
+  const ranked = items.filter((item) => !isMasked(item));
+  const masked = items.filter((item) => isMasked(item));
+  const maxValue = ranked.reduce((max, item) => Math.max(max, num(item[state.metric]) || 0), 0);
+  const { lo, hi } = geoRange(dimItems());
   const all = dimItems();
   $("#list-count").textContent = query ? `${items.length} of ${all.length} segments match "${state.search}"` : `${all.length} segment${all.length === 1 ? "" : "s"} in this view`;
   $("#sort-pill").textContent = `Sorted by ${metricMeta(state.metric).short.toLowerCase()}`;
   $("#list-empty").hidden = items.length > 0;
   host.innerHTML = "";
-  items.forEach((item) => {
+
+  const renderRow = (item, isSmallN) => {
     const row = document.createElement("button");
     row.type = "button";
-    row.className = "rank-row";
+    row.className = `rank-row${isSmallN ? " is-masked" : ""}`;
     row.dataset.id = item.id;
-    row.setAttribute("role", "option");
-    row.setAttribute("aria-selected", state.sel === item.id ? "true" : "false");
-    if (state.sel === item.id) row.setAttribute("aria-current", "true");
+    row.setAttribute("title", itemName(item));
+    if (isSmallN) {
+      row.setAttribute("aria-disabled", "true");
+      row.setAttribute("tabindex", "-1");
+    } else if (state.sel === item.id) {
+      row.setAttribute("aria-current", "true");
+    }
     const value = num(item[state.metric]);
     const width = maxValue > 0 ? clamp((value / maxValue) * 100, 0, 100) : 0;
+    const isYearTotal = state.dim === "vintage" && item.segment_type === "year";
+    if (!isSmallN) row.style.setProperty("--rank-color", colorFor(value, lo, hi));
     row.innerHTML = `
-      <span class="rank-name">${esc(item.name)}${item.insufficient ? `<span class="smalln">small n</span>` : ""}</span>
+      <span class="rank-name">${esc(itemName(item))}${isYearTotal ? '<span class="year-tag">year</span>' : ""}${isSmallN ? `<span class="smalln">${item.immature ? "immature" : "small n"}</span>` : ""}</span>
       <span class="rank-value">${metricText(value, state.metric, 2)}</span>
       <span class="rank-meta">
         <span class="rank-bar" aria-hidden="true"><span style="--w:${width.toFixed(1)}%"></span></span>
         <span class="rank-sub">n=${fmtInt(item.n)} · PD ${fmtPct(item.pred_pd, 1)}</span>
       </span>`;
-    row.onclick = () => {
-      state.sel = state.sel === item.id ? null : item.id;
-      commit({ push: true });
-    };
-    row.onkeydown = (event) => {
-      if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
-      event.preventDefault();
-      const rows = $$(".rank-row", host);
-      const index = rows.indexOf(row);
-      const next = event.key === "ArrowDown" ? Math.min(rows.length - 1, index + 1) : Math.max(0, index - 1);
-      rows[next].focus();
-    };
+    if (!isSmallN) {
+      row.onclick = () => {
+        state.sel = state.sel === item.id ? null : item.id;
+        commit({ push: true });
+      };
+      row.onkeydown = (event) => {
+        if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+        event.preventDefault();
+        const rows = $$(".rank-row:not(.is-masked)", host);
+        const index = rows.indexOf(row);
+        const next = event.key === "ArrowDown" ? Math.min(rows.length - 1, index + 1) : Math.max(0, index - 1);
+        rows[next].focus();
+      };
+    }
     host.appendChild(row);
-  });
+  };
+
+  ranked.forEach((item) => renderRow(item, false));
+  if (masked.length) {
+    const divider = document.createElement("div");
+    divider.className = "rank-divider";
+    divider.setAttribute("role", "separator");
+    divider.innerHTML = `<span>${masked.some((item) => item.immature) ? "Immature, not ranked" : "Small n, not ranked"}</span>`;
+    host.appendChild(divider);
+    masked.forEach((item) => renderRow(item, true));
+  }
+}
+
+function metricRank(item, metric) {
+  const peers = dimItems()
+    .filter((entry) => !isMasked(entry) && !(state.dim === "vintage" && entry.segment_type === "year") && num(entry[metric]) != null)
+    .sort((a, b) => (num(b[metric]) || 0) - (num(a[metric]) || 0));
+  const index = peers.findIndex((entry) => entry.id === item.id);
+  return index >= 0 ? { rank: index + 1, total: peers.length } : null;
+}
+
+function signedPp(diff) {
+  const value = diff * 100;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(2)} pp`;
+}
+
+function selectionModelCheck(item) {
+  // The portfolio row must use the unrounded meta.mean_pd so its gap agrees
+  // with the folder sheet and README (14.4631% - 12.1752% = 2.29 pp).
+  const predictedValue = item.id === "total" && pe() ? pe().meta.mean_pd : item.pred_pd;
+  const observed = fmtPct(item.default_rate, 2);
+  const predicted = fmtPct(predictedValue, 2);
+  const gap = Math.abs((num(item.default_rate) || 0) - (num(predictedValue) || 0)) * 100;
+  if (num(predictedValue) < num(item.ci_low)) {
+    return `Model check: observed ${observed} vs predicted ${predicted}: the model underestimates risk by ${gap.toFixed(2)} pp (predicted PD is outside the 95% CI).`;
+  }
+  if (num(predictedValue) > num(item.ci_high)) {
+    return `Model check: observed ${observed} vs predicted ${predicted}: the model overestimates risk by ${gap.toFixed(2)} pp (predicted PD is outside the 95% CI).`;
+  }
+  return `Model check: observed ${observed} vs predicted ${predicted}: predicted PD is within the 95% CI.`;
 }
 
 function renderSummary() {
@@ -764,44 +1638,30 @@ function renderSummary() {
   if (!item) return;
   const total = totalItem();
   const isSelected = state.dim !== "total" && !!selectedItem();
-  $("#summary-title").textContent = isSelected ? item.name : "Portfolio";
-  $("#summary-subtitle").textContent = isSelected
-    ? `${dimMeta(state.dim).label} segment · ${fmtInt(item.n)} loans · ${fmtPct(item.ead_share, 1)} of EAD`
-    : "All segments in the primary mature test window.";
+  const showCompare = isSelected;
+  $("#summary-title").textContent = state.dim === "total" ? "Total portfolio" : isSelected ? itemName(item) : "Portfolio";
+  $("#summary-context").innerHTML = `<span>Loans <strong data-testid="summary-loans">${fmtInt(item.n)}</strong></span><span>Share of EAD <strong data-testid="summary-ead-share">${fmtPct(item.ead_share, 1)}</strong></span>`;
 
-  const kpis = [
-    { label: "Loans", value: item.n, format: fmtInt, testid: "summary-loans", info: "kpi-loans" },
-    { label: "Observed default", value: item.default_rate, format: (v) => fmtPct(v, 2), testid: "summary-default-rate", info: "kpi-observed", sub: `95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)}` },
-    { label: "Predicted PD", value: item.pred_pd, format: (v) => fmtPct(v, 2), testid: "summary-pred-pd", info: "kpi-pd" },
-    { label: "EL % of EAD", value: item.el_pct_ead, format: (v) => fmtPct(v, 2), testid: "summary-el", info: "kpi-el" },
-    { label: "EAD share", value: item.ead_share, format: (v) => fmtPct(v, 1), testid: "summary-ead-share", info: "kpi-ead" },
+  const rows = [
+    { metric: "default_rate", label: "Observed default", testid: "summary-default-rate" },
+    { metric: "pred_pd", label: "Predicted PD", testid: "summary-pred-pd" },
+    { metric: "el_pct_ead", label: "Expected loss (% of EAD)", testid: "summary-el" },
   ];
   const host = $("#summary-kpis");
-  host.innerHTML = kpis.map((kpi) => `<div class="summary-kpi"><p class="mini-label">${esc(kpi.label)} ${infoButton(kpi.info, kpi.label)}</p><p class="value" data-testid="${kpi.testid}">—</p>${kpi.sub ? `<p class="sub">${esc(kpi.sub)} ${infoButton("kpi-ci", "95% confidence interval")}</p>` : ""}</div>`).join("");
-  kpis.forEach((kpi) => {
-    const el = host.querySelector(`[data-testid="${kpi.testid}"]`);
-    countUp(el, kpi.value, kpi.format);
-  });
+  host.innerHTML = rows.map((row) => {
+    const value = num(item[row.metric]);
+    const diff = showCompare && total ? value - (num(total[row.metric]) || 0) : null;
+    const rank = showCompare ? metricRank(item, row.metric) : null;
+    const active = state.metric === row.metric;
+    return `<div class="selection-metric-row${active ? " is-active" : ""}" data-row-metric="${row.metric}">
+      <div class="selection-metric-label"><span>${esc(row.label)}</span></div>
+      <div class="selection-metric-value" data-testid="${row.testid}">${metricText(value, row.metric, 2)}</div>
+      ${row.metric === "default_rate" ? `<div class="selection-ci">95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)} ${infoButton("kpi-ci", "95% confidence interval")}</div>` : ""}
+      ${showCompare ? `<div class="selection-metric-compare"><span class="selection-metric-diff">${signedPp(diff)} vs portfolio</span><span class="selection-metric-rank">${rank ? `#${rank.rank} of ${rank.total}` : "—"}</span></div>` : ""}
+    </div>`;
+  }).join("");
 
-  const gapHost = $("#summary-gap");
-  const sourceDim = state.dim === "total" ? "state" : state.dim;
-  const peers = dimItems(sourceDim).filter((x) => !x.insufficient && num(x[state.metric]) != null);
-  const highest = peers.slice().sort((a, b) => (num(b[state.metric]) || 0) - (num(a[state.metric]) || 0))[0];
-  const lowest = peers.slice().sort((a, b) => (num(a[state.metric]) || 0) - (num(b[state.metric]) || 0))[0];
-  let html = "";
-  if (isSelected && total) {
-    const diff = (num(item[state.metric]) || 0) - (num(total[state.metric]) || 0);
-    const direction = diff >= 0 ? "above" : "below";
-    html += `<strong>${esc(item.name)}</strong> is <strong>${Math.abs(diff * 100).toFixed(2)} pp ${direction}</strong> the portfolio on ${esc(metricMeta(state.metric).short.toLowerCase())}. `;
-  }
-  if (highest && lowest) {
-    const dimLabel = state.dim === "total" ? "states" : `${dimMeta(sourceDim).label.toLowerCase()} segments`;
-    html += `Highest ${dimLabel}: <strong>${esc(highest.name)} (${metricText(highest[state.metric], state.metric, 1)})</strong>. Lowest: <strong>${esc(lowest.name)} (${metricText(lowest[state.metric], state.metric, 1)})</strong>.`;
-  }
-  gapHost.innerHTML = html || "Select a segment to compare it with the portfolio.";
-
-  const hist = histFor(state.dim, item.id);
-  renderScoreHist($("#score-hist"), hist, pe().meta.score_bins, `${isSelected ? item.name : "Portfolio"} · score distribution`, null);
+  $(".selection-model-check").innerHTML = `<span id="summary-model-check" data-testid="summary-model-check">${esc(selectionModelCheck(item))}</span>${infoButton("model-check", "Model check")}`;
 }
 
 function renderScoreHist(host, hist, bins, caption, markerValue) {
@@ -828,37 +1688,107 @@ function renderScoreHist(host, hist, bins, caption, markerValue) {
   const fig = host.closest("figure");
   const cap = fig && fig.querySelector("figcaption");
   if (cap) cap.textContent = caption;
-  const selCap = $("#score-hist-caption");
-  if (selCap && host.id === "score-hist") selCap.textContent = caption;
 }
 
-function renderInsight() {
-  const item = summaryItem();
-  const total = totalItem();
-  if (!item || !total) return;
-  const selected = state.dim === "total" ? null : selectedItem();
-  const kicker = $("#insight-kicker");
-  const copy = $("#insight-text");
-  if (selected) {
-    const diff = (num(item[state.metric]) || 0) - (num(total[state.metric]) || 0);
-    const direction = diff >= 0 ? "above" : "below";
-    kicker.textContent = `${dimMeta(state.dim).label} view · ${item.name}`;
-    copy.innerHTML = `<span class="big">${metricText(item[state.metric], state.metric, 2)}</span>
-      ${esc(metricMeta(state.metric).short)}. This segment holds <strong>${fmtPct(item.ead_share, 1)}</strong> of EAD across <strong>${fmtInt(item.n)}</strong> loans. Observed default is <strong>${fmtPct(item.default_rate, 2)}</strong> (95% CI ${fmtPct(item.ci_low, 2)}–${fmtPct(item.ci_high, 2)}), predicted PD is <strong>${fmtPct(item.pred_pd, 2)}</strong>, and expected loss is <strong>${fmtPct(item.el_pct_ead, 2)}</strong> of EAD — <strong>${Math.abs(diff * 100).toFixed(2)} pp ${direction}</strong> the portfolio.`;
-  } else {
-    const masked = dimItems("state").filter((x) => x.insufficient).length;
-    kicker.textContent = "Portfolio view";
-    copy.innerHTML = `<span class="big">${fmtPct(total.default_rate, 2)}</span>
-      observed default across <strong>${fmtInt(total.n)}</strong> resolved loans. Predicted PD is <strong>${fmtPct(total.pred_pd, 2)}</strong> and expected loss is <strong>${fmtPct(total.el_pct_ead, 2)}</strong> of EAD. Pick a dimension, then a tile or a ranked row, to compare one segment with the portfolio. ${masked ? `<strong>${masked} states</strong> are masked for small n.` : ""}`;
+let howBuiltOpenStep = 1;
+
+function howBuiltContent(step) {
+  return (PROCESS.steps || []).find((entry) => entry.id === step) || null;
+}
+
+function renderHowBuilt() {
+  const panel = $("#how-built-panel");
+  if (!panel) return;
+  const picture = $("#how-built-picture");
+  const reading = $("#how-built-reading");
+  const title = $("#how-built-reading-title");
+  const body = $("#how-built-reading-body");
+  if (!picture || !reading || !title || !body) return;
+
+  const nodes = $$(".how-built-node", panel);
+  const svgSteps = $$("[data-step]", picture.querySelector("svg"));
+  const selectStep = (stepId) => {
+    howBuiltOpenStep = stepId;
+    nodes.forEach((node) => {
+      const open = Number(node.dataset.step) === howBuiltOpenStep;
+      node.classList.toggle("is-selected", open);
+      node.setAttribute("aria-pressed", String(open));
+    });
+    svgSteps.forEach((element) => {
+      element.classList.toggle("is-selected", Number(element.dataset.step) === howBuiltOpenStep);
+    });
+    const step = howBuiltContent(stepId);
+    if (!step) return;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      reading.classList.add("is-swapping");
+      window.setTimeout(() => reading.classList.remove("is-swapping"), 180);
+    }
+    title.textContent = step.title;
+    body.innerHTML = `
+      <p><strong>What I did:</strong> ${esc(resolveInfoText(step.what))}</p>
+      <p><strong>Why:</strong> ${esc(resolveInfoText(step.why))}</p>
+      <p><strong>What I learned:</strong> ${esc(resolveInfoText(step.learned))}</p>`;
+  };
+
+  if (!picture.__howBuiltBound) {
+    picture.addEventListener("click", (event) => {
+      const stepElement = event.target.closest("[data-step]");
+      if (stepElement) selectStep(Number(stepElement.dataset.step));
+    });
+    picture.__howBuiltBound = true;
   }
+
+  nodes.forEach((node) => {
+    if (node.__howBuiltBound) return;
+    node.addEventListener("click", () => selectStep(Number(node.dataset.step)));
+    node.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const next = nodes.find((candidate, index) => index > nodes.indexOf(node));
+        if (next) { next.focus(); next.click(); }
+      } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+        event.preventDefault();
+        const previous = [...nodes].reverse().find((candidate) => nodes.indexOf(candidate) < nodes.indexOf(node));
+        if (previous) { previous.focus(); previous.click(); }
+      }
+    });
+    node.__howBuiltBound = true;
+  });
+
+  selectStep(howBuiltOpenStep || 1);
+}
+
+function mountFolderArt() {
+  const host = $("#total-folder-art");
+  if (!host || !FOLDER_SVG || host.dataset.mounted === "1") return;
+  host.innerHTML = FOLDER_SVG;
+  host.dataset.mounted = "1";
+}
+
+function renderTotalPanel() {
+  mountFolderArt();
 }
 
 function renderExplorer() {
   if (!pe()) return;
   const meta = pe().meta;
-  $("#explorer-caption").textContent = `Primary mature test window · ${meta.years.join("–")} · ${meta.term}-month · ${fmtInt(meta.n_total)} loans. Small segments (n < ${fmtInt(meta.min_n)}) are hatched and never drive a ranking.`;
+  const isTotal = state.dim === "total";
+  $("#view-explorer").dataset.dim = state.dim;
+  $(".explorer-grid").classList.toggle("is-total", isTotal);
+  $("#total-panel").hidden = !isTotal;
+  $(".map-panel").hidden = isTotal;
+  $(".list-panel").hidden = isTotal;
+  $(".selection-part-a").hidden = isTotal;
+  $("#explorer-caption").textContent = isTotal
+    ? (EXPLORER.captions && EXPLORER.captions.total) || "The whole test portfolio at a glance. Pick a dimension to compare slices with it."
+    : (EXPLORER.captions && EXPLORER.captions.default) || "Pick a dimension to compare one slice with the portfolio.";
   renderDimensionTabs();
   renderMetricTabs();
+  if (isTotal) {
+    renderTotalPanel();
+    renderHowBuilt();
+    return;
+  }
   const search = $("#segment-search");
   if (search && search.value !== state.search) search.value = state.search;
   if (search && !search.__bound) {
@@ -870,10 +1800,11 @@ function renderExplorer() {
       timer = setTimeout(() => { writeHash(false); renderList(); }, 120);
     });
   }
+
   renderMap();
   renderList();
   renderSummary();
-  renderInsight();
+  renderHowBuilt();
 }
 
 /* ---------------------------------------------------------------- risk lab */
@@ -936,7 +1867,7 @@ function updateRiskControls() {
   set("risk-rho", "rho", opts.rhos, (v) => fmtNum(v, 3));
   set("risk-pd", "pd", opts.pds, fmtX);
   set("risk-lgd", "lgd", opts.lgds, fmtX);
-  $$("#surface-metrics button").forEach((btn) => btn.setAttribute("aria-selected", btn.dataset.metric === state.surfaceMetric ? "true" : "false"));
+  $$("#surface-metrics button").forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.metric === state.surfaceMetric ? "true" : "false"));
 }
 
 function renderRisk() {
@@ -946,33 +1877,21 @@ function renderRisk() {
   updateRiskControls();
   const scenario = scenarioForState();
   const hist = scenario && sc.histograms[scenario.key];
-  $("#scenario-sub").textContent = "Sliders snap to the precomputed simulation grid. The same state drives the histogram and the surface.";
+  $("#scenario-sub").textContent = "The same state drives the histogram and the surface.";
   $("#scenario-badge").textContent = scenario ? scenario.key.replace(/_/g, " · ") : "—";
   const kpis = $("#risk-kpis");
   if (hist && hist.exact) {
     const ex = hist.exact;
-    const defs = [
-      ["EL", ex.expected_loss_pct_ead, "expected-loss"],
-      ["UL", ex.unexpected_loss_pct_ead, "unexpected-loss"],
-      ["VaR 99%", ex["var_0.99_pct_ead"], "var-99"],
-      ["VaR 99.9%", ex["var_0.999_pct_ead"], "var-999"],
-      ["ES 99%", ex["es_0.99_pct_ead"], "es-99"],
-      ["ES 99.9%", ex["es_0.999_pct_ead"], "es-999"],
-    ];
-    const meanings = {
-      "expected-loss": "Average loss across simulated paths.",
-      "unexpected-loss": "Typical variation around expected loss.",
-      "var-99": `Loss stays below this in 99 of 100 simulated years.`,
-      "var-999": `Loss stays below this in 999 of 1,000 simulated years.`,
-      "es-99": "Average loss in the worst 1% of simulated years.",
-      "es-999": "Average loss in the worst 0.1% of simulated years.",
-    };
-    const infoIds = { "expected-loss": "risk-el", "unexpected-loss": "risk-ul", "var-99": "risk-var99", "var-999": "risk-var999", "es-99": "risk-es99", "es-999": "risk-es999" };
-    kpis.innerHTML = defs.map(([label, value, key]) => `<div class="summary-kpi"><p class="mini-label">${label} ${infoButton(infoIds[key], label)}</p><p class="value" data-testid="risk-${key}">—</p><p class="sub">${esc(meanings[key])}</p></div>`).join("");
-    defs.forEach(([label, value, key]) => countUp(kpis.querySelector(`[data-testid="risk-${key}"]`), value, (v) => fmtPct(v, 2)));
+    const p = palette();
+    const kpiStats = LOSS_STATISTICS.filter((stat) => stat.id !== "var-999");
+    kpis.innerHTML = kpiStats.map((stat) => {
+      const cssDash = stat.dash === "dot" ? "dotted" : stat.dash === "dash" ? "dashed" : "solid";
+      return `<div class="summary-kpi" data-stat="${stat.id}" style="--stat-color:${p[stat.color]};--stat-dash:${cssDash}"><p class="mini-label">${stat.label}</p><p class="value" data-testid="risk-${stat.id}">—</p><p class="sub">${esc(stat.meaning)}</p></div>`;
+    }).join("");
+    kpiStats.forEach((stat) => countUp(kpis.querySelector(`[data-testid="risk-${stat.id}"]`), ex[stat.key], (v) => fmtPct(v, 1)));
+    $("#risk-bar-note").textContent = (EXPLORER && EXPLORER.riskBarNote) || "";
     $("#loss-sub").textContent = `${scenario.key.replace(/_/g, " ")} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
-    $("#tail-pill").textContent = `ES 99.9% ${fmtPct(ex["es_0.999_pct_ead"], 1)}`;
-    renderGauge(ex["var_0.999_pct_ead"]);
+      renderGauge(ex["var_0.999_pct_ead"], ex.expected_loss_pct_ead);
   }
   if (state.view === "risk") {
     drawLossChart(hist, scenario);
@@ -980,7 +1899,7 @@ function renderRisk() {
   }
 }
 
-function renderGauge(value) {
+function renderGauge(value, expectedLoss) {
   const host = $("#risk-gauge");
   if (!host) return;
   const v = num(value) || 0;
@@ -991,17 +1910,30 @@ function renderGauge(value) {
   const cx = 115; const cy = 105; const r = 80;
   const nx = cx + 54 * Math.cos(angle);
   const ny = cy - 54 * Math.sin(angle);
+  const p = palette();
+  const tick = (pctValue) => {
+    const theta = Math.PI * (1 - pctValue / 60);
+    return { x: cx + 92 * Math.cos(theta), y: cy - 92 * Math.sin(theta), pct: pctValue };
+  };
+  const ticks = [0, 20, 40, 60].map(tick);
+  const gradientStops = p.risk.map((entry, index) => `<stop offset="${(index / (p.risk.length - 1) * 100).toFixed(1)}%" stop-color="${entry}"></stop>`).join("");
   host.innerHTML = `<svg viewBox="0 0 230 146" aria-hidden="true">
+    <defs><linearGradient id="gauge-ramp" x1="0" x2="1">${gradientStops}</linearGradient></defs>
     <path class="track" d="M25 105 A80 80 0 0 1 205 105" pathLength="100"></path>
+    <path class="ramp-track" d="M25 105 A80 80 0 0 1 205 105" pathLength="100" stroke="url(#gauge-ramp)"></path>
     <path class="value" d="M25 105 A80 80 0 0 1 205 105" pathLength="100" stroke="${color}" stroke-dasharray="${(pct * 100).toFixed(1)} 100"></path>
     <line class="needle" x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}"></line>
     <circle class="hub" cx="${cx}" cy="${cy}" r="4.2"></circle>
-    <text x="${cx}" y="140" text-anchor="middle" font-size="22">${fmtPct(v, 1)}</text>
-    <text class="scale" x="18" y="119">0%</text>
-    <text class="scale" x="212" y="119" text-anchor="end">${Math.round(max * 100)}%</text>
+    <text x="${cx}" y="140" text-anchor="middle" font-size="26">${fmtPct(v, 1)}</text>
+    ${ticks.map((entry) => `<text class="scale" x="${entry.x.toFixed(1)}" y="${entry.y.toFixed(1)}" text-anchor="middle">${entry.pct}%</text>`).join("")}
   </svg>`;
   const caption = $("#gauge-caption");
-  if (caption) caption.textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale. The gauge is descriptive; it does not imply a limit.`;
+  if (caption) caption.textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale.`;
+  const ratio = $("#gauge-ratio");
+  if (ratio) {
+    const el = num(expectedLoss);
+    ratio.textContent = el && el > 0 ? `VaR 99.9% is ${(v / el).toFixed(1)}x the expected loss.` : "";
+  }
 }
 
 function drawLossChart(hist, scenario) {
@@ -1012,31 +1944,48 @@ function drawLossChart(hist, scenario) {
   const edges = hist.bin_edges_pct_ead || [];
   const centers = edges.slice(0, -1).map((v, i) => (v + edges[i + 1]) / 2);
   const ex = hist.exact || {};
-  const markers = [
-    ["EL", ex.expected_loss_pct_ead, "#1f2937", "solid"],
-    ["VaR 99%", ex["var_0.99_pct_ead"], "#b45309", "dash"],
-    ["VaR 99.9%", ex["var_0.999_pct_ead"], "#b91c1c", "dash"],
-    ["ES 99%", ex["es_0.99_pct_ead"], "#0f766e", "dot"],
-  ];
+  const p = palette();
+  const markers = LOSS_STATISTICS.filter((stat) => stat.dash != null).map((stat) => ({
+    label: stat.label,
+    value: ex[stat.key],
+    color: p[stat.color],
+    dash: stat.dash,
+  }));
   const shapes = [];
-  markers.forEach(([label, value, color, dash]) => {
+  markers.forEach(({ value, color, dash }) => {
     if (num(value) == null) return;
     const x = value * 100;
     shapes.push({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.6, dash } });
   });
-  const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: "rgba(37,99,235,0.72)", line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
+  const var99Raw = num(ex["var_0.99_pct_ead"]);
+  const var999Raw = num(ex["var_0.999_pct_ead"]);
+  const var99 = var99Raw == null ? null : var99Raw * 100;
+  const var999 = var999Raw == null ? null : var999Raw * 100;
+  const barColors = centers.map((center) => {
+    if (var999 != null && center >= var999) return p.lilacDark;
+    if (var99 != null && center >= var99) return p.lilac;
+    return p.periwinkle;
+  });
+  const regions = [
+    ["Below VaR 99%", p.periwinkle],
+    ["VaR 99% to 99.9%", p.lilac],
+    ["Beyond VaR 99.9% (worst 0.1% of years)", p.lilacDark],
+  ];
+  const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: barColors, line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
     bargap: 0.02,
-    xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02] },
+    xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02], tickformat: ".1f" },
     yaxis: { title: "Simulated paths" },
     showlegend: false, shapes,
     margin: { l: 64, r: 20, t: 24, b: 52 },
   });
   const legend = $("#loss-legend");
   if (legend) {
-    legend.innerHTML = markers.filter(([, value]) => num(value) != null).map(([label, value, color, dash]) => {
+    const regionItems = regions.map(([label, color]) => `<span class="legend-item"><span class="region-swatch" style="background:${color}"></span><strong>${esc(label)}</strong></span>`).join("");
+    const markerItems = markers.filter(({ value }) => num(value) != null).map(({ label, value, color, dash }) => {
       const style = dash === "dot" ? "dotted" : dash;
-      return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong> ${fmtPct(value, 1)} of EAD</span>`;
+      return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong> <span class="legend-value">${fmtPct(value, 1)}</span></span>`;
     }).join("");
+    legend.innerHTML = regionItems + markerItems;
   }
   if (!ok) showFallback(host, "assets/loss_distribution.png", "The interactive histogram could not be drawn; a static figure is shown.");
 }
@@ -1062,9 +2011,10 @@ function drawSurface() {
   const host = $("#surface-chart");
   const surf = D.interactive && D.interactive.risk_surface;
   if (!host || !surf) return;
+  const p = palette();
   const base = surf.base_case;
   const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
-  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText} Click a point to move the sliders.`;
+  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText}`;
   if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
   const matrix = surfaceMatrix(state.surfaceMetric);
   if (!matrix) return;
@@ -1079,9 +2029,9 @@ function drawSurface() {
   let ok = false;
   if (!hasWebGL() || window.innerWidth < 700) {
     ok = plot(host, [
-      { z, x: rhos, y: pds, type: "heatmap", colorscale: "YlOrRd", hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
-      { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: "#111827", line: { width: 2, color: "#fff" } }, hoverinfo: "skip", showlegend: false },
-      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle-open", size: 13, color: "#0f172a", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
+      { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
+      { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
+      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle", size: 20, color: p.surface, line: { width: 4, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
       title: { text: "2D heatmap fallback (no WebGL)", font: { size: 11 } },
@@ -1090,54 +2040,17 @@ function drawSurface() {
     host.dataset.mode = "heatmap";
   } else {
     ok = plot(host, [
-      { type: "surface", z, x: rhos, y: pds, colorscale: "YlOrRd", showscale: true, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.2f}% of EAD<extra></extra>" },
-      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: "#111827", symbol: "x" }, hoverinfo: "skip", showlegend: false },
-      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: "#0f172a" }, marker: { size: 5, color: "#0f172a", symbol: "circle-open", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
+      { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, colorbar: { tickformat: ".1f" }, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
+      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
+      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: p.ink }, marker: { size: 9, color: p.surface, symbol: "circle", line: { width: 3, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
-      scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
+      scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD", tickformat: ".1f" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
       margin: { l: 0, r: 0, t: 8, b: 0 },
     });
     host.dataset.mode = "surface";
   }
   if (!ok) { showFallback(host, "assets/risk_surface_static.png", "The surface could not be drawn; a static figure is shown."); return; }
-  const el = host;
-  if (!el.__clickBound) {
-    el.__clickBound = true;
-    el.on("plotly_click", (event) => {
-      const point = event && event.points && event.points[0];
-      if (!point) return;
-      let rho = Number(point.x);
-      let pd = Number(point.y);
-      if (!Number.isFinite(rho) || !Number.isFinite(pd)) {
-        const n = Number(point.pointNumber);
-        if (Number.isFinite(n) && el.dataset.mode === "heatmap") {
-          rho = rhos[n % rhos.length]; pd = pds[Math.floor(n / rhos.length)];
-        }
-      }
-      const opts = riskOptions();
-      if (!opts.rhos.includes(rho) || !opts.pds.includes(pd)) return;
-      el.__lastPlotlyClick = Date.now();
-      state.risk.rho = rho; state.risk.pd = pd;
-      commit({ push: true });
-    });
-    // 3D hit-testing depends on the camera and can miss a thin surface. Keep a
-    // deterministic pointer fallback so a click on the chart always moves the
-    // linked sliders, even in a headless browser.
-    el.addEventListener("click", (event) => {
-      if (event.target.closest(".modebar")) return;
-      if (Date.now() - (el.__lastPlotlyClick || 0) < 220) return;
-      const rect = el.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
-      const fx = clamp((event.clientX - rect.left) / rect.width, 0, 1);
-      const fy = clamp((event.clientY - rect.top) / rect.height, 0, 1);
-      const rho = rhos[Math.round(fx * (rhos.length - 1))];
-      const pd = pds[Math.round(fy * (pds.length - 1))];
-      if (rho == null || pd == null) return;
-      state.risk.rho = rho; state.risk.pd = pd;
-      commit({ push: true });
-    });
-  }
 }
 function nearestValue(values, target) {
   return values[nearestIndex(values, target)];
@@ -1298,14 +2211,14 @@ function setupSimulator() {
     const optionHtml = options.map((opt) => `<option value="${esc(opt.key)}">${esc(opt.label)}${opt.share ? ` — ${(opt.share * 100).toFixed(1)}% of test window` : ""}</option>`).join("");
     wrap.innerHTML = `
       <div class="sim-ctrl-head">
-        <label for="${id}">${esc(label)} ${infoButton(`sim-${variable}`, label)}</label>
-        <output class="sim-contrib" id="sim-contrib-${variable}">—</output>
+        <label for="${id}">${esc(label)} ${INFO[`sim-${variable}`] ? infoButton(`sim-${variable}`, label) : ""}</label>
+        <span class="sim-ctrl-value"><output class="sim-contrib" id="sim-contrib-${variable}">—</output><span class="sim-point-bar" aria-hidden="true"><span id="sim-bar-${variable}"></span></span></span>
       </div>
       ${numeric
         ? `<input id="${id}" type="range" min="0" max="${Math.max(0, options.length - 1)}" step="1" value="${Math.max(0, options.findIndex((o) => o.key === key))}" aria-valuetext="${esc((options.find((o) => o.key === key) || options[0]).label)}">
-           <output class="sim-range-label" id="sim-label-${variable}">—</output>`
-        : `<select id="${id}">${optionHtml}</select>`}
-      <p class="sim-share" id="sim-share-${variable}"></p>`;
+            <output class="sim-range-label" id="sim-label-${variable}">—</output>
+            <p class="sim-share" id="sim-share-${variable}"></p>`
+         : `<select id="${id}">${optionHtml}</select>`}`;
     host.appendChild(wrap);
     const input = wrap.querySelector(numeric ? "input" : "select");
     input.value = key;
@@ -1387,26 +2300,31 @@ function renderSimulator() {
   const portfolioRate = pe() ? pe().meta.default_rate_total : null;
   const testYears = pe() ? pe().meta.years.join("-") : "the test window";
   const typicalScore = Number(app.test_score_bins?.[0] || 0);
+  const contributions = simVariables(app).map((variable) => Number(simOption(app, variable, state.sim[variable]).points) || 0);
+  const maxContribution = Math.max(...contributions.map((value) => Math.abs(value)), 1);
 
-  simVariables(app).forEach((variable) => {
+  simVariables(app).forEach((variable, index) => {
     const opt = simOption(app, variable, state.sim[variable]);
     const contribution = Number(opt.points) || 0;
     const contrib = $(`#sim-contrib-${variable}`);
     if (contrib) contrib.textContent = signedPoints(contribution);
+    const bar = $(`#sim-bar-${variable}`);
+    if (bar) {
+      bar.style.width = `${(Math.abs(contribution) / maxContribution) * 50}%`;
+      bar.classList.toggle("is-negative", contribution < 0);
+    }
     const label = $(`#sim-label-${variable}`);
     if (label) label.textContent = opt.label;
     const share = $(`#sim-share-${variable}`);
-    if (share) share.textContent = opt.share ? `${(opt.share * 100).toFixed(1)}% of loans in the ${testYears} test window have this value.` : "";
+    if (share) share.textContent = opt.share ? `${(opt.share * 100).toFixed(1)}% of loans have this value.` : "";
   });
 
   countUp($("#sim-score"), score, (v) => String(Math.round(v)));
   countUp($("#sim-pd"), pd, (v) => fmtPct(v, 2));
   countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}%`);
-  $("#sim-score-note").textContent = "Higher score = lower implied risk.";
   $("#sim-pd-note").textContent = `About ${Math.round(pd * 100)} out of 100 similar applicants default; the portfolio average is ${fmtPct(portfolioRate, 2)}.`;
   $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the ${testYears} test window.`;
   $("#sim-gini").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)}`;
-  $("#sim-gini-foot").textContent = fmtNum(D.pd.champion_gini, 4);
   renderScoreHist($("#sim-hist"), hist, bins, "Test-window score distribution", score);
   const minScore = Number(bins[0] || typicalScore);
   const maxScore = Number(bins[bins.length - 1] || minScore + 1);
@@ -1432,7 +2350,95 @@ function setupCutoff() {
   slider.value = String(Math.round(state.cutoff == null ? cut.cutoff_score : state.cutoff));
   slider.oninput = () => { state.cutoff = Number(slider.value); writeHash(false); renderCutoff(); };
   slider.onchange = () => { state.cutoff = Number(slider.value); commit({ push: true }); };
+  const tabs = $$("[data-cutoff-tab]");
+  const selectTab = (key, focus = false) => {
+    state.cutoffTab = key === "ks" ? "ks" : "tradeoff";
+    tabs.forEach((button) => button.setAttribute("aria-selected", button.dataset.cutoffTab === state.cutoffTab ? "true" : "false"));
+    if (focus) $(`[data-cutoff-tab="${state.cutoffTab}"]`)?.focus();
+    renderCutoff();
+  };
+  tabs.forEach((button, index) => {
+    button.onclick = () => selectTab(button.dataset.cutoffTab);
+    button.onkeydown = (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const next = (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      selectTab(tabs[next].dataset.cutoffTab, true);
+    };
+  });
+  selectTab(state.cutoffTab);
 }
+function cutoffExtraPlot(cut, bins, goods, bads, cutoff) {
+  const host = $("#cutoff-extra-chart");
+  if (!host) return;
+  if (!PLOTLY) { showFallback(host, null, "Plotly is blocked; the cutoff diagnostic is unavailable."); return; }
+  const p = palette();
+  const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
+  const caption = $("#cutoff-caption");
+  const plotHeight = Math.max(250, Math.round(host.clientHeight || 250));
+  const total = goods.reduce((sum, value) => sum + value, 0) + bads.reduce((sum, value) => sum + value, 0);
+  let ok = false;
+  if (state.cutoffTab === "ks") {
+    let totalGood = 0; let totalBad = 0;
+    goods.forEach((v) => { totalGood += v; });
+    bads.forEach((v) => { totalBad += v; });
+    let cg = 0; let cb = 0; let maxGap = -1; let maxAt = centers[0] || 0;
+    const goodShare = []; const badShare = [];
+    centers.forEach((center, index) => {
+      cg += goods[index]; cb += bads[index];
+      const g = totalGood ? cg / totalGood : 0;
+      const b = totalBad ? cb / totalBad : 0;
+      goodShare.push(g * 100); badShare.push(b * 100);
+      if (Math.abs(b - g) > maxGap) { maxGap = Math.abs(b - g); maxAt = center; }
+    });
+    const published = Number(D.pd.champion_ks);
+    const binned = Math.max(0, maxGap);
+    const mismatch = Math.abs(binned - published) > 0.005;
+    ok = plot(host, [
+      { x: centers, y: goodShare, mode: "lines", name: "Good cumulative", line: { color: p.teal, width: 2 } },
+      { x: centers, y: badShare, mode: "lines", name: "Bad cumulative", line: { color: p.lilacDark, width: 2 } },
+      { x: [maxAt], y: [Math.max(goodShare[centers.indexOf(maxAt)] || 0, badShare[centers.indexOf(maxAt)] || 0)], mode: "markers", name: "Max gap", marker: { size: 9, color: p.surface, line: { color: p.accent, width: 3 } }, hovertemplate: `KS ${Math.round(maxGap * 10000) / 10000}<extra></extra>` },
+    ], {
+      margin: { l: 48, r: 14, t: 22, b: 38 }, height: plotHeight,
+      xaxis: { title: "Scorecard score" }, yaxis: { title: "Cumulative share (%)", range: [0, 101] },
+      legend: { orientation: "h", y: -0.2 },
+      shapes: [{ type: "line", x0: maxAt, x1: maxAt, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 1.2, dash: "dot" } }],
+    }, { small: true });
+    if (caption) caption.textContent = `${EXPLORER.cutoffKs || "Cumulative good and bad shares by score."} Published KS ${published.toFixed(4)}; binned KS ${binned.toFixed(4)} at score ${Math.round(maxAt)}.${mismatch ? " The curve is binned; the published value is authoritative." : ""}`;
+  } else {
+    const xs = []; const approvalLine = []; const badLine = [];
+    centers.forEach((score) => {
+      let ga = 0; let ba = 0; let gr = 0; let br = 0;
+      centers.forEach((center, i) => {
+        if (center >= score) { ga += goods[i]; ba += bads[i]; } else { gr += goods[i]; br += bads[i]; }
+      });
+      const approved = ga + ba;
+      xs.push(score);
+      approvalLine.push(approved ? (approved / (ga + ba + gr + br)) * 100 : 0);
+      badLine.push(approved ? (ba / approved) * 100 : 0);
+    });
+    let exactApproved = 0; let exactBad = 0;
+    centers.forEach((center, index) => {
+      if (center >= cutoff) { exactApproved += goods[index] + bads[index]; exactBad += bads[index]; }
+    });
+    const exactApproval = total ? exactApproved / total : 0;
+    const exactBadRate = exactApproved ? exactBad / exactApproved : 0;
+    ok = plot(host, [
+      { x: xs, y: approvalLine, mode: "lines", name: "Approval rate", line: { color: p.sky, width: 2 } },
+      { x: xs, y: badLine, mode: "lines", name: "Bad rate (approved)", line: { color: p.lilac, width: 2 } },
+      { x: [cutoff], y: [exactApproval * 100], mode: "markers", name: "Approval at cutoff", marker: { size: 8, color: p.surface, line: { color: p.sky, width: 3 } } },
+      { x: [cutoff], y: [exactBadRate * 100], mode: "markers", name: "Bad rate at cutoff", marker: { size: 8, color: p.surface, line: { color: p.lilac, width: 3 } } },
+    ], {
+      margin: { l: 48, r: 14, t: 22, b: 38 }, height: plotHeight,
+      xaxis: { title: "Scorecard score" }, yaxis: { title: "Percent", range: [0, 101] },
+      legend: { orientation: "h", y: -0.2 },
+      shapes: [{ type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 1.4, dash: "dash" } }],
+    }, { small: true });
+    if (caption) caption.textContent = EXPLORER.cutoffTradeoff || "Approval and approved bad rates as the cutoff moves.";
+  }
+  if (!ok) showFallback(host, null, "The cutoff diagnostic could not be drawn.");
+}
+
 function renderCutoff() {
   const cut = D.interactive && D.interactive.cutoff_explorer;
   if (!cut || !cut.histograms || !cut.histograms.bins?.length) return;
@@ -1455,31 +2461,38 @@ function renderCutoff() {
   const badApproved = approved ? badAbove / approved : 0;
   const overall = total ? (badAbove + badBelow) / total : 0;
   $("#cutoff-sub").textContent = `At cutoff ${Math.round(cutoff)}, ${fmtPct(approval, 1)} of applicants are approved; ${fmtPct(badApproved, 1)} of approved loans default, versus ${fmtPct(overall, 2)} overall. Approve everyone: ${fmtPct(overall, 2)} bad rate.`;
-  const defs = [
-    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1), "cutoff-approval", "Share of applicants accepted."],
-    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1), "cutoff-bad", "Defaults among approved loans."],
-    ["Approved good", goodAbove, "cut-good", fmtInt, "cutoff-approved-good", "Good loans kept by the cutoff."],
-    ["Approved bad", badAbove, "cut-bad-n", fmtInt, "cutoff-approved-bad", "Bad loans kept by the cutoff."],
-  ];
+  const values = { "cut-approval": approval, "cut-bad": badApproved, "cut-good": goodAbove, "cut-bad-n": badAbove };
+  const formatters = { "cut-approval": (v) => fmtPct(v, 1), "cut-bad": (v) => fmtPct(v, 1), "cut-good": fmtInt, "cut-bad-n": fmtInt };
+  const p = palette();
   const host = $("#cutoff-kpis");
-  host.innerHTML = defs.map(([label, , key, , info, meaning]) => `<div class="summary-kpi"><p class="mini-label">${label} ${infoButton(info, label)}</p><p class="value" data-testid="${key}">—</p><p class="sub">${esc(meaning)}</p></div>`).join("");
-  defs.forEach(([, value, key, formatter]) => countUp(host.querySelector(`[data-testid="${key}"]`), value, formatter));
+  host.innerHTML = CUTOFF_STATISTICS.map((stat) => `<div class="summary-kpi" style="--stat-color:${p[stat.color]}"><p class="mini-label">${stat.label}</p><p class="value" data-testid="${stat.id}">—</p><p class="sub">${esc(stat.meaning)}</p></div>`).join("");
+  CUTOFF_STATISTICS.forEach((stat) => countUp(host.querySelector(`[data-testid="${stat.id}"]`), values[stat.id], formatters[stat.id]));
+  $$("[data-cutoff-tab]").forEach((button) => button.setAttribute("aria-selected", button.dataset.cutoffTab === state.cutoffTab ? "true" : "false"));
   if (!PLOTLY) { showFallback($("#cutoff-chart"), null, "Plotly is blocked; the cutoff chart is unavailable."); return; }
   const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
+  const approvedGood = []; const approvedBad = []; const rejectedGood = []; const rejectedBad = [];
+  centers.forEach((center, i) => {
+    if (center >= cutoff) { approvedGood.push(goods[i]); approvedBad.push(bads[i]); rejectedGood.push(0); rejectedBad.push(0); }
+    else { approvedGood.push(0); approvedBad.push(0); rejectedGood.push(goods[i]); rejectedBad.push(bads[i]); }
+  });
+  const rgba = (hex, alpha) => { const [r, g, b] = hexToRgb(hex); return `rgba(${r}, ${g}, ${b}, ${alpha})`; };
   const ok = plot($("#cutoff-chart"), [
-    { x: centers, y: goods, type: "bar", name: "Good", marker: { color: "rgba(15,118,110,0.65)" } },
-    { x: centers, y: bads, type: "bar", name: "Bad", marker: { color: "rgba(185,28,28,0.65)" } },
+    { x: centers, y: approvedGood, type: "bar", name: "Good (approved)", marker: { color: p.teal } },
+    { x: centers, y: approvedBad, type: "bar", name: "Bad (approved)", marker: { color: p.lilacDark } },
+    { x: centers, y: rejectedGood, type: "bar", name: "Good (rejected)", marker: { color: rgba(p.teal, 0.22) } },
+    { x: centers, y: rejectedBad, type: "bar", name: "Bad (rejected)", marker: { color: rgba(p.lilacDark, 0.22) } },
   ], {
     barmode: "overlay", bargap: 0.03,
     xaxis: { title: "Scorecard score" }, yaxis: { title: "Loans" },
     shapes: [
-      { type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: "#111827", width: 2, dash: "dash" } },
-      { type: "line", x0: cut.cutoff_score, x1: cut.cutoff_score, yref: "paper", y0: 0, y1: 1, line: { color: "#b45309", width: 1.6, dash: "dot" } },
+      { type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 2, dash: "dash" } },
+      { type: "line", x0: cut.cutoff_score, x1: cut.cutoff_score, yref: "paper", y0: 0, y1: 1, line: { color: p.lilacDark, width: 1.6, dash: "dot" } },
     ],
-    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 1.02, text: "Published KS cutoff", showarrow: false, font: { size: 9, color: "#b45309" }, xanchor: "right" }],
+    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 1.02, text: "Published KS cutoff", showarrow: false, font: { size: 9, color: p.lilacDark }, xanchor: "right" }],
     margin: { l: 52, r: 16, t: 36, b: 44 }, showlegend: true,
   }, { small: true });
   if (!ok) showFallback($("#cutoff-chart"), null, "The cutoff chart could not be drawn.");
+  else cutoffExtraPlot(cut, bins, goods, bads, cutoff);
 }
 
 /* ---------------------------------------------------------------- learn */
@@ -1500,29 +2513,9 @@ function runGuideAction(action) {
   };
   if (action === "default") { state.dim = "state"; state.metric = "default_rate"; state.sel = null; go("explorer", "#view-explorer"); }
   else if (action === "scorecard") { go("risk", "#sim-title"); }
-  else if (action === "el") { state.dim = "state"; state.metric = "el_pct_ead"; state.sel = null; go("explorer", "#summary-card"); }
+  else if (action === "el") { state.dim = "state"; state.metric = "el_pct_ead"; state.sel = null; go("explorer", "#summary-kpis"); }
   else if (action === "tail") { go("risk", "#risk-kpis"); }
   else if (action === "validation") { go("evidence", "#view-evidence"); }
-}
-
-function seeTerm(term) {
-  const entry = (LEARN.terms || []).find((item) => item.id === term);
-  if (!entry || !entry.see) return;
-  const see = entry.see;
-  if (see.view === "explorer") {
-    state.dim = see.dim || "state";
-    state.metric = see.metric || "default_rate";
-    state.sel = null;
-    setView("explorer");
-  } else if (see.view === "risk") {
-    setView("risk");
-    const target = see.sim ? "#sim-title" : see.panel === "cutoff" ? "#cutoff-title" : "#risk-kpis";
-    window.setTimeout(() => $(target)?.scrollIntoView({ behavior: prefersReduced() ? "auto" : "smooth", block: "start" }), 120);
-  } else if (see.view === "evidence") {
-    setView("evidence");
-  } else {
-    setView("explorer");
-  }
 }
 
 function renderLearn() {
@@ -1563,10 +2556,8 @@ function renderLearn() {
         <p class="glossary-why"><strong>Why it matters here:</strong> ${esc(resolveInfoText(entry.why))}</p>
         <p class="glossary-example">${esc(resolveInfoText(entry.example))}</p>
         ${entry.formula ? `<details class="formula-details"><summary>Formula</summary><div class="formula">${esc(entry.formula)}</div></details>` : ""}
-        <div class="glossary-actions"><button type="button" data-see-term="${esc(entry.id)}">See it in the dashboard</button></div>
       </details>`;
     }).join("");
-    $$("[data-see-term]", list).forEach((button) => { button.onclick = () => seeTerm(button.dataset.seeTerm); });
   }
   $("#glossary-empty").hidden = entries.length > 0;
   if (state.term && state.view === "learn") {
@@ -1584,16 +2575,8 @@ function renderLearn() {
 function renderEvidence() {
   if (!D) return;
   const disp = D.display || {};
-  const stats = D.simulation.statistics;
-  const cards = [
-    ["Resolved loans", disp.n_rows || fmtInt(D.data.n_rows), `${disp.data_years || ""} snapshot`],
-    ["Champion AUC", disp.champion_auc || fmtNum(D.pd.champion_auc, 4), `Gini ${disp.champion_gini || fmtNum(D.pd.champion_gini, 4)}`],
-    ["Expected loss", disp.el_rate || fmtPct(D.lgd.el_rate_oot, 2), disp.el_amount || fmtMoney(D.lgd.expected_loss_oot)],
-    ["VaR 99.9%", disp.sim_var999 || fmtPct(stats["var_0.999_pct_ead"], 2), disp.sim_var999_usd || fmtMoney(stats["var_0.999"])],
-  ];
-  $("#evidence-kpis").innerHTML = cards.map(([label, value, sub]) => `<div class="summary-kpi"><p class="mini-label">${esc(label)}</p><p class="value">${esc(value)}</p><p class="sub">${esc(sub)}</p></div>`).join("");
   const meta = pe().meta;
-  $("#evidence-window").textContent = `Primary test window: ${meta.years.join("–")}, ${meta.term}-month terms, ${fmtInt(meta.n_total)} resolved loans. The censored window is shown only to quantify the measurement artifact.`;
+  // Headline statistics are already shown in the hero KPI row.
   $("#benchmark-note").textContent = `The lender's own grade still beats a leakage-free model by ${disp.auc_gap_vs_benchmark || "—"} AUC. It is an upper bound on what a challenger could recover, not a failure of the pipeline.`;
   $("#calibration-note").textContent = disp.calibration_note || "";
   $("#lgd-note").textContent = `Loan-level LGD is not usable: every model has a negative out-of-time R². Expected loss therefore uses the portfolio-level LGD (${disp.realized_lgd || "—"} realized out of time).`;
@@ -1633,6 +2616,196 @@ function setWelcomeDismissed(dismissed) {
   }
 }
 
+function folderVisualMarkup(sheet) {
+  const meta = pe().meta;
+  const observed = (meta.default_rate_total || 0) * 100;
+  const predicted = (meta.mean_pd || 0) * 100;
+  const expectedLoss = (meta.el_pct_ead || 0) * 100;
+  const primary = sheet.id === "expected-loss" ? expectedLoss : observed;
+  const whole = Math.floor(primary + 1e-9);
+  const fraction = primary - whole;
+  const predictedWhole = Math.floor(predicted + 1e-9);
+  const predictedFraction = predicted - predictedWhole;
+  const dots = Array.from({ length: 100 }, (_, index) => {
+    const classes = ["folder-dot"];
+    let style = `--i:${index}`;
+    if (index < whole) classes.push("is-filled");
+    else if (index === whole && fraction > 0.001) {
+      classes.push("is-partial");
+      style += `;--fill:${fraction.toFixed(3)}`;
+    }
+    if (sheet.id === "predicted" && index < predictedWhole) {
+      classes.push("is-outline");
+    } else if (sheet.id === "predicted" && index === predictedWhole && predictedFraction > 0.001) {
+      classes.push("is-outline", "is-outline-partial");
+      style += `;--outline-fill:${predictedFraction.toFixed(3)}`;
+    }
+    return `<span class="${classes.join(" ")}" style="${style}" aria-hidden="true"></span>`;
+  }).join("");
+  const label = resolveInfoText(sheet.visual_label || "");
+  const note = resolveInfoText(sheet.visual_note || "");
+  return `<figure class="folder-visual">
+    <div class="folder-dots" role="img" aria-label="100 dots; ${primary.toFixed(2)} filled">${dots}</div>
+    <figcaption>${esc(label)}${note ? `<span class="folder-gap">${esc(note)}</span>` : ""}</figcaption>
+  </figure>`;
+}
+
+function folderSheetMarkup(sheet, index) {
+  const hidden = index === 0 ? "" : " hidden";
+  return `<article class="folder-sheet-card folder-sheet-${index}" id="folder-sheet-${index}" data-folder-sheet="${index}" role="tabpanel" aria-labelledby="folder-tab-${index}"${hidden}>
+    <p class="folder-scope">${esc(resolveInfoText(FOLDER.scope || ""))}</p>
+    <div class="folder-sheet-copy">
+      <h3>${esc(resolveInfoText(sheet.title))}</h3>
+      <p class="folder-headline">${esc(resolveInfoText(sheet.headline))}</p>
+      <p class="folder-headline-label">${esc(resolveInfoText(sheet.headline_label))}</p>
+      <p class="folder-copy"><strong>How it is computed here:</strong> ${esc(resolveInfoText(sheet.computation))}</p>
+      <p class="folder-copy"><strong>How to read it:</strong> ${esc(resolveInfoText(sheet.reading))}</p>
+      <p class="folder-copy folder-caveat"><strong>Caveat:</strong> ${esc(resolveInfoText(sheet.caveat))}</p>
+    </div>
+    ${folderVisualMarkup(sheet)}
+  </article>`;
+}
+
+function folderOverlayMarkup() {
+  const sheets = FOLDER.sheets || [];
+  return `<section class="welcome-card folder-card" id="folder-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-title" tabindex="-1">
+    <div class="welcome-head folder-head">
+      <div>
+        <p class="eyebrow">Portfolio folder</p>
+        <h2 id="folder-title">Three views of one portfolio</h2>
+      </div>
+      <button type="button" class="icon-btn folder-close" data-folder-close aria-label="Close portfolio folder">Close</button>
+    </div>
+    <div class="folder-tabs" role="tablist" aria-label="Portfolio sheets">
+      ${sheets.map((sheet, index) => `<button type="button" class="folder-tab folder-tab-${index}" id="folder-tab-${index}" data-folder-tab="${index}" role="tab" aria-selected="${index === 0}" aria-controls="folder-sheet-${index}" tabindex="${index === 0 ? 0 : -1}">${esc(sheet.tab)}</button>`).join("")}
+    </div>
+    <div class="folder-main">
+      <div class="folder-fan" id="folder-fan" data-active="0" aria-hidden="true">
+        <span class="folder-fan-sheet folder-fan-0"></span>
+        <span class="folder-fan-sheet folder-fan-1"></span>
+        <span class="folder-fan-sheet folder-fan-2"></span>
+      </div>
+      <div class="folder-sheet-stack">${sheets.map(folderSheetMarkup).join("")}</div>
+    </div>
+    <div class="folder-nav">
+      <button type="button" class="btn btn-ghost" data-folder-prev>Previous</button>
+      <span id="folder-counter" aria-live="polite">1 of ${sheets.length}</span>
+      <button type="button" class="btn btn-primary" data-folder-next>Next</button>
+    </div>
+  </section>`;
+}
+
+function ensureFolderOverlay() {
+  let overlay = $("#folder-overlay");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "folder-overlay";
+  overlay.className = "welcome-backdrop folder-backdrop";
+  overlay.hidden = true;
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) { closeFolder(); return; }
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    const tab = target.closest("[data-folder-tab]");
+    if (tab) { setFolderSheet(Number(tab.dataset.folderTab)); return; }
+    if (target.closest("[data-folder-close]")) { closeFolder(); return; }
+    if (target.closest("[data-folder-prev]")) { setFolderSheet(folderActive - 1, { focusTab: true }); return; }
+    if (target.closest("[data-folder-next]")) { setFolderSheet(folderActive + 1, { focusTab: true }); }
+  });
+  overlay.addEventListener("touchstart", (event) => {
+    if (event.touches.length !== 1) return;
+    folderTouch = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }, { passive: true });
+  overlay.addEventListener("touchend", (event) => {
+    if (!folderTouch) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - folderTouch.x;
+    const dy = touch.clientY - folderTouch.y;
+    folderTouch = null;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) setFolderSheet(folderActive + (dx < 0 ? 1 : -1));
+  }, { passive: true });
+  return overlay;
+}
+
+function setFolderSheet(index, { focusTab = false } = {}) {
+  const sheets = FOLDER.sheets || [];
+  if (!sheets.length) return;
+  folderActive = (index + sheets.length) % sheets.length;
+  const overlay = $("#folder-overlay");
+  if (!overlay) return;
+  $$("[data-folder-tab]", overlay).forEach((tab, tabIndex) => {
+    const active = tabIndex === folderActive;
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+    tab.tabIndex = active ? 0 : -1;
+  });
+  $$("[data-folder-sheet]", overlay).forEach((panel, panelIndex) => { panel.hidden = panelIndex !== folderActive; });
+  const fan = $("#folder-fan", overlay);
+  if (fan) fan.dataset.active = String(folderActive);
+  const counter = $("#folder-counter", overlay);
+  if (counter) counter.textContent = `${folderActive + 1} of ${sheets.length}`;
+  if (focusTab) $(`#folder-tab-${folderActive}`, overlay)?.focus();
+}
+
+function openFolder() {
+  if (folderOpen || !FOLDER.sheets || !FOLDER.sheets.length) return;
+  const overlay = ensureFolderOverlay();
+  folderLastFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : $("#total-folder-button");
+  folderOpen = true;
+  folderActive = 0;
+  overlay.innerHTML = folderOverlayMarkup();
+  overlay.hidden = false;
+  document.body.classList.add("folder-open");
+  setFolderSheet(0);
+  $("#folder-dialog", overlay)?.focus({ preventScroll: true });
+}
+
+function closeFolder(restoreFocus = true) {
+  const overlay = $("#folder-overlay");
+  if (!overlay || !folderOpen) return;
+  folderOpen = false;
+  overlay.hidden = true;
+  document.body.classList.remove("folder-open");
+  if (restoreFocus && folderLastFocus && typeof folderLastFocus.focus === "function") folderLastFocus.focus();
+  folderLastFocus = null;
+}
+
+function bindFolder() {
+  const buttons = [$("#total-folder-button"), $("#total-folder-open")].filter(Boolean);
+  if (!buttons.length) return;
+  buttons.forEach((button) => {
+    if (button.__folderBound) return;
+    button.__folderBound = true;
+    button.addEventListener("click", openFolder);
+  });
+  if (document.__folderKeyBound) return;
+  document.__folderKeyBound = true;
+  document.addEventListener("keydown", (event) => {
+    if (!folderOpen) return;
+    if (event.key === "Escape") { event.preventDefault(); closeFolder(); return; }
+    if (event.key === "ArrowRight") { event.preventDefault(); setFolderSheet(folderActive + 1, { focusTab: true }); return; }
+    if (event.key === "ArrowLeft") { event.preventDefault(); setFolderSheet(folderActive - 1, { focusTab: true }); return; }
+    if (event.key !== "Tab") return;
+    const card = $("#folder-dialog");
+    if (!card) return;
+    const focusable = $$("button, a, input, select, textarea, [tabindex]:not([tabindex='-1'])", card)
+      .filter((el) => !el.disabled && el.getClientRects().length > 0);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (document.activeElement === card) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
 function renderWelcome() {
   const overlay = $("#welcome-overlay");
   if (!overlay || !WELCOME.title) return false;
@@ -1663,7 +2836,6 @@ function renderWelcome() {
         <div class="welcome-side">
           <div class="welcome-actions">
             <button type="button" class="btn btn-primary" id="welcome-start">${esc(WELCOME.primary)}</button>
-            <button type="button" class="welcome-link" id="welcome-provenance">${esc(WELCOME.provenance)}</button>
           </div>
           <label class="welcome-check">
             <input type="checkbox" id="welcome-dismiss">
@@ -1673,10 +2845,6 @@ function renderWelcome() {
       </div>
     </section>`;
   $("#welcome-start").onclick = () => dismissWelcome();
-  $("#welcome-provenance").onclick = () => {
-    closeWelcome(true);
-    openDrawer();
-  };
   $("#welcome-dismiss").addEventListener("change", (event) => setWelcomeDismissed(event.target.checked));
   return true;
 }
@@ -1748,48 +2916,6 @@ function bindWelcome() {
   });
 }
 
-/* ---------------------------------------------------------------- drawer */
-function openDrawer() {
-  const drawer = $("#provenance-drawer");
-  const backdrop = $("#drawer-backdrop");
-  if (!drawer || !backdrop || !D) return;
-  lastFocus = document.activeElement;
-  const meta = pe().meta;
-  $("#drawer-window").textContent = `Primary mature test window: ${meta.years.join("–")}, ${meta.term}-month terms. Only loans with a final outcome are measured.`;
-  $("#drawer-sample").textContent = `${fmtInt(meta.n_total)} resolved loans. The portfolio default rate is ${fmtPct(meta.default_rate_total, 2)}; predicted PD is EAD-weighted and expected loss is reconciled to the headline ${fmtPct(meta.el_pct_ead, 2)}.`;
-  $("#drawer-smalln").textContent = `Segments with fewer than ${fmtInt(meta.min_n)} loans are hatched on the map and excluded from the "highest/lowest" sentence. Their Wilson intervals are wide; no ranking should be read from them.`;
-  $("#drawer-limitations").innerHTML = (D.limitations || []).map((text) => `<li>${esc(text)}</li>`).join("");
-  drawer.hidden = false; backdrop.hidden = false;
-  drawer.setAttribute("aria-hidden", "false");
-  document.body.style.overflow = "hidden";
-  $("#drawer-close").focus();
-}
-function closeDrawer() {
-  const drawer = $("#provenance-drawer");
-  const backdrop = $("#drawer-backdrop");
-  if (!drawer || !backdrop) return;
-  drawer.hidden = true; backdrop.hidden = true;
-  drawer.setAttribute("aria-hidden", "true");
-  document.body.style.overflow = "";
-  if (lastFocus && typeof lastFocus.focus === "function") lastFocus.focus();
-}
-function bindDrawer() {
-  $("#provenance-btn").onclick = openDrawer;
-  $("#evidence-provenance").onclick = openDrawer;
-  $("#drawer-close").onclick = closeDrawer;
-  $("#drawer-backdrop").onclick = closeDrawer;
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !$("#provenance-drawer").hidden) closeDrawer();
-    if (event.key === "Tab" && !$("#provenance-drawer").hidden) {
-      const focusable = $$("button, a, input, select, [tabindex]:not([tabindex='-1'])", $("#provenance-drawer"));
-      if (!focusable.length) return;
-      const first = focusable[0]; const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    }
-  });
-}
-
 /* ------------------------------------------------------------------ paint */
 function paint() {
   if (!D) return;
@@ -1814,11 +2940,18 @@ async function boot() {
   const initialParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
   const deepLink = initialParams.has("view") || initialParams.has("term");
   try {
-    const [response, infoResponse, learnResponse, welcomeResponse] = await Promise.all([
+    const [response, infoResponse, learnResponse, welcomeResponse, processResponse, folderResponse, explorerResponse] = await Promise.all([
       fetch(DATA_URL, { cache: "no-cache" }),
       fetch("content/info.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/learn.json", { cache: "no-cache" }).catch(() => null),
       fetch("content/welcome.json", { cache: "no-cache" }).catch(() => null),
+      fetch("content/process.json", { cache: "no-cache" }).catch(() => null),
+      fetch("content/folder.json", { cache: "no-cache" }).catch(() => null),
+      fetch("content/explorer.json", { cache: "no-cache" }).catch(() => null),
+      loadFolderSvg(),
+      loadUsMap(),
+      loadIllustratedMap("home_ownership"),
+      loadIllustratedMap("purpose"),
     ]);
     if (!response.ok) throw new Error(`data.json ${response.status}`);
     D = await response.json();
@@ -1829,16 +2962,25 @@ async function boot() {
     if (learnResponse && learnResponse.ok) {
       try { LEARN = await learnResponse.json(); } catch (err) { LEARN = { guide: [], terms: [] }; }
     }
+    if (processResponse && processResponse.ok) {
+      try { PROCESS = await processResponse.json(); } catch (err) { PROCESS = { steps: [] }; }
+    }
+    if (folderResponse && folderResponse.ok) {
+      try { FOLDER = await folderResponse.json(); } catch (err) { FOLDER = { sheets: [] }; }
+    }
     if (welcomeResponse && welcomeResponse.ok) {
       try { WELCOME = await welcomeResponse.json(); } catch (err) { WELCOME = {}; }
+    }
+    if (explorerResponse && explorerResponse.ok) {
+      try { EXPLORER = await explorerResponse.json(); } catch (err) { EXPLORER = { captions: {} }; }
     }
     readHash();
     applyHashState();
     $("#app-skeleton").hidden = true;
     $("#app-content").hidden = false;
-    bindDrawer();
     bindInfoDelegation();
     bindWelcome();
+    bindFolder();
     applyTheme();
     setupRiskControls();
     setupSimulator();
@@ -1848,6 +2990,13 @@ async function boot() {
     bindThemeMedia();
     window.addEventListener("popstate", () => { readHash(); applyHashState(); writeHash(false); paint(); });
     window.addEventListener("hashchange", () => { readHash(); applyHashState(); writeHash(false); paint(); });
+    let vintageResizeTimer = null;
+    window.addEventListener("resize", () => {
+      window.clearTimeout(vintageResizeTimer);
+      vintageResizeTimer = window.setTimeout(() => {
+        if (state.view === "explorer" && state.dim === "vintage") renderMap();
+      }, 120);
+    });
     writeHash(false);
     maybeOpenWelcome(deepLink);
     loadPlotly().then(() => { paint(); }).catch((err) => {

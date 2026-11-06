@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 332" role="img" aria-label="Portfolio folder with three sheets">
+  <g id="sheet-3" class="folder-sheet" stroke-linejoin="round">
+    <rect x="150" y="32" width="150" height="190" rx="8" fill="var(--sky-light)" stroke="var(--sky)" stroke-width="4"/>
+    <rect x="168" y="48" width="96" height="7" rx="3.5" fill="var(--ink)" opacity=".35"/>
+  </g>
+  <g id="sheet-2" class="folder-sheet" stroke-linejoin="round">
+    <rect x="114" y="62" width="150" height="190" rx="8" fill="var(--periwinkle-light)" stroke="var(--periwinkle)" stroke-width="4"/>
+    <rect x="132" y="78" width="96" height="7" rx="3.5" fill="var(--ink)" opacity=".35"/>
+  </g>
+  <g id="sheet-1" class="folder-sheet" stroke-linejoin="round">
+    <rect x="78" y="92" width="150" height="190" rx="8" fill="var(--lilac-light)" stroke="var(--lilac)" stroke-width="4"/>
+    <rect x="96" y="110" width="104" height="7" rx="3.5" fill="var(--ink)" opacity=".35"/>
+    <rect x="96" y="128" width="116" height="7" rx="3.5" fill="var(--ink)" opacity=".35"/>
+    <rect x="96" y="146" width="78" height="7" rx="3.5" fill="var(--ink)" opacity=".35"/>
+  </g>
+  <g id="folder-front" stroke-linejoin="round">
+    <path d="M60 170 H148 L168 190 H340 A10 10 0 0 1 350 200 V318 A10 10 0 0 1 340 328 H60 A10 10 0 0 1 50 318 V180 A10 10 0 0 1 60 170 Z" fill="var(--teal-light)" stroke="var(--teal)" stroke-width="5"/>
+    <g fill="none" stroke="var(--ink)" stroke-width="3.5" stroke-linecap="round">
+      <circle cx="200" cy="241" r="25"/>
+      <circle cx="200" cy="234" r="6"/>
+      <path d="M185 258 Q200 241 215 258"/>
+    </g>
+    <text x="200" y="304" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="22" font-weight="800" letter-spacing="2.5" fill="var(--ink)">PORTFOLIO</text>
+  </g>
+</svg>

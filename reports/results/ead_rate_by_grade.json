@@ -1,0 +1,54 @@
+{
+  "basis": "mean ead_rate on train defaults, by grade",
+  "rates": [
+    {
+      "grade": "A",
+      "n_defaults_train": 2024,
+      "ead_rate_train": 0.5346929245379866,
+      "n_defaults_oot": 5704,
+      "ead_rate_oot": 0.5010882861684802
+    },
+    {
+      "grade": "B",
+      "n_defaults_train": 6804,
+      "ead_rate_train": 0.5534836856622174,
+      "n_defaults_oot": 16643,
+      "ead_rate_oot": 0.5356952874152173
+    },
+    {
+      "grade": "C",
+      "n_defaults_train": 6093,
+      "ead_rate_train": 0.5895813324101635,
+      "n_defaults_oot": 22624,
+      "ead_rate_oot": 0.5796178969190049
+    },
+    {
+      "grade": "D",
+      "n_defaults_train": 4432,
+      "ead_rate_train": 0.6154508798358989,
+      "n_defaults_oot": 13124,
+      "ead_rate_oot": 0.6236310987867648
+    },
+    {
+      "grade": "E",
+      "n_defaults_train": 1035,
+      "ead_rate_train": 0.6512917473546465,
+      "n_defaults_oot": 5011,
+      "ead_rate_oot": 0.6553332124470393
+    },
+    {
+      "grade": "F",
+      "n_defaults_train": 215,
+      "ead_rate_train": 0.6966386477951213,
+      "n_defaults_oot": 1161,
+      "ead_rate_oot": 0.6825672328112838
+    },
+    {
+      "grade": "G",
+      "n_defaults_train": 19,
+      "ead_rate_train": 0.7817508528513792,
+      "n_defaults_oot": 178,
+      "ead_rate_oot": 0.7326222828310741
+    }
+  ]
+}

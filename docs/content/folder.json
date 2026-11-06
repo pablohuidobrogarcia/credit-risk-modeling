@@ -1,0 +1,42 @@
+{
+  "scope": "These figures describe the {n_total} loans of the mature {test_years} test window ({term}-month term, at least 90% resolved), not the full {n_rows} resolved loans.",
+  "sheets": [
+    {
+      "id": "observed",
+      "tab": "1 Observed default",
+      "title": "Observed default",
+      "headline": "{default_rate_total}",
+      "headline_label": "of resolved loans ended in default",
+      "computation": "We divide {observed_defaults} defaults by {n_total} resolved loans. The Wilson 95% CI is {ci_low} to {ci_high}.",
+      "reading": "About {defaults_per_100} of every 100 loans ended in default.",
+      "caveat": "Right-censoring is why only mature loans are measured.",
+      "visual": "observed",
+      "visual_label": "100 loans"
+    },
+    {
+      "id": "predicted",
+      "tab": "2 Predicted PD",
+      "title": "Predicted PD",
+      "headline": "{mean_pd}",
+      "headline_label": "average predicted probability of default",
+      "computation": "The {champion} model's average predicted PD over the same loans; out-of-time AUC is {champion_auc}.",
+      "reading": "Observed is {gap_pp} pp above predicted, so the model underestimates risk on average. Calibration details are in Evidence.",
+      "caveat": "Averages can hide segment-level miscalibration.",
+      "visual": "predicted",
+      "visual_label": "100 loans",
+      "visual_note": "Fill = observed; outline = predicted. Observed minus predicted: +{gap_pp} pp"
+    },
+    {
+      "id": "expected-loss",
+      "tab": "3 Expected loss",
+      "title": "Expected loss",
+      "headline": "{el_pct_ead} of EAD",
+      "headline_label": "expected loss on EAD at default",
+      "computation": "EL is {el_amount} on {ead_total} of EAD. The funded amount is {funded_total}; EL is {el_pct_funded} of funded. LGD is {mean_lgd_pct}.",
+      "reading": "EL = PD × LGD × EAD, where EAD is funded amount × the train grade EAD rate; about ${el_per_100} per $100 of EAD.",
+      "caveat": "EAD at default is estimated on train defaults, not assumed equal to the full funded amount.",
+      "visual": "expected-loss",
+      "visual_label": "$100 of EAD"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
@@ -32,7 +32,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check src tests scripts
+        run: ruff check .
 
       - name: Docs number-integrity check
         # Fails if the README results tables drift from reports/results/summary.json.
@@ -45,3 +45,27 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install Playwright dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Interaction tests (Playwright)
+        run: npx playwright test
+
+      - name: Upload Playwright report and videos
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

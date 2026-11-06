@@ -40,8 +40,10 @@ def _summary() -> dict:
 # ---------------------------------------------------------------------------
 def test_readme_results_block_matches_summary():
     summary = _summary()
-    # check_docs raises AssertionError with a diff when the text has drifted.
+    # The path-specific check covers the results block; the default check also
+    # covers the EAD reconciliation and monthly-drift blocks in README + report.
     report_tables.check_docs(summary, path=README)
+    report_tables.check_docs(summary)
 
 
 def test_readme_markers_present_and_unique():
@@ -90,7 +92,7 @@ def test_headline_scalars_appear_in_docs():
     if stats:
         for key in ("expected_loss_pct_ead", "var_0.99_pct_ead", "var_0.999_pct_ead"):
             if stats.get(key) is not None:
-                checks.append(_fmt_pct(stats[key]))
+                checks.append(_fmt_pct(stats[key], 1))
 
     missing = [c for c in checks if c not in haystack]
     assert not missing, f"Headline values absent from the docs: {missing}"

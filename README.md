@@ -10,6 +10,21 @@ visual case study of this project (built from `reports/results/summary.json`, se
 
 [![Credit-risk case study: champion AUC, expected loss, VaR 99.9% and the censoring gap](docs/assets/og-card.png)](https://pablohuidobrogarcia.github.io/credit-risk-modeling/)
 
+**Interactive dashboard:** the live site is one linked application. The portfolio
+explorer has a State map, a grade staircase, a purpose hexagon map, a home-ownership
+view, a monthly vintage timeline and ranked segment bars; the Total tab opens a folder
+overlay with the three headline sheets. The Monte Carlo Risk Lab has a loss histogram,
+a linked 3D VaR surface, an applicant simulator and a cutoff explorer. Every view shares
+one state store, the URL hash is shareable, and the back button restores the previous
+selection.
+
+![Linked portfolio explorer and risk lab](docs/assets/dashboard.gif)
+
+The GIF is generated from the current local site (Total folder sheet 3, State map,
+Risk Lab top). Regenerate it with `npm ci`, `npx playwright install chromium`, then
+`python scripts/make_dashboard_gif.py`; the script captures the frames with Playwright
+and assembles them with Pillow at `docs/assets/dashboard.gif`.
+
 An end-to-end, reproducible credit-risk pipeline built on the public Lending Club
 loan book (2007–2018):
 
@@ -61,11 +76,11 @@ is reported separately as the censoring-exposed secondary analysis.
 | **PD — calibration** (fit on a held-out temporal slice) | `isotonic`, OOT Brier raw 0.11949 → calibrated 0.11970, CITL 0.1986, slope 1.0765 |
 | **LGD — champion** | `lightgbm`, MAE **0.1015**, R² **-0.0294**, mean grade gap **0.0024** |
 | **LGD — boundary mass** (`recoveries = 0`) | **5.20 %** train / **26.86 %** OOT |
-| **Expected loss** | **$574.8M** on $5,670.3M EAD → **10.14 %** of EAD (primary OOT portfolio) |
+| **Expected loss** | **$332.1M** on $3,226.7M EAD -> **10.29 %** of EAD; $5,670.3M funded -> **5.86 %** of funded (primary OOT portfolio) |
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
-| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.14 %**, UL **5.88 %**, VaR 99 % **28.52 %**, VaR 99.9 % **37.39 %**, ES 99 % **32.40 %**, ES 99.9 % **40.67 %** of EAD |
+| **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.3 %**, UL **5.9 %**, VaR 99 % **28.8 %**, VaR 99.9 % **37.7 %**, ES 99 % **32.7 %**, ES 99.9 % **41.0 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
-| **Test suite** | **133** unit tests on synthetic data, `ruff check src tests` clean, run on Python 3.10 and 3.11 in CI |
+| **Test suite** | **153** unit tests on synthetic data, `ruff check .` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 
@@ -227,7 +242,7 @@ END
 | SQL | `sql` | Vintage and default-rate queries over Parquet (Hive/Spark stand-in) | `sql_0*_*.csv` |
 | EDA | `eda` | Monthly default-rate series, censoring diagnostic, decomposition, stationarity tests, SARIMAX forecast **benchmarked against naive/ETS** | `ts_*.csv`, `ts_*.json`, `ts_*.png` |
 | PD | `pd` | WoE binning + IV, variable selection, logit/probit scorecard, regularized and tree challengers on the wide feature set, temporal LightGBM tuning, four-way probability calibration, OOT validation on the mature window, secondary censored-window comparison, PSI, SHAP | `pd_*.csv/json`, `roc_curves.png`, `ks_curve.png`, `calibration.png`, `shap_summary.png` |
-| LGD/EAD | `lgd` | LGD on defaults (Gamma GLM vs tree vs **two-part boundary/severity** model), grade/portfolio calibration, EAD from outstanding principal, EL = PD × LGD × EAD | `lgd_*.csv`, `el_*.csv` |
+| LGD/EAD | `lgd` | LGD on defaults (Gamma GLM vs tree vs **two-part boundary/severity** model), grade/portfolio calibration, EAD at default = funded amount x train grade EAD rate, EL = PD x LGD x EAD | `lgd_*.csv`, `el_*.csv`, `ead_rate_by_grade.csv` |
 | Clustering | `clustering` | k-means **and Gaussian-mixture** segmentation on log features, elbow/silhouette/stability, PCA, segment profiles | `clustering_*.csv`, `clustering_*.png` |
 | Simulation | `simulation` | Vasicek single-factor Monte Carlo: EL, UL, VaR, ES, ρ sensitivity, **stratified + antithetic + importance-sampling** variance reduction, stress | `sim_*.csv`, `mc_*.png` |
 | Reject (exploratory) | `reject` | Rejected-vs-accepted common-variable shift and an illustrative extrapolation gap — **not used by any headline number** | `reject_*.csv/json` |
@@ -334,7 +349,9 @@ logit scorecard reaches AUC 0.6217, and the lender-grade benchmark reaches AUC 0
 
 * **LGD** = `1 − recoveries / exposure` computed on loans that reached a default
   outcome (Charged Off / Default), which is the standard recovery-based definition.
-* **EAD** = outstanding funded principal at the moment of default.
+* **EAD** = funded amount × the mean EAD rate observed on **training defaults**
+  of the same grade. The funded amount is kept as a separate field; it is not the
+  exposure used for EL or the simulation.
 * Realised LGD piles up at the two boundaries (0 = full recovery, 1 = no recovery), and the
   mass at `LGD = 1` **shifts sharply across vintages** (5.20 % train vs 26.86 % OOT), so
   `src/lgd_ead.py` fits a **two-part model** in addition to the classic Gamma GLM:
@@ -346,6 +363,40 @@ logit scorecard reaches AUC 0.6217, and the lender-grade benchmark reaches AUC 0
   champion is chosen on grade-level calibration first.
 * **EL = PD × LGD × EAD** per loan, aggregated by `grade` and for the whole
   out-of-time portfolio.
+
+<!-- EAD-RECON:START -->
+#### EAD-at-default reconciliation
+
+**The issue and the fix.** The superseded calculation applied LGD to the full funded amount, so it treated every loan as if its entire principal were still outstanding at default. LGD is defined on the outstanding principal, so the pipeline now estimates a mean EAD rate on **training defaults only** (2010-2013, 36-month loans) and sets `EAD = funded_amnt x` that grade rate for every primary OOT loan. The OOT rate below is a diagnostic, never an input.
+
+The new EL is $332.1M (10.29 % of EAD, 5.86 % of funded). Realised loss on the OOT portfolio is $400.2M (7.06 % of funded); the new EL / realised ratio is 0.830x. The superseded funded-basis EL was $574.8M (10.14 % of funded). Predicted PD is 2.29 pp below the observed default rate, which explains 91.65 % of the remaining new-EL gap.
+
+**Two-row discrepancy.** The PD window has 64,447 defaults, while the LGD sample has 64,445. The 2 missing rows are loans 62724310, 63155120: both are Charged Off after repaying principal in full, so realised EAD and LGD are zero/undefined. They are included in PD and default counts, excluded from the LGD fit, and carry zero realised loss; the new expected-EAD basis assigns them their grade EAD rate.
+
+| Item | Value |
+|---|---|
+| Defaults used for the LGD sample, train / OOT | 20,622 / 64,445 |
+| EAD at default, OOT | $3,226.7M |
+| Funded amount, OOT | $5,670.3M |
+| Realised loss on funded basis | $400.2M (7.06 % of funded) |
+| EL, EAD basis (current) | $332.1M (10.29 % of EAD; 5.86 % of funded) |
+| EL, funded basis (superseded) | $574.8M (10.14 % of funded) |
+| New EL / realised loss | 0.830x |
+| PD under-prediction (observed - predicted) | 2.29 pp |
+| PD-scaled EL / unexplained gap | $394.5M / $5.7M |
+| Share of new-EL gap explained by PD under-prediction | 91.65 % |
+
+| Grade | Train LGD-sample defaults | Train EAD rate | OOT LGD-sample defaults | OOT EAD rate (diagnostic) |
+|---|---:|---:|---:|---:|
+| A | 2,024 | 53.47 % | 5,704 | 50.11 % |
+| B | 6,804 | 55.35 % | 16,643 | 53.57 % |
+| C | 6,093 | 58.96 % | 22,624 | 57.96 % |
+| D | 4,432 | 61.55 % | 13,124 | 62.36 % |
+| E | 1,035 | 65.13 % | 5,011 | 65.53 % |
+| F | 215 | 69.66 % | 1,161 | 68.26 % |
+| G | 19 | 78.18 % | 178 | 73.26 % |
+<!-- EAD-RECON:END -->
+
 
 ### 3.6 Segmentation
 
@@ -409,7 +460,7 @@ the Gaussian-correlation transform of the PD, then losses are `Σ LGD × EAD × 
   against the closed-form Vasicek VaR of an infinitely granular homogeneous portfolio,
   and its spread is measured by a replication-based RMSE study
   (`variance_reduction_comparison`) rather than the (invalid for quantiles) `se / √ESS`
-  scaling. At the tuned shift the IS estimator cuts the tail-VaR RMSE by **5.11×** versus
+  scaling. At the tuned shift the IS estimator cuts the tail-VaR RMSE by **5.14×** versus
   plain Monte Carlo at equal paths; the full shift curve, ESS and effective sample size are
   reported, and PD/LGD stress scenarios complete the stage.
 
@@ -431,7 +482,7 @@ python -m src.pipeline eda pd       # a subset of stages
 python -m src.pipeline figures      # rebuild the showcase figures + docs/data.json
 
 # 4. quality gates
-python -m ruff check src tests scripts
+python -m ruff check .
 python scripts/check_site.py        # validate the GitHub Pages site
 python -m pytest -q
 ```
@@ -676,6 +727,10 @@ Two observations, stated plainly:
   2010–2013 training rate (12.39 %), so much of this is a real level shift between windows,
   not a defective fit.
 
+<!-- MONTHLY-DRIFT:START -->
+**Monthly calibration drift.** Over the 24-month test window the observed-minus-predicted gap grows from 0.28 pp in 2014-01 to 3.72 pp in 2015-12, a least-squares slope of 0.124 pp per month (R-squared 0.807). Its minimum is 0.28 pp in 2014-01 and its maximum is 3.72 pp in 2015-12. Observed default rises from 12.47 % to 15.59 %, while predicted PD moves from 12.19 % to 11.87 %. This is descriptive: it may reflect changing loan mix or underwriting, not a proven cause. A monthly calibration monitor on this gap would have flagged the drift.
+<!-- MONTHLY-DRIFT:END -->
+
 The calibrated PDs are still used downstream for EL/simulation (operationally correct), but
 no improvement is claimed.
 
@@ -693,16 +748,16 @@ no improvement is claimed.
   model the credit cycle through a real macro factor, so the "stress" scenarios are
   shocks, not forecasts.
 * **Vasicek correlation is an assumption.** The Basel retail formula at the portfolio PD
-  (EAD-weighted PD 0.1172) implies a much lower ρ than the simulation base case of
-  **ρ = 0.12** (Basel-implied ≈ 0.0322); VaR 99.9 % ranges from **18.92 %** of EAD
-  (ρ = 0.02) to **41.67 %** (ρ = 0.15)
+  (EAD-weighted PD 0.1190) implies a much lower ρ than the simulation base case of
+  **ρ = 0.12** (Basel-implied ≈ 0.0320); VaR 99.9 % ranges from **19.15 %** of EAD
+  (ρ = 0.02) to **42.02 %** (ρ = 0.15)
   — the choice of ρ matters more than anything else in the capital number. That is why the
   full sensitivity grid is reported instead of a single figure.
 * **Importance sampling works, but it is not a free lunch.** Shifting the systematic factor
   towards the loss tail and reweighting by the likelihood ratio gives an unbiased 99.9 %
   VaR (the estimator is checked against the closed-form Vasicek VaR in the test suite) and it
   **genuinely reduces the estimator's spread**: a replication-based RMSE study puts the IS
-  tail-VaR RMSE at **5.11× smaller** than plain Monte Carlo at equal paths. The caveat is
+  tail-VaR RMSE at **5.14× smaller** than plain Monte Carlo at equal paths. The caveat is
   that the win comes at a real cost — the effective sample size falls to **2,276 of 20,000
   paths (11.4 %)** — and pushing the shift out to the factor quantile (≈ 3.09) collapses it
   further and biases the estimate upward. The shift is therefore tuned to 1.5 and the whole
@@ -739,7 +794,7 @@ no improvement is claimed.
 * The modeling sample is hash-based, hence machine-independent.
 * Every artifact under `reports/results/` and `reports/figures/` is regenerated by
   `python -m src.pipeline all`; nothing is hand-edited.
-* `python -m ruff check src tests` and `python -m pytest -q` must be clean before a
+* `python -m ruff check .` and `python -m pytest -q` must be clean before a
   commit. The live test count is recorded in `summary.json` (`test_count`) by
   `python -m src.report_tables --write-test-count` and quoted in the results block
   above, so it cannot go stale.

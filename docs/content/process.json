@@ -1,0 +1,46 @@
+{
+  "title": "How this was built",
+  "subtitle": "Click a number",
+  "steps": [
+    {
+      "id": 1,
+      "title": "Data & leakage control",
+      "label": "Data",
+      "what": "Used the public Lending Club loan book (2007-2018) and kept only resolved loans, labelling Charged Off and Default as default. Dropped every post-origination variable (recoveries, payments, last payment dates) and the lender's own grade and interest rate from the main feature set.",
+      "why": "Those variables are consequences of the outcome or copies of the lender's own model, so using them would make the prediction circular.",
+      "learned": "The lender's own grade still beats the leakage-free model by about {auc_gap} AUC. I report it as an upper bound, not as a flaw."
+    },
+    {
+      "id": 2,
+      "title": "An honest validation split",
+      "label": "Validation",
+      "what": "Found that recent loans are right-censored (still open), derived the split from the data with a rule of at least 90% resolved, and trained on 2010-2013 and tested on 2014-2015 with 36-month loans. Every fitted element (winsorization, encoders, WoE) uses training data only.",
+      "why": "A random split leaks the credit cycle, and censored vintages mix real signal with a measurement artifact.",
+      "learned": "The censored 2017-2018 window flatters the model (AUC {window_immature_auc} vs {champion_auc}), so it is shown only to measure that gap."
+    },
+    {
+      "id": 3,
+      "title": "Scorecard and challengers",
+      "label": "Scorecard",
+      "what": "Binned variables with WoE and ranked them by IV; screened correlation and VIF, leaving 7 predictors for a logit scorecard (base score 600, odds 1:50, 20 points to double the odds). Compared it with Lasso, Ridge, a tree, a random forest and LightGBM tuned by temporal cross-validation, and explained the champion with SHAP.",
+      "why": "The scorecard is interpretable; the challengers show how much more a flexible model captures from the full 30-variable set.",
+      "learned": "LightGBM wins (AUC {champion_auc} vs 0.6217 for the scorecard), but discrimination remains moderate."
+    },
+    {
+      "id": 4,
+      "title": "Calibration and LGD",
+      "label": "Calibration",
+      "what": "Compared four probability calibrators (none, intercept, Platt, isotonic) fitted on a later out-of-sample slice, and modelled LGD with a Gamma GLM, LightGBM and a two-part model for the mass at LGD = 1.",
+      "why": "A calibrator fitted in-sample inherits the overfit it should fix, and realised LGD piles up at 0 and 1.",
+      "learned": "Calibration did not improve the Brier score and no LGD model had a positive out-of-time R-squared, so expected loss uses the portfolio-level LGD ({realized_lgd}). Both are reported as null results."
+    },
+    {
+      "id": 5,
+      "title": "Portfolio loss simulation",
+      "label": "Simulation",
+      "what": "Built a Vasicek single-factor Monte Carlo over grade x PD-decile buckets, swept asset correlation from 0.02 to 0.15 (including the Basel-implied {rho_basel}), added PD and LGD stress, and tested stratified, antithetic and importance-sampling variance reduction.",
+      "why": "Correlation is a portfolio effect, so averaging PD first would hide the tail.",
+      "learned": "Importance sampling cuts the tail-VaR error by 5.11 times, while antithetic sampling gives almost nothing. Capital figures depend strongly on the correlation."
+    }
+  ]
+}

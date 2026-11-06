@@ -1,2 +1,2 @@
-n_loans,mean_pd,mean_lgd,ead,expected_loss,el_rate,realised_defaults
-445596,0.1218,0.8663,5670341550.0,574794646.3783,0.1014,64447
+n_loans,mean_pd,mean_lgd,ead,funded,expected_loss,el_rate,el_rate_funded,realised_defaults
+445596,0.1218,0.8663,3226694627.7175,5670341550.0,332137179.8534,0.1029,0.0586,64447

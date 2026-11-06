@@ -3,478 +3,539 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
-<title>Credit Risk Modeling — Lending Club PD, LGD &amp; Monte Carlo portfolio risk</title>
-<meta name="description" content="End-to-end credit-risk case study on Lending Club loans: how right-censoring inflates validation metrics, a PD scorecard, calibrations, LGD, expected loss and Monte-Carlo portfolio capital. Fully reproducible.">
+<title>Credit Risk Studio — linked portfolio explorer and Monte Carlo risk lab</title>
+<meta name="description" content="An interactive credit-risk dashboard: explore observed defaults, calibrated PD and expected loss across US states, grades, purposes and vintages, then stress the Monte Carlo loss distribution.">
 <meta name="author" content="Pablo Huido Brogarcia">
 <link rel="canonical" href="https://pablohuidobrogarcia.github.io/credit-risk-modeling/">
-
-<!-- Open Graph (LinkedIn) -->
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Credit Risk Modeling">
-<meta property="og:title" content="Credit Risk Modeling — PD, LGD &amp; Monte Carlo portfolio risk (Lending Club)">
-<meta property="og:description" content="A reproducible credit-risk case study: right-censoring inflates validation the most, discrimination is moderate, calibration is a null result, and the Monte-Carlo tail is what matters for capital.">
+<meta property="og:site_name" content="Credit Risk Studio">
+<meta property="og:title" content="Credit Risk Studio — linked portfolio explorer and risk lab">
+<meta property="og:description" content="Observed default rate, calibrated PD and expected loss by segment; Monte Carlo tail risk with a linked 3D surface.">
 <meta property="og:url" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/">
 <meta property="og:image" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/assets/og-card.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Credit Risk Modeling summary card: champion AUC, expected loss, VaR 99.9% and the censoring gap.">
-
-<!-- Twitter card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Credit Risk Modeling — PD, LGD &amp; Monte Carlo portfolio risk">
-<meta name="twitter:description" content="Right-censoring inflates validation the most. A reproducible Lending Club credit-risk case study.">
-<meta name="twitter:image" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/assets/og-card.png">
-
-<!-- Favicon (inline SVG, no extra request) -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230072B2'/%3E%3Cpath d='M7 21l5-6 4 3 3-5 6 8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
-
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f2937'/%3E%3Cpath d='M7 22l5-7 4 4 3-5 6 8' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/site.css">
+<noscript><style>#app-skeleton{display:none!important}#app-content[hidden]{display:block!important}</style></noscript>
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 
-<header class="site-header">
-  <div class="wrap">
-    <a class="brand" href="#top">Credit&nbsp;Risk&nbsp;Modeling</a>
-    <nav aria-label="Section navigation">
-      <a href="#problem">Problem</a>
-      <a href="#censoring">Censoring</a>
-      <a href="#scorecard">Scorecard</a>
-      <a href="#lgd">LGD &amp; EL</a>
-      <a href="#simulation">Simulation</a>
-      <a href="#limitations">Limitations</a>
-    </nav>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#top" aria-label="Credit Risk Studio home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="9" fill="url(#bg)"/><path d="M7 22l5-7 4 4 3-5 6 8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop style="stop-color:var(--lilac)"/><stop offset="1" style="stop-color:var(--teal)"/></linearGradient></defs></svg>
+      </span>
+      <span>Credit Risk <em>Studio</em></span>
+    </a>
   </div>
 </header>
 
 <main id="main">
-  <!-- ================================================================= 1. HERO -->
-  <section class="hero" id="top" aria-labelledby="hero-title">
-    <div class="wrap">
-      <h1 id="hero-title">Credit-risk modeling on <span data-field="display.n_rows">1,345,350</span> Lending&nbsp;Club loans</h1>
-      <p class="lead">
-        An end-to-end, reproducible credit-risk study: probability of default, loss given
-        default, expected loss and a Monte-Carlo portfolio loss distribution — built so the
-        numbers can be trusted, including the ones that did not work.
-      </p>
-      <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">View code on GitHub</a>
-        <a class="btn btn-secondary" href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Read the validation report</a>
-      </div>
+  <div id="app-skeleton" class="skeleton-wrap" aria-hidden="true">
+    <div class="skeleton hero-skeleton"></div>
+    <div class="skeleton-row">
+      <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+    </div>
+    <div class="skeleton big-skeleton"></div>
+  </div>
 
-      <div class="kpis">
-        <div class="kpi">
-          <div class="label">Resolved loans</div>
-          <div class="value" data-field="display.n_rows">1,345,350</div>
-          <div class="sub">Lending Club, <span data-field="display.data_years">2007–2018</span></div>
-        </div>
-        <div class="kpi">
-          <div class="label">Champion AUC</div>
-          <div class="value" data-field="display.champion_auc">0.6572</div>
-          <div class="sub">Gini <span data-field="display.champion_gini">0.3144</span>; <span data-field="display.oot_years">2014-2015</span>; <span data-field="display.n_oot">445,596</span> loans</div>
-        </div>
-        <div class="kpi">
-          <div class="label">Expected loss</div>
-          <div class="value" data-field="display.el_rate">10.14%</div>
-          <div class="sub">of EAD (<span data-field="display.el_amount">$574.8M</span>)</div>
-        </div>
-        <div class="kpi">
-          <div class="label">VaR 99.9%</div>
-          <div class="value" data-field="display.sim_var999">37.39%</div>
-          <div class="sub">of EAD, base &rho;=<span data-field="display.rho">0.12</span></div>
+  <div id="app-content" hidden>
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="wrap hero-grid">
+        <div>
+          <p class="eyebrow">Portfolio intelligence · Lending Club snapshot</p>
+          <h1 id="hero-title">Where does the loss <span class="grad-text">actually live?</span></h1>
+          <p class="lead">
+            One linked view of the mature test window.
+          </p>
+          <div class="hero-actions">
+            <button class="btn btn-primary" id="hero-explore" type="button">Explore the portfolio</button>
+            <button class="btn btn-ghost" id="hero-risk" type="button">Stress the tail</button>
+          </div>
         </div>
       </div>
-      <p class="rho-readout" style="margin-top:1rem">
-        Portfolio EAD <span data-field="display.portfolio_ead">$5,670.3M</span>. All figures on this page are read
-        from <code>reports/results/summary.json</code> at build time; nothing here is hardcoded.
-      </p>
-    </div>
-  </section>
+    </section>
 
-  <!-- ============================================================== 2. PROBLEM -->
-  <section id="problem" aria-labelledby="problem-title">
     <div class="wrap">
-      <h2 id="problem-title"><span class="num">01</span>The problem and the data</h2>
-      <p class="section-lead">
-        Lending Club publishes every loan it originated, with the outcome as of the end of
-        2018. The task is the one a lender actually faces: estimate how much of a portfolio
-        will default, how much is lost when it does, and how much capital the tail requires.
-      </p>
-      <p>
-        Of <span data-field="display.n_accepted">2,260,668</span> originated loans,
-        <span data-field="display.n_resolved">1,345,350</span> have reached a final status
-        (Fully Paid, Charged Off or Default). A loan is labeled <em>default</em> when its
-        status is Charged Off or Default; the overall resolved default rate is
-        <span data-field="display.default_rate">19.96%</span>.
-      </p>
-      <p>
-        The primary model is trained on the <strong><span data-field="display.train_years">2010–2013</span></strong>
-        vintages and evaluated, once, on the <strong><span data-field="display.oot_years">2014–2015</span></strong>
-        36-month vintages (<span data-field="display.default_rate_train">12.4%</span> and
-        <span data-field="display.default_rate_oot">14.5%</span> default rates). The test window is used
-        only for the final number — never for tuning.
-      </p>
-      <div class="note">
-        <strong>Why this split matters.</strong> The dataset is a snapshot: recent loans are
-        mostly still open, so their outcomes are unknown. Choosing the validation window
-        carelessly is the single most common way to fool yourself with this dataset — see the
-        next section.
-      </div>
-    </div>
-  </section>
+      <section class="kpi-strip" aria-label="Headline results">
+        <article class="kpi-card">
+          <p class="mini-label">Loans analyzed</p>
+          <p class="kpi-value" id="kpi-loans" data-countup data-field="display.n_rows">1,345,350</p>
+          <p class="kpi-sub" id="kpi-loans-sub">Resolved Lending Club loans, 2007-2018 · 20.0% ended in default</p>
+        </article>
+        <article class="kpi-card">
+          <p class="mini-label">Model accuracy (AUC)</p>
+          <p class="kpi-value" id="kpi-auc" data-countup data-field="display.champion_auc">0.6572</p>
+          <p class="kpi-sub" id="kpi-auc-sub">Ranks a defaulter above a non-defaulter about 66% of the time · tested on 2014-2015 loans</p>
+        </article>
+        <article class="kpi-card">
+          <p class="mini-label">Expected loss</p>
+          <p class="kpi-value" id="kpi-el" data-countup data-field="display.el_rate">10.29%</p>
+          <p class="kpi-sub" id="kpi-el-sub">$332.1M expected loss on $3.23B of EAD</p>
+        </article>
+        <article class="kpi-card risk">
+          <p class="mini-label">Bad-year loss (VaR 99.9%)</p>
+          <p class="kpi-value" id="kpi-var" data-countup data-field="display.sim_var999">37.73%</p>
+          <p class="kpi-sub" id="kpi-var-sub">Exceeded once in 1,000 simulated years · $1,217.4M</p>
+        </article>
+      </section>
 
-  <!-- ============================================================ 3. CENSORING -->
-  <section id="censoring" aria-labelledby="censoring-title">
+      <nav class="view-tabs" role="tablist" aria-label="Dashboard views">
+        <button class="view-tab" id="view-tab-learn" role="tab" aria-controls="view-learn" data-view="learn" type="button">Learn</button>
+        <button class="view-tab" id="view-tab-explorer" role="tab" aria-controls="view-explorer" data-view="explorer" type="button">Portfolio Explorer</button>
+        <button class="view-tab" id="view-tab-risk" role="tab" aria-controls="view-risk" data-view="risk" type="button">Risk Lab</button>
+        <button class="view-tab" id="view-tab-evidence" role="tab" aria-controls="view-evidence" data-view="evidence" type="button">Evidence &amp; limits</button>
+      </nav>
+    </div>
+
+    <!-- ============================================================ EXPLORER -->
+    <section class="view" id="view-explorer" role="tabpanel" aria-labelledby="view-tab-explorer" tabindex="0">
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Portfolio Explorer</p>
+            <h2>Read the portfolio one slice at a time</h2>
+            <p class="section-lead" id="explorer-caption">—</p>
+          </div>
+          <div class="explorer-controls">
+            <div class="segmented" id="dimension-tabs" role="tablist" aria-label="Explorer dimension"></div>
+            <div class="explorer-tools">
+              <div class="segmented metric-tabs" id="metric-tabs" role="tablist" aria-label="Color metric"></div>
+              <label class="search-wrap">
+                <span class="sr-only">Filter segments</span>
+                <input id="segment-search" type="search" placeholder="Filter segments…" autocomplete="off">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="explorer-grid">
+          <section class="panel how-built-panel" id="how-built-panel" aria-labelledby="how-built-title" aria-live="polite">
+            <div class="panel-head">
+              <div>
+                <h3 id="how-built-title">How this was built</h3>
+              </div>
+            </div>
+            <!-- Reference artwork: docs/assets/process-ribbon.svg -->
+            <div class="how-built-picture" id="how-built-picture">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 604" width="380" height="604" class="process-ribbon" focusable="false" aria-hidden="true">
+<style>
+  .process-ribbon {
+    --pr-a1: #d6cdf5; --pr-b1: #a99be0;
+    --pr-a2: #c3cff6; --pr-b2: #8fa6ea;
+    --pr-a3: #b6dcf3; --pr-b3: #7fbbe6;
+    --pr-a4: #acdfd6; --pr-b4: #6fc6b9;
+    --pr-a5: #c9e8b4; --pr-b5: #93d07f;
+    --pr-badge: #1f2937; --pr-badge-text: #ffffff; --pr-label: #1f2937; --pr-ring: #1d4ed8;
+  }
+  @media (prefers-color-scheme: dark) {
+    .process-ribbon:not(.force-light) {
+      --pr-a1: #6a5aa8; --pr-b1: #4b3d8a;
+      --pr-a2: #566fb8; --pr-b2: #3d559c;
+      --pr-a3: #4a86b3; --pr-b3: #356a96;
+      --pr-a4: #3f9a8e; --pr-b4: #2c7c71;
+      --pr-a5: #6aa14f; --pr-b5: #4f8638;
+      --pr-badge: #e2e8f0; --pr-badge-text: #0f172a; --pr-label: #e5e7eb; --pr-ring: #93c5fd;
+    }
+  }
+  .process-ribbon.force-dark {
+    --pr-a1: #6a5aa8; --pr-b1: #4b3d8a; --pr-a2: #566fb8; --pr-b2: #3d559c;
+    --pr-a3: #4a86b3; --pr-b3: #356a96; --pr-a4: #3f9a8e; --pr-b4: #2c7c71;
+    --pr-a5: #6aa14f; --pr-b5: #4f8638;
+    --pr-badge: #e2e8f0; --pr-badge-text: #0f172a; --pr-label: #e5e7eb; --pr-ring: #93c5fd;
+  }
+  .ribbon { fill: none; stroke-width: 48; stroke-linecap: butt; stroke-linejoin: butt; opacity: .94; transition: opacity .2s; }
+  .step.is-selected .ribbon { opacity: 1; filter: saturate(1.4); }
+  .label { font: 700 12px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: .06em; fill: var(--pr-label); text-anchor: middle; dominant-baseline: central; }
+  .badge { fill: var(--pr-badge); }
+  .badge-num { font: 700 17px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--pr-badge-text); text-anchor: middle; dominant-baseline: central; }
+  .badge-ring { fill: none; stroke: var(--pr-ring); stroke-width: 0; }
+  .step.is-selected .badge-ring { stroke-width: 4; }
+  @media (prefers-reduced-motion: reduce) { .ribbon { transition: none; } }
+</style>
+<defs>
+  <linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="172"><stop offset="0" style="stop-color:var(--pr-a1)"/><stop offset="1" style="stop-color:var(--pr-b1)"/></linearGradient>
+  <linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="0" y1="124" x2="0" y2="276"><stop offset="0" style="stop-color:var(--pr-a2)"/><stop offset="1" style="stop-color:var(--pr-b2)"/></linearGradient>
+  <linearGradient id="g3" gradientUnits="userSpaceOnUse" x1="0" y1="228" x2="0" y2="380"><stop offset="0" style="stop-color:var(--pr-a3)"/><stop offset="1" style="stop-color:var(--pr-b3)"/></linearGradient>
+  <linearGradient id="g4" gradientUnits="userSpaceOnUse" x1="0" y1="332" x2="0" y2="484"><stop offset="0" style="stop-color:var(--pr-a4)"/><stop offset="1" style="stop-color:var(--pr-b4)"/></linearGradient>
+  <linearGradient id="g5" gradientUnits="userSpaceOnUse" x1="0" y1="436" x2="0" y2="588"><stop offset="0" style="stop-color:var(--pr-a5)"/><stop offset="1" style="stop-color:var(--pr-b5)"/></linearGradient>
+  <linearGradient id="fade" gradientUnits="userSpaceOnUse" x1="40" y1="0" x2="110" y2="0"><stop offset="0" stop-color="#000"/><stop offset="1" stop-color="#fff"/></linearGradient>
+  <mask id="ribbon-mask" maskUnits="userSpaceOnUse" x="0" y="0" width="380" height="604">
+    <rect x="0" y="0" width="380" height="68" fill="url(#fade)"/>
+    <rect x="0" y="68" width="380" height="472" fill="#fff"/>
+    <rect x="0" y="540" width="380" height="64" fill="url(#fade)"/>
+  </mask>
+</defs>
+<g mask="url(#ribbon-mask)">
+  <g class="step" id="step-1" data-step="1"><path class="ribbon" stroke="url(#g1)" d="M40 44 H270 A52 52 0 0 1 270 148"/></g>
+  <g class="step" id="step-2" data-step="2"><path class="ribbon" stroke="url(#g2)" d="M270 148 H110 A52 52 0 0 0 110 252"/></g>
+  <g class="step" id="step-3" data-step="3"><path class="ribbon" stroke="url(#g3)" d="M110 252 H270 A52 52 0 0 1 270 356"/></g>
+  <g class="step" id="step-4" data-step="4"><path class="ribbon" stroke="url(#g4)" d="M270 356 H110 A52 52 0 0 0 110 460"/></g>
+  <g class="step" id="step-5" data-step="5"><path class="ribbon" stroke="url(#g5)" d="M110 460 H270 A52 52 0 0 1 270 564 H40"/></g>
+</g>
+<g class="labels">
+  <text class="label" x="190" y="96">DATA</text>
+  <text class="label" x="190" y="200">VALIDATION</text>
+  <text class="label" x="190" y="304">SCORECARD</text>
+  <text class="label" x="190" y="408">CALIBRATION</text>
+  <text class="label" x="190" y="512">SIMULATION</text>
+</g>
+<g class="badges">
+  <g class="step" id="badge-1" data-step="1"><circle class="badge" cx="346" cy="96" r="21"/><circle class="badge-ring" cx="346" cy="96" r="26"/><text class="badge-num" x="346" y="96">1</text></g>
+  <g class="step" id="badge-2" data-step="2"><circle class="badge" cx="34" cy="200" r="21"/><circle class="badge-ring" cx="34" cy="200" r="26"/><text class="badge-num" x="34" y="200">2</text></g>
+  <g class="step" id="badge-3" data-step="3"><circle class="badge" cx="346" cy="304" r="21"/><circle class="badge-ring" cx="346" cy="304" r="26"/><text class="badge-num" x="346" y="304">3</text></g>
+  <g class="step" id="badge-4" data-step="4"><circle class="badge" cx="34" cy="408" r="21"/><circle class="badge-ring" cx="34" cy="408" r="26"/><text class="badge-num" x="34" y="408">4</text></g>
+  <g class="step" id="badge-5" data-step="5"><circle class="badge" cx="346" cy="512" r="21"/><circle class="badge-ring" cx="346" cy="512" r="26"/><text class="badge-num" x="346" y="512">5</text></g>
+</g>
+</svg>
+            <button type="button" class="how-built-node how-built-node-1" data-step="1" aria-label="Step 1: Data and leakage control" aria-pressed="true">01</button>
+            <button type="button" class="how-built-node how-built-node-2" data-step="2" aria-label="Step 2: An honest validation split" aria-pressed="false">02</button>
+            <button type="button" class="how-built-node how-built-node-3" data-step="3" aria-label="Step 3: Scorecard and challengers" aria-pressed="false">03</button>
+            <button type="button" class="how-built-node how-built-node-4" data-step="4" aria-label="Step 4: Calibration and LGD" aria-pressed="false">04</button>
+            <button type="button" class="how-built-node how-built-node-5" data-step="5" aria-label="Step 5: Portfolio loss simulation" aria-pressed="false">05</button>
+            </div>
+            <div class="how-built-reading" id="how-built-reading" aria-live="polite">
+              <h4 class="how-built-reading-title" id="how-built-reading-title">—</h4>
+              <div id="how-built-reading-body"></div>
+            </div>
+          </section>
+
+          <section class="panel total-panel" id="total-panel" aria-label="Portfolio folder" hidden>
+            <button type="button" class="total-folder-button" id="total-folder-button" aria-label="Open the portfolio folder">
+              <span class="total-folder-art" id="total-folder-art" aria-hidden="true"></span>
+            </button>
+            <button type="button" class="btn btn-ghost total-folder-open" id="total-folder-open">Open the folder</button>
+            <div class="total-tab-guide" id="total-tab-guide" aria-label="What each explorer tab shows">
+              <article class="total-tab-note"><strong>Total</strong><span>The whole portfolio at a glance; open the folder for the three headline views.</span></article>
+              <article class="total-tab-note"><strong>State</strong><span>Compare states on the US map. The small-state buttons make compact states selectable.</span></article>
+              <article class="total-tab-note"><strong>Grade</strong><span>Compare the lender’s A–G risk grades on the staircase.</span></article>
+              <article class="total-tab-note"><strong>Purpose</strong><span>Compare loan purposes as ranked tiles.</span></article>
+              <article class="total-tab-note"><strong>Vintage</strong><span>Explore monthly vintages on a timeline, with year totals.</span></article>
+              <article class="total-tab-note"><strong>Home ownership</strong><span>Compare mortgage, rent and own-home segments.</span></article>
+            </div>
+          </section>
+
+          <section class="panel map-panel" aria-labelledby="map-title">
+            <div class="panel-head">
+              <div>
+                <h3 id="map-title">US state map</h3>
+                <p id="map-subtitle" class="panel-sub">—</p>
+              </div>
+              <div class="panel-badge" id="map-metric-badge">—</div>
+            </div>
+            <div class="map-scroll">
+              <div class="tilemap" id="tile-map" role="group" aria-label="Segment tile map"></div>
+            </div>
+            <div class="legend" id="map-legend"></div>
+            <p class="map-narrow" id="map-narrow" hidden></p>
+            <p class="panel-foot" id="map-note">—</p>
+          </section>
+
+          <section class="panel selection-panel selection-part-a" aria-labelledby="summary-title">
+            <div class="selection-head">
+              <h3 id="summary-title">Portfolio</h3>
+            </div>
+            <div class="selection-context" id="summary-context"></div>
+            <div class="selection-metrics" id="summary-kpis"></div>
+            <div class="selection-model-check">
+              <span id="summary-model-check" data-testid="summary-model-check">—</span>
+            </div>
+          </section>
+
+          <section class="panel list-panel" aria-labelledby="rank-title">
+            <div class="panel-head">
+              <div>
+                <h3 id="rank-title">Ranked segments</h3>
+                <p class="panel-sub" id="list-count">—</p>
+              </div>
+              <span class="sort-pill" id="sort-pill">—</span>
+            </div>
+            <div class="rank-list" id="rank-list" role="group" aria-label="Ranked segments"></div>
+            <p class="empty-state" id="list-empty" hidden>No segment matches that filter.</p>
+          </section>
+        </div>
+      </div>
+    </section>
+      </div>
+    </section>
+
+    <!-- ============================================================ RISK LAB -->
+    <section class="view" id="view-risk" role="tabpanel" aria-labelledby="view-tab-risk" tabindex="0" hidden>
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Portfolio Risk Lab</p>
+            <h2>Move the assumptions, watch the tail</h2>
+            <p class="section-lead">
+              Every slider snaps to a precomputed simulation grid. The histogram and the 3D
+              surface share the same state; drag the surface to rotate and scroll to zoom. It
+              does not change the sliders. The page never re-simulates.
+            </p>
+          </div>
+          <button class="btn btn-primary" id="play-rho" type="button" aria-pressed="false">Play ρ sweep</button>
+        </div>
+
+        <section class="panel scenario-panel" aria-labelledby="scenario-title">
+          <div class="panel-head">
+            <div>
+              <h3 id="scenario-title">Scenario controls</h3>
+              <p class="panel-sub" id="scenario-sub">—</p>
+            </div>
+            <div class="panel-badge" id="scenario-badge">—</div>
+          </div>
+          <div class="slider-grid">
+            <label class="slider-field" for="risk-rho">
+              <span>Asset correlation ρ</span>
+              <output id="rho-output">—</output>
+              <input id="risk-rho" type="range" min="0" max="0" step="1" value="0">
+            </label>
+            <label class="slider-field" for="risk-pd">
+              <span>PD stress</span>
+              <output id="pd-output">—</output>
+              <input id="risk-pd" type="range" min="0" max="0" step="1" value="0">
+            </label>
+            <label class="slider-field" for="risk-lgd">
+              <span>LGD stress</span>
+              <output id="lgd-output">—</output>
+              <input id="risk-lgd" type="range" min="0" max="0" step="1" value="0">
+            </label>
+          </div>
+          <div class="risk-kpis" id="risk-kpis"></div>
+          <p class="risk-bar-note" id="risk-bar-note"></p>
+        </section>
+
+        <div class="risk-grid">
+          <div class="risk-stack">
+            <section class="panel gauge-panel" aria-labelledby="gauge-title">
+              <div class="panel-head">
+                <h3 id="gauge-title">VaR 99.9% gauge</h3>
+              </div>
+              <div class="gauge-row">
+                <div class="gauge" id="risk-gauge" role="img" aria-label="VaR 99.9 percent gauge"></div>
+                <p class="panel-foot gauge-note" id="gauge-caption">—</p>
+              </div>
+              <p class="gauge-ratio" id="gauge-ratio">—</p>
+            </section>
+
+            <section class="panel" aria-labelledby="loss-title">
+              <div class="panel-head">
+                <div>
+                  <h3 id="loss-title">Loss distribution</h3>
+                  <p class="panel-sub" id="loss-sub">—</p>
+                </div>
+              </div>
+              <div class="chart-host" id="loss-chart" role="img" aria-label="Simulated portfolio loss histogram with expected loss and tail markers"></div>
+              <div class="chart-legend" id="loss-legend" aria-label="Loss marker legend"></div>
+              <p class="chart-fallback" id="loss-fallback" hidden></p>
+            </section>
+          </div>
+
+          <section class="panel" aria-labelledby="surface-title">
+            <div class="panel-head">
+              <div>
+                <h3 id="surface-title">VaR surface</h3>
+                <p class="panel-sub" id="surface-sub">—</p>
+              </div>
+              <div class="segmented surface-toggle compact" id="surface-metrics" role="group" aria-label="Surface metric">
+                <button type="button" data-metric="var_0.999" aria-pressed="true">VaR 99.9%</button>
+                <button type="button" data-metric="es_0.999" aria-pressed="false">ES 99.9%</button>
+                <button type="button" data-metric="el" aria-pressed="false">EL</button>
+              </div>
+            </div>
+            <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional surface of portfolio risk across correlation and PD stress"></div>
+            <p class="chart-fallback" id="surface-fallback" hidden></p>
+          </section>
+        </div>
+
+        <div class="risk-grid lower">
+          <section class="panel" aria-labelledby="sim-title">
+            <div class="panel-head">
+              <div>
+                <h3 id="sim-title">Applicant simulator</h3>
+                <p class="panel-sub">Educational illustration of the published scorecard. Not a lending decision. Shares are from the 2014-2015 test window.</p>
+              </div>
+              <span class="panel-badge" id="sim-gini">—</span>
+            </div>
+            <div class="sim-presets" id="sim-presets" aria-label="Applicant presets">
+              <button type="button" class="chip" data-preset="typical">Typical applicant</button>
+              <button type="button" class="chip" data-preset="lower">Lower-risk example</button>
+              <button type="button" class="chip" data-preset="higher">Higher-risk example</button>
+              <button type="button" class="chip" data-preset="reset">Reset</button>
+            </div>
+            <div class="sim-controls" id="sim-controls"></div>
+            <div class="sim-outputs">
+              <div><p class="mini-label">Score</p><p class="sim-value" id="sim-score">—</p></div>
+              <div><p class="mini-label">Implied PD</p><p class="sim-value" id="sim-pd">—</p><p class="sub" id="sim-pd-note">—</p></div>
+              <div><p class="mini-label">Percentile</p><p class="sim-value" id="sim-pct">—</p><p class="sub" id="sim-pct-note">—</p></div>
+            </div>
+            <div id="sim-scale" class="sim-scale" role="img" aria-label="Score scale from lower to higher risk"></div>
+            <div id="sim-hist" class="score-hist" role="img" aria-label="Test-window score distribution and the applicant marker"></div>
+            <details class="sim-breakdown" id="sim-breakdown-details">
+              <summary>Why this score?</summary>
+              <div id="sim-breakdown"></div>
+            </details>
+          </section>
+
+          <section class="panel" aria-labelledby="cutoff-title">
+            <div class="panel-head">
+              <div>
+                <h3 id="cutoff-title">Cutoff explorer</h3>
+                <p class="panel-sub" id="cutoff-sub">—</p>
+              </div>
+              <span class="panel-badge" id="cutoff-badge">—</span>
+            </div>
+            <label class="slider-field" for="cutoff-slider">
+              <span>Score cutoff</span>
+              <output id="cutoff-output">—</output>
+              <input id="cutoff-slider" type="range" min="0" max="0" step="1" value="0">
+            </label>
+            <div class="cutoff-kpis" id="cutoff-kpis"></div>
+            <div class="chart-host small" id="cutoff-chart" role="img" aria-label="Score distributions for goods and bads with the selected cutoff"></div>
+            <p class="cutoff-legend-note" id="cutoff-legend-note">Muted = rejected at this cutoff.</p>
+            <div class="cutoff-tabs" id="cutoff-tabs" role="tablist" aria-label="Cutoff diagnostics">
+              <button type="button" role="tab" data-cutoff-tab="tradeoff" aria-selected="true">Trade-off</button>
+              <button type="button" role="tab" data-cutoff-tab="ks" aria-selected="false">KS curve</button>
+            </div>
+            <div class="cutoff-tab-panel" id="cutoff-tab-panel">
+              <div class="chart-host cutoff-extra" id="cutoff-extra-chart" role="img" aria-label="Cutoff trade-off or KS curve"></div>
+              <p class="cutoff-caption" id="cutoff-caption">—</p>
+            </div>
+            <p class="chart-fallback" id="cutoff-fallback" hidden></p>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ EVIDENCE -->
+    <section class="view" id="view-evidence" role="tabpanel" aria-labelledby="view-tab-evidence" tabindex="0" hidden>
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Evidence &amp; limits</p>
+            <h2>The numbers, the method and what did not work</h2>
+            <p class="section-lead">
+              The dashboard is a view over the same reproducible project. Nothing here is
+              tuned for the screen: model comparisons, calibration, LGD and the Monte Carlo
+              assumptions are reported as they are.
+            </p>
+          </div>
+        </div>
+
+        <div class="evidence-columns">
+          <div class="evidence-column">
+            <section class="panel">
+              <h3>Model comparison</h3>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Model comparison table">
+                <table id="model-table">
+                  <caption>Mature out-of-time window (★ = selected champion)</caption>
+                  <thead><tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr></thead>
+                  <tbody><tr><td>lightgbm ★</td><td>0.6572</td><td>0.3144</td><td>0.2274</td><td>30</td></tr><tr><td>random_forest</td><td>0.6468</td><td>0.2936</td><td>0.2088</td><td>30</td></tr><tr><td>probit</td><td>0.6219</td><td>0.2438</td><td>0.1770</td><td>8</td></tr><tr><td>logit_l2</td><td>0.6218</td><td>0.2436</td><td>0.1766</td><td>8</td></tr><tr><td>logit</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>logit_l1</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>decision_tree</td><td>0.5509</td><td>0.1018</td><td>0.1018</td><td>30</td></tr></tbody>
+                </table>
+              </div>
+              <p class="panel-foot" id="benchmark-note"></p>
+            </section>
+
+            <section class="panel">
+              <h3>Calibration and LGD</h3>
+              <p class="note-copy" id="calibration-note"></p>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="LGD model comparison table">
+                <table id="lgd-table">
+                  <caption>Loan-level LGD models, out of time</caption>
+                  <thead><tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr></thead>
+                  <tbody><tr><td>gamma_glm</td><td>0.1004</td><td>0.1572</td><td>-0.0758</td></tr><tr><td>lightgbm ★</td><td>0.1015</td><td>0.1538</td><td>-0.0294</td></tr><tr><td>two_part</td><td>0.1000</td><td>0.1559</td><td>-0.0578</td></tr></tbody>
+                </table>
+              </div>
+              <p class="note-copy" id="lgd-note"></p>
+            </section>
+          </div>
+
+          <div class="evidence-column">
+            <section class="panel">
+              <h3>Censoring and the test window</h3>
+              <p class="note-copy" id="censoring-note"></p>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Validation window comparison table">
+                <table id="window-table">
+                  <caption>Mature vs censored validation window</caption>
+                  <thead><tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr></thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+              <p class="note-copy" id="forecast-note"></p>
+              <div class="table-scroll" tabindex="0" role="region" aria-label="Forecast benchmark table">
+                <table id="forecast-table">
+                  <caption>Monthly default-rate forecast, benchmark comparison</caption>
+                  <thead><tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr></thead>
+                  <tbody><tr><td>last value naive</td><td>0.0132</td><td>0.0112</td><td>0.5543</td></tr><tr><td>ets</td><td>0.0140</td><td>0.0119</td><td>0.5903</td></tr><tr><td>sarimax</td><td>0.0246</td><td>0.0229</td><td>1.1319</td></tr><tr><td>seasonal naive</td><td>0.0363</td><td>0.0344</td><td>1.7036</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel limitations-panel">
+              <h3>What did not work, and limitations</h3>
+              <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
+              <p class="note-copy" id="segments-note"></p>
+            </section>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================ LEARN -->
+    <section class="view" id="view-learn" role="tabpanel" aria-labelledby="view-tab-learn" tabindex="0" hidden>
+      <div class="wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Learn</p>
+            <h2>Start here: a 5-minute guide</h2>
+            <p class="section-lead">This dashboard is a descriptive view over historical Lending Club data, not a lending decision system, forecast or causal model; segment differences are correlations, not causal effects.</p>
+          </div>
+        </div>
+        <div class="guide-grid" id="learn-guide"></div>
+
+        <section class="panel glossary-panel" aria-labelledby="glossary-title">
+          <div class="panel-head">
+            <div>
+              <h3 id="glossary-title">Glossary</h3>
+              <p class="panel-sub" id="glossary-count">—</p>
+            </div>
+            <label class="search-wrap glossary-search">
+              <span class="sr-only">Search the glossary</span>
+              <input id="glossary-search" type="search" placeholder="Search a term or definition…" autocomplete="off">
+            </label>
+          </div>
+          <div class="glossary-categories" id="glossary-categories" role="group" aria-label="Glossary categories"></div>
+          <div class="glossary-list" id="glossary-list"></div>
+          <p class="empty-state" id="glossary-empty" hidden>No glossary entry matches that search.</p>
+        </section>
+      </div>
+    </section>
+
     <div class="wrap">
-      <h2 id="censoring-title"><span class="num">02</span>The pitfall: right-censoring</h2>
-      <p class="section-lead">
-        A loan can only be scored as paid or defaulted once it has finished. In a snapshot,
-        the finished loans are not a random sample of the portfolio: which loans have an
-        outcome, and when, depends on the vintage. This is the headline finding of the project.
-      </p>
-
-      <figure>
-        <div class="chart-host" id="chart-censoring" role="img"
-             data-fallback-src="assets/censoring.png"
-             aria-label="Grouped bars of resolved share by issue year for 36- and 60-month terms, with a 90% threshold line."></div>
-        <noscript>
-          <img src="assets/censoring.png" alt="Resolved share by issue year and term. Early vintages are fully resolved; from 2016 onwards the resolved share collapses.">
-        </noscript>
-        <figcaption>
-          Share of each vintage's loans that already have a final outcome. The dashed line is
-          the 90% threshold that a (year, term) cell must clear to enter the primary split.
-        </figcaption>
-      </figure>
-
-      <figure>
-        <div class="chart-host" id="chart-auc-window" style="min-height:300px" role="img"
-             data-fallback-src="assets/auc_window.png"
-             aria-label="Dot plot comparing out-of-time AUC on the mature window and the censored window, with a chance marker at 0.50."></div>
-        <noscript>
-          <img src="assets/auc_window.png" alt="Dot plot of mature versus censored out-of-time AUC, with the axis range and chance level stated.">
-        </noscript>
-        <figcaption>
-          Same model recipe on two windows. The censored window is incomplete and has a
-          different loan composition, so the two AUCs are not comparable.
-        </figcaption>
-      </figure>
-
-      <div class="table-scroll">
-        <table>
-          <caption>Mature vs censored validation window (same model recipe)</caption>
-          <thead>
-            <tr><th scope="col">Window</th><th scope="col">Test years</th><th scope="col">AUC</th><th scope="col">Score PSI</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Mature (primary)</td><td>2014–2015</td><td data-field="display.window_mature_auc">0.6572</td><td data-field="display.window_mature_psi">0.0145</td></tr>
-            <tr><td>Censored (secondary)</td><td>2017–2018</td><td data-field="display.window_immature_auc">0.7152</td><td data-field="display.window_immature_psi">0.0028</td></tr>
-            <tr><td colspan="2"><strong>Inflation from censoring</strong></td><td class="highlight" data-field="display.window_gap">+0.0580</td><td></td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="note">
-        <p data-field="display.censoring_note">Only resolved loans enter the sample, so early defaults and early prepayments are over-represented relative to loans that are still open. The censored 2017-2018 window has a higher observed default rate (21.29%) than the mature 2014-2015 window (14.46%), and its loan composition differs, so its AUC is not comparable. The +0.0580 AUC gap is a measurement artifact of the sampling; the censored window is shown only to quantify it and feeds no headline number.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================ 4. SCORECARD -->
-  <section id="scorecard" aria-labelledby="scorecard-title">
-    <div class="wrap">
-      <h2 id="scorecard-title"><span class="num">03</span>The PD scorecard</h2>
-      <p class="section-lead">
-        A weight-of-evidence logistic scorecard is compared against gradient boosting and
-        tree challengers on the same out-of-time window, all with leakage-free features
-        known at origination.
-      </p>
-
-      <figure>
-        <div class="chart-host" id="chart-models" style="min-height:320px" role="img"
-             data-fallback-src="assets/scorecard_panel.png"
-             aria-label="Horizontal bars of out-of-time AUC by model, champion highlighted."></div>
-        <noscript>
-          <img src="assets/scorecard_panel.png" alt="Scorecard panel: AUC by model, information value ranking, and champion versus benchmark.">
-        </noscript>
-        <figcaption>Out-of-time AUC on the mature window. The champion is highlighted.</figcaption>
-      </figure>
-
-      <div class="table-scroll">
-        <table id="model-table">
-          <caption>Model comparison, mature out-of-time window (★ = selected champion)</caption>
-          <thead>
-            <tr><th scope="col">Model</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">KS</th><th scope="col">Features</th></tr>
-          </thead>
-          <tbody><tr><td>lightgbm ★</td><td>0.6572</td><td>0.3144</td><td>0.2274</td><td>30</td></tr><tr><td>random_forest</td><td>0.6468</td><td>0.2936</td><td>0.2088</td><td>30</td></tr><tr><td>probit</td><td>0.6219</td><td>0.2438</td><td>0.1770</td><td>8</td></tr><tr><td>logit_l2</td><td>0.6218</td><td>0.2436</td><td>0.1766</td><td>8</td></tr><tr><td>logit</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>logit_l1</td><td>0.6217</td><td>0.2435</td><td>0.1764</td><td>8</td></tr><tr><td>decision_tree</td><td>0.5509</td><td>0.1018</td><td>0.1018</td><td>30</td></tr></tbody>
-        </table>
-      </div>
-
-      <div class="table-scroll">
-        <table id="benchmark-row">
-          <caption>The lender's own grade still beats a leakage-free model</caption>
-          <thead>
-            <tr><th scope="col">Benchmark (wide features + grade / int_rate)</th><th scope="col">AUC</th><th scope="col">Gini</th><th scope="col">AUC vs champion</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>LightGBM on all variables incl. lender grade &amp; rate</td>
-              <td data-field="display.benchmark_auc">0.6799</td>
-              <td data-field="display.benchmark_gini">0.3599</td>
-              <td data-field="display.auc_gap_vs_benchmark">0.0227</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="note">
-        <strong>Honest read.</strong> Discrimination is moderate — champion KS
-        <span data-field="display.champion_ks">0.2274</span>, score PSI
-        <span data-field="display.score_psi">0.0145</span>. The lender's own grade and
-        interest rate, which are not available to an outside modeler at origination, still add
-        about <span data-field="display.auc_gap_vs_benchmark">0.0227</span> AUC. That gap is an upper
-        bound on what a genuine challenger could hope to recover, not a failure of the
-        pipeline.
-      </div>
-    </div>
-  </section>
-
-  <!-- =========================================================== 5. LGD & CALIB -->
-  <section id="lgd" aria-labelledby="lgd-title">
-    <div class="wrap">
-      <h2 id="lgd-title"><span class="num">04</span>Calibration, LGD and expected loss</h2>
-      <p class="section-lead">
-        A score only becomes money once it is calibrated to a probability and combined with
-        loss given default. Both steps here are reported as they stand, including the null
-        results.
-      </p>
-
-      <figure>
-        <div class="chart-host" id="chart-calibration" role="img"
-             data-fallback-src="assets/calibration_lift.png"
-             aria-label="Calibration curves: raw and isotonic-calibrated predicted PD against observed default rate."></div>
-        <noscript>
-          <img src="assets/calibration_lift.png" alt="Calibration curve and Brier-score comparison across calibration methods.">
-        </noscript>
-        <figcaption data-field="display.calibration_caption">—</figcaption>
-      </figure>
-
-      <div class="note">
-        <strong>Calibration is a null result.</strong>
-        <p data-field="display.calibration_note">Recalibration barely changes the Brier score (raw 0.11949 vs calibrated 0.11970); calibration-in-the-large moves from 0.1844 to 0.1986. The selected method is isotonic, and no method beats the raw score. Every decile lies above the diagonal, so the score under-predicts default: on the test window the calibrated score is 2.3 pp below the observed rate.</p>
-      </div>
-
-      <figure>
-        <div class="chart-host" id="chart-el-grade" style="min-height:300px" role="img"
-             data-fallback-src="assets/hero.png"
-             aria-label="Bars of expected loss as a share of exposure by lender grade."></div>
-        <noscript>
-          <img src="assets/hero.png" alt="Expected loss by grade alongside discrimination and portfolio-risk summaries.">
-        </noscript>
-        <figcaption>Expected loss by lender grade (PD × LGD × EAD), sharing a single LGD model across grades.</figcaption>
-      </figure>
-
-      <div class="table-scroll">
-        <table id="lgd-table">
-          <caption>Loan-level LGD models, out of time (★ = best by RMSE)</caption>
-          <thead>
-            <tr><th scope="col">Model</th><th scope="col">MAE</th><th scope="col">RMSE</th><th scope="col">R²</th></tr>
-          </thead>
-          <tbody><tr><td>gamma_glm</td><td>0.1004</td><td>0.1572</td><td>-0.0758</td></tr><tr><td>lightgbm ★</td><td>0.1015</td><td>0.1538</td><td>-0.0294</td></tr><tr><td>two_part</td><td>0.1000</td><td>0.1559</td><td>-0.0578</td></tr></tbody>
-        </table>
-      </div>
-      <div class="note">
-        <strong>Loan-level LGD is not usable.</strong> Every LGD model has a negative
-        out-of-time R² — worse than predicting the mean. There is real signal in the
-        loss-rate <em>distribution</em> (the share of zero-recovery defaults rises from
-        <span data-field="display.boundary_train">5.2%</span> in training to
-        <span data-field="display.boundary_oot">26.9%</span> out of time), but per-loan
-        prediction does not generalize, so expected loss uses a portfolio-level LGD
-        (<span data-field="display.realized_lgd">0.8678</span> realized out of time).
-      </div>
-    </div>
-  </section>
-
-  <!-- =========================================================== 6. SIMULATION -->
-  <section id="simulation" aria-labelledby="simulation-title">
-    <div class="wrap">
-      <h2 id="simulation-title"><span class="num">05</span>Portfolio risk by Monte Carlo</h2>
-      <p class="section-lead">
-        A single-factor Vasicek model turns the calibrated PDs, LGDs and exposures into a
-        full loss distribution, so capital can be read off the tail instead of a point
-        estimate. <span data-field="display.sim_n">100,000</span> paths, run in Python;
-        the page only displays the result.
-      </p>
-
-      <div class="control-row">
-        <label for="rho-select">Asset correlation scenario</label>
-        <select id="rho-select" aria-label="Asset correlation scenario"></select>
-        <span class="rho-readout" id="rho-readout"></span>
-      </div>
-
-      <figure>
-        <div class="chart-host" id="chart-loss" role="img"
-             data-fallback-src="assets/loss_distribution.png"
-             aria-label="Histogram of simulated portfolio losses with expected loss, VaR 99%, VaR 99.9% and expected-shortfall markers."></div>
-        <noscript>
-          <img src="assets/loss_distribution.png" alt="Simulated portfolio loss distribution with expected loss, value-at-risk and expected-shortfall markers.">
-        </noscript>
-        <figcaption>
-          Simulated loss distribution for the selected &rho;. Markers are read from the same
-          precomputed paths as the headline statistics — the page never re-simulates.
-        </figcaption>
-      </figure>
-
-      <div class="kpis" style="margin-top:1.4rem">
-        <div class="kpi"><div class="label">Expected loss</div><div class="value" data-field="display.sim_el">10.14%</div><div class="sub" data-field="display.sim_el_usd">$574.7M</div></div>
-        <div class="kpi"><div class="label">Unexpected loss</div><div class="value" data-field="display.sim_ul">5.88%</div><div class="sub" data-field="display.sim_ul_usd">$333.5M</div></div>
-        <div class="kpi"><div class="label">VaR 99%</div><div class="value" data-field="display.sim_var99">28.52%</div><div class="sub" data-field="display.sim_var99_usd">$1,617.3M</div></div>
-        <div class="kpi"><div class="label">VaR 99.9%</div><div class="value" data-field="display.sim_var999">37.39%</div><div class="sub" data-field="display.sim_var999_usd">$2,120.3M</div></div>
-        <div class="kpi"><div class="label">ES 99%</div><div class="value" data-field="display.sim_es99">32.40%</div><div class="sub" data-field="display.sim_es99_usd">$1,837.4M</div></div>
-        <div class="kpi"><div class="label">ES 99.9%</div><div class="value" data-field="display.sim_es999">40.67%</div><div class="sub" data-field="display.sim_es999_usd">$2,306.2M</div></div>
-      </div>
-
-      <figure>
-        <div class="chart-host" id="chart-rho" style="min-height:340px" role="img"
-             data-fallback-src="assets/rho_sensitivity.png"
-             aria-label="Grouped bars of expected loss, ES 99% and ES 99.9% across asset-correlation scenarios."></div>
-        <noscript>
-          <img src="assets/rho_sensitivity.png" alt="Expected loss, ES 99% and ES 99.9% across the asset-correlation grid.">
-        </noscript>
-        <figcaption>
-          Capital is highly sensitive to &rho;, so every figure is quoted with this grid. The
-          base case is &rho; = <span data-field="display.rho">0.12</span>; the
-          PD-dependent Basel-implied value for this portfolio is
-          <span data-field="display.rho_basel">0.0322</span>.
-        </figcaption>
-      </figure>
-
-      <p style="margin-top:1.4rem;color:var(--fg-muted);font-size:0.92rem">
-        Variance reduction was measured, not assumed: stratified sampling cuts the standard
-        error by <span data-field="display.se_stratified">0.50%</span> and
-        antithetic variates by <span data-field="display.se_antithetic">0.18%</span>.
-        Stratified sampling is the technique of record.
-      </p>
-    </div>
-  </section>
-
-  <!-- ========================================================== 7. LIMITATIONS -->
-  <section id="limitations" aria-labelledby="limitations-title">
-    <div class="wrap">
-      <h2 id="limitations-title"><span class="num">06</span>What did not work, and limitations</h2>
-      <p class="section-lead">
-        Kept visible on purpose. A portfolio that only shows its wins is not a portfolio you
-        can trust.
-      </p>
-
-      <ul class="limitations" id="limitations-list"><li>Discrimination is moderate (champion Gini 0.3144); the lender&#x27;s own grade still adds about 0.0227 AUC.</li><li>Loan-level LGD is not usable (every model has a negative out-of-time R-squared).</li><li>Probability calibration is a null result: isotonic did not improve the test Brier (0.11949 raw vs 0.11970 calibrated).</li><li>The monthly default-rate forecast is beaten by a naive benchmark (last-value naive MASE 0.5543 vs SARIMAX 1.1319).</li><li>Antithetic variates give a negligible variance reduction (reported, not hidden).</li><li>No macroeconomic variables; the data ends in 2018, so only one credit cycle is observed.</li><li>Reject inference is exploratory only and feeds no headline number. The data contains approved loans only, so the selection bias cannot be corrected.</li></ul>
-
-      <h3>Forecasting the monthly default rate</h3>
-      <div class="table-scroll">
-        <table id="forecast-table">
-          <caption data-field="display.forecast_caption">—</caption>
-          <thead>
-            <tr><th scope="col">Method</th><th scope="col">RMSE</th><th scope="col">MAE</th><th scope="col">MASE</th></tr>
-          </thead>
-          <tbody><tr><td>last value naive</td><td>0.0132</td><td>0.0112</td><td>0.5543</td></tr><tr><td>ets</td><td>0.0140</td><td>0.0119</td><td>0.5903</td></tr><tr><td>sarimax</td><td>0.0246</td><td>0.0229</td><td>1.1319</td></tr><tr><td>seasonal naive</td><td>0.0363</td><td>0.0344</td><td>1.7036</td></tr></tbody>
-        </table>
-      </div>
-      <div class="note">
-        <p data-field="display.forecast_note">A last-value naive forecast wins outright (MASE 0.5543 vs 1.1319 for SARIMAX and 0.5903 for ETS) on the 17-month holdout. Residual autocorrelation is only marginal (Ljung-Box at lag 10, p = 0.066), consistent with a series that is close to a random walk. This is reported as a limitation, not dressed up.</p>
-      </div>
-
-      <h3>Behavioral segmentation</h3>
-      <div class="table-scroll">
-        <table id="cluster-table">
-          <caption>k-means segments (k = <span data-field="display.cluster_k">2</span>) — descriptive only</caption>
-          <thead>
-            <tr><th scope="col">Segment</th><th scope="col">Loans</th><th scope="col">Share</th><th scope="col">Default rate</th></tr>
-          </thead>
-          <tbody><tr><td>k-means 0</td><td>741,055</td><td>55.1%</td><td>20.2%</td></tr><tr><td>k-means 1</td><td>604,295</td><td>44.9%</td><td>19.7%</td></tr></tbody>
-        </table>
-      </div>
-      <p style="color:var(--fg-muted);font-size:0.92rem" data-field="display.segments_note">Silhouette 0.1840, stability ARI 0.9566. k-means separates the default rate by only 0.54 pp; a Gaussian mixture separates more (6.28 pp) and is at least as stable (bootstrap ARI 0.9785 vs 0.9566). Neither is used as a model feature.</p>
-
-      <figure>
-        <img src="assets/segments.png" loading="lazy"
-             alt="Segment sizes and default rates for k-means and Gaussian-mixture solutions, plus the k-selection silhouette curve.">
-        <figcaption>
-          Segmentation is descriptive only: the segment default-rate spread is small next to the
-          spread the supervised PD model already captures.
-        </figcaption>
-      </figure>
-
-      <h3>Selection bias</h3>
-      <p style="font-size:0.94rem">
-        The data only contains approved loans. An exploratory reject-inference pass suggests
-        the rejected applicants would default more often (illustrative PD gap
-        <span data-field="display.reject_gap">0.0576</span>), but rejected applicants have no observed
-        outcome, so the gap cannot be validated. It is labeled exploratory and feeds no
-        headline number.
-      </p>
-    </div>
-  </section>
-
-  <!-- ======================================================= 8. REPRODUCE -->
-  <section id="reproduce" aria-labelledby="reproduce-title">
-    <div class="wrap">
-      <h2 id="reproduce-title"><span class="num">07</span>How to reproduce</h2>
-      <p class="section-lead">
-        Everything is deterministic (seed 42). The pipeline runs from raw CSV to the figures
-        and this page's <code>data.json</code>; the <span data-field="display.test_count">133</span>-test
-        suite checks that no number drifts.
-      </p>
-<pre><code>git clone https://github.com/pablohuidobrogarcia/credit-risk-modeling.git
-cd credit-risk-modeling
-
-python -m venv .venv &amp;&amp; source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
-
-# download the Lending Club data (see README) into data/raw/, then:
-python -m src.pipeline all          # full modelling run
-python -m src.pipeline figures      # rebuild the site figures + docs/data.json
-python -m pytest                    # full test suite, incl. number-integrity checks
-python -m src.report_tables --check # verify README numbers against summary.json</code></pre>
-
-      <h3>Stack</h3>
-      <p style="font-size:0.94rem">
-        Python · pandas · scikit-learn · LightGBM · SHAP · statsmodels · matplotlib · DuckDB /
-        HiveQL · Plotly (pinned CDN). Data quality, SQL, EDA and time series, PD scorecard and
-        challengers, calibration, LGD/EAD/EL, clustering, and a Monte-Carlo Vasicek portfolio
-        simulation.
-      </p>
-
-      <h3>Links</h3>
-      <ul style="font-size:0.94rem">
-        <li><a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">Source code on GitHub</a></li>
-        <li><a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Validation report</a></li>
-        <li><a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling#readme">Full README (methods &amp; results)</a></li>
-        <li><a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club">Dataset: Lending Club (Kaggle)</a></li>
-      </ul>
-    </div>
-  </section>
-</main>
-
-<footer class="site-footer">
-  <div class="wrap">
-    <p id="data-error" hidden><strong>Note:</strong> live data could not be loaded; static figures are shown instead.</p>
-    <p>
-      Credit-risk modeling case study · every number read from
-      <code>reports/results/summary.json</code> · generated with
-      <code>python -m src.pipeline figures</code>.
-    </p>
-    <div class="links">
-      <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">GitHub</a>
-      <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Validation report</a>
-      <a href="#top">Back to top</a>
+      <footer class="site-footer">
+        <p>
+          Credit Risk Studio · every number read from <code>docs/data.json</code>, generated by
+          <code>python -m src.pipeline figures</code> from <code>reports/results/summary.json</code>.
+        </p>
+        <div class="links">
+          <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling">Source code</a>
+          <span class="footer-command">Reproduce: <code>python -m src.pipeline all</code></span>
+          <a href="https://github.com/pablohuidobrogarcia/credit-risk-modeling/blob/main/reports/model_validation_report.md">Validation report</a>
+          <a href="https://www.kaggle.com/datasets/wordsforthewise/lending-club">Dataset</a>
+          <a href="#top">Back to top</a>
+        </div>
+        <p id="data-error" class="data-error" hidden>Live data could not be loaded. Static fallbacks are shown where available.</p>
+      </footer>
     </div>
   </div>
-</footer>
+</main>
 
-<!-- Plotly, pinned to an exact version. If it fails to load (CDN blocked,
-     ad-blocker, in-app browser), site.js swaps in the static PNG for every chart. -->
-<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"
-        integrity="sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7"
-        crossorigin="anonymous" defer
-        onerror="window.__plotlyLoadFailed = true"></script>
-<script src="assets/site.js" defer></script>
+<div class="welcome-backdrop" id="welcome-overlay" hidden></div>
+
+<noscript><p class="noscript">This dashboard needs JavaScript to load <code>data.json</code>. The static figures in <code>assets/</code> remain available.</p></noscript>
+
+<script type="module" src="assets/site.js"></script>
 </body>
 </html>
+

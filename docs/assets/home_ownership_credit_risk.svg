@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 40 1200 290" width="1200" height="290" class="home-ownership-svg" font-family="Helvetica, Arial, sans-serif">
+  <style>
+    .home-ownership-svg .card { cursor: pointer; outline: none; }
+    .home-ownership-svg .card .bg { fill: transparent; stroke: #000000; stroke-width: 3; transition: fill .15s, stroke-width .15s; }
+    .home-ownership-svg .card:hover .bg, .home-ownership-svg .card:focus .bg { fill: rgba(0,0,0,0.08); stroke-width: 6; }
+    .home-ownership-svg .lbl { font-size: 26px; font-weight: 700; fill: #000000; text-anchor: middle; letter-spacing: .5px; }
+  </style>
+
+  <rect x="0" y="40" width="1200" height="290" fill="#ffffff"/>
+
+  <!-- ================= RENT ================= -->
+  <a href="#rent" id="rent" class="card" data-category="RENT">
+    <title>RENT</title>
+    <rect class="bg" x="55" y="60" width="250" height="250" rx="18"/>
+    <g transform="translate(180 0)" stroke="#000000" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <rect x="-62" y="100" width="90" height="130" rx="6" fill="none"/>
+      <g fill="none" stroke-width="3">
+        <rect x="-48" y="116" width="18" height="18"/><rect x="-4" y="116" width="18" height="18"/>
+        <rect x="-48" y="146" width="18" height="18"/><rect x="-4" y="146" width="18" height="18"/>
+        <rect x="-48" y="176" width="18" height="18"/><rect x="-4" y="176" width="18" height="18"/>
+      </g>
+      <rect x="-26" y="200" width="24" height="30" fill="#000000"/>
+      <!-- llave -->
+      <g fill="none">
+        <circle cx="62" cy="130" r="14"/>
+        <line x1="62" y1="144" x2="62" y2="200"/>
+        <line x1="62" y1="176" x2="74" y2="176"/>
+        <line x1="62" y1="190" x2="72" y2="190"/>
+      </g>
+    </g>
+    <text class="lbl" x="180" y="288">Rent</text>
+  </a>
+
+  <!-- ================= OWN ================= -->
+  <a href="#own" id="own" class="card" data-category="OWN">
+    <title>OWN</title>
+    <rect class="bg" x="335" y="60" width="250" height="250" rx="18"/>
+    <g transform="translate(460 0)" stroke="#000000" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <polygon points="-70,150 0,90 70,150" fill="none"/>
+      <rect x="-55" y="150" width="110" height="80" fill="none"/>
+      <rect x="-14" y="180" width="28" height="50" fill="#000000"/>
+      <rect x="-45" y="168" width="22" height="22" fill="none" stroke-width="3"/>
+      <rect x="23" y="168" width="22" height="22" fill="none" stroke-width="3"/>
+      <!-- insignia de propiedad -->
+      <circle cx="58" cy="105" r="20" fill="#000000" stroke="none"/>
+      <path d="M48 105 L55 112 L68 97" fill="none" stroke="#ffffff" stroke-width="5"/>
+    </g>
+    <text class="lbl" x="460" y="288">Own</text>
+  </a>
+
+  <!-- ================= MORTGAGE ================= -->
+  <a href="#mortgage" id="mortgage" class="card" data-category="MORTGAGE">
+    <title>MORTGAGE</title>
+    <rect class="bg" x="615" y="60" width="250" height="250" rx="18"/>
+    <g transform="translate(740 0)" stroke="#000000" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <polygon points="-70,150 -5,95 60,150" fill="none"/>
+      <path d="M-55 150 V230 H17 M45 180 V150" fill="none"/>
+      <rect x="-30" y="180" width="26" height="50" fill="#000000"/>
+      <!-- moneda % -->
+      <circle cx="50" cy="205" r="30" fill="#000000"/>
+      <text x="50" y="216" text-anchor="middle" font-size="32" font-weight="800" fill="#ffffff" stroke="none">%</text>
+    </g>
+    <text class="lbl" x="740" y="288">Mortgage</text>
+  </a>
+
+  <!-- ================= ANY ================= -->
+  <a href="#any" id="any" class="card" data-category="ANY">
+    <title>ANY</title>
+    <rect class="bg" x="895" y="60" width="250" height="250" rx="18"/>
+    <g transform="translate(1020 0)" stroke="#000000" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="10 8">
+      <polygon points="-70,150 0,90 70,150" fill="none"/>
+      <rect x="-55" y="150" width="110" height="80" fill="none"/>
+    </g>
+    <text x="1020" y="212" text-anchor="middle" font-size="56" font-weight="800" fill="#000000">?</text>
+    <text class="lbl" x="1020" y="288">Any</text>
+  </a>
+</svg>

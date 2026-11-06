@@ -700,6 +700,11 @@ body.folder-open { overflow: hidden; }
 .hatch-bg { fill: var(--bg-deep); }
 .hatch-line { stroke: var(--border-strong); stroke-width: 2; }
 .map-panel #map-subtitle { min-height: 3.2em; }
+@media (max-width: 1200px) {
+  /* Reserve the longest metric label at the intermediate width, so switching
+     metric does not move the map camera under different platform fonts. */
+  .map-panel #map-subtitle { min-height: 5.5em; }
+}
 .map-panel #map-legend { min-height: 1.45rem; }
 .map-panel #map-note { min-height: 3.6em; }
 .state-map-wrap { position: relative; width: 100%; aspect-ratio: 960 / 600; flex: 0 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; cursor: grab; }
@@ -1050,7 +1055,7 @@ body.welcome-open { overflow: hidden; }
     height: auto; min-height: 0; max-height: none;
   }
   .total-panel { grid-column: 1; grid-row: auto; }
-  .selection-part-a { min-height: 430px; }
+  .selection-part-a { min-height: 470px; }
   .map-panel.geo-mode .map-scroll { overflow: visible; }
   .geo-visual { height: auto; min-height: 300px; }
 }

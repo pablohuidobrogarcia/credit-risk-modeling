@@ -80,7 +80,7 @@ is reported separately as the censoring-exposed secondary analysis.
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
 | **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.3 %**, UL **5.9 %**, VaR 99 % **28.8 %**, VaR 99.9 % **37.7 %**, ES 99 % **32.7 %**, ES 99.9 % **41.0 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
-| **Test suite** | **152** unit tests on synthetic data, `ruff check .` clean, run on Python 3.10 and 3.11 in CI |
+| **Test suite** | **153** unit tests on synthetic data, `ruff check .` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 
@@ -726,6 +726,10 @@ Two observations, stated plainly:
   predicted 0.1218 vs observed 0.1446). The 2014–2015 default rate is higher than the
   2010–2013 training rate (12.39 %), so much of this is a real level shift between windows,
   not a defective fit.
+
+<!-- MONTHLY-DRIFT:START -->
+**Monthly calibration drift.** Over the 24-month test window the observed-minus-predicted gap grows from 0.28 pp in 2014-01 to 3.72 pp in 2015-12, a least-squares slope of 0.124 pp per month (R-squared 0.807). Its minimum is 0.28 pp in 2014-01 and its maximum is 3.72 pp in 2015-12. Observed default rises from 12.47 % to 15.59 %, while predicted PD moves from 12.19 % to 11.87 %. This is descriptive: it may reflect changing loan mix or underwriting, not a proven cause. A monthly calibration monitor on this gap would have flagged the drift.
+<!-- MONTHLY-DRIFT:END -->
 
 The calibrated PDs are still used downstream for EL/simulation (operationally correct), but
 no improvement is claimed.

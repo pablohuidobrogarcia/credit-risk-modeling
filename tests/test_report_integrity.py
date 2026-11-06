@@ -40,8 +40,10 @@ def _summary() -> dict:
 # ---------------------------------------------------------------------------
 def test_readme_results_block_matches_summary():
     summary = _summary()
-    # check_docs raises AssertionError with a diff when the text has drifted.
+    # The path-specific check covers the results block; the default check also
+    # covers the EAD reconciliation and monthly-drift blocks in README + report.
     report_tables.check_docs(summary, path=README)
+    report_tables.check_docs(summary)
 
 
 def test_readme_markers_present_and_unique():

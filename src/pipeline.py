@@ -42,7 +42,7 @@ from . import (
 from . import metrics as M
 from . import simulation as sim
 from .config import Config
-from .utils import ensure_dirs, save_fig, save_json, save_table, set_seeds
+from .utils import ensure_dirs, load_json, save_fig, save_json, save_table, set_seeds
 from .woe_iv import fit_encoders, iv_summary, transform_frame
 
 STAGES = [
@@ -1453,6 +1453,19 @@ def stage_figures() -> Dict[str, Any]:
     """
     print("[figures] static showcase figures + docs/data.json ...")
     out = showcase.run_all()
+    # The Explorer build already has the 24 monthly observed/predicted rows.
+    # Copy its drift statistics into summary.json here, so the fast figures
+    # stage updates the headline artifact without re-running the 35-minute
+    # modeling stages.
+    try:
+        explorer = load_json("portfolio_explorer.json")
+        drift = (explorer.get("meta") or {}).get("monthly_drift")
+        if drift:
+            summary = load_json("summary.json")
+            summary.setdefault("pd", {})["monthly_drift"] = drift
+            save_json(summary, "summary.json")
+    except (OSError, ValueError) as exc:
+        print(f"    monthly drift skipped: {exc}")
     for key, value in out.items():
         if key == "assets":
             print(f"    assets copied to docs/: {len(value)}")

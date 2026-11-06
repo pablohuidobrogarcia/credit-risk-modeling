@@ -34,6 +34,8 @@ START_MARKER = "<!-- RESULTS:START -->"
 END_MARKER = "<!-- RESULTS:END -->"
 EAD_START_MARKER = "<!-- EAD-RECON:START -->"
 EAD_END_MARKER = "<!-- EAD-RECON:END -->"
+MONTHLY_START_MARKER = "<!-- MONTHLY-DRIFT:START -->"
+MONTHLY_END_MARKER = "<!-- MONTHLY-DRIFT:END -->"
 
 
 # ---------------------------------------------------------------------------
@@ -419,10 +421,45 @@ def render_ead_reconciliation(summary: Dict[str, Any]) -> str:
 _EAD_MARKER_RE = re.compile(
     re.escape(EAD_START_MARKER) + r".*?" + re.escape(EAD_END_MARKER), re.DOTALL
 )
+_MONTHLY_MARKER_RE = re.compile(
+    re.escape(MONTHLY_START_MARKER) + r".*?" + re.escape(MONTHLY_END_MARKER), re.DOTALL
+)
 
 
 def render_ead_with_markers(summary: Dict[str, Any]) -> str:
     return f"{EAD_START_MARKER}\n{render_ead_reconciliation(summary)}\n{EAD_END_MARKER}"
+
+
+def render_monthly_drift(summary: Dict[str, Any]) -> str:
+    """Render the monthly observed-minus-predicted drift paragraph."""
+    drift = (summary.get("pd") or {}).get("monthly_drift")
+    if not drift:
+        return "Monthly drift statistics are not available in this partial run."
+    first_month = drift.get("first_month", "first month")
+    last_month = drift.get("last_month", "last month")
+    min_month = drift.get("min_gap_month", first_month)
+    max_month = drift.get("max_gap_month", last_month)
+    r2 = drift.get("r_squared")
+    r2_text = f"{r2:.3f}" if r2 is not None else "n/a"
+    return (
+        f"**Monthly calibration drift.** Over the {int(drift.get('n_months') or 0)}-month "
+        f"test window the observed-minus-predicted gap grows from "
+        f"{float(drift.get('first_gap_pp') or 0):.2f} pp in {first_month} to "
+        f"{float(drift.get('last_gap_pp') or 0):.2f} pp in {last_month}, a least-squares "
+        f"slope of {float(drift.get('slope_pp_per_month') or 0):.3f} pp per month "
+        f"(R-squared {r2_text}). Its minimum is {float(drift.get('min_gap_pp') or 0):.2f} pp "
+        f"in {min_month} and its maximum is {float(drift.get('max_gap_pp') or 0):.2f} pp in "
+        f"{max_month}. Observed default rises from {float(drift.get('first_observed') or 0) * 100:.2f} % "
+        f"to {float(drift.get('last_observed') or 0) * 100:.2f} %, while predicted PD moves from "
+        f"{float(drift.get('first_predicted_pd') or 0) * 100:.2f} % to "
+        f"{float(drift.get('last_predicted_pd') or 0) * 100:.2f} %. This is descriptive: it may "
+        "reflect changing loan mix or underwriting, not a proven cause. A monthly calibration "
+        "monitor on this gap would have flagged the drift."
+    )
+
+
+def render_monthly_with_markers(summary: Dict[str, Any]) -> str:
+    return f"{MONTHLY_START_MARKER}\n{render_monthly_drift(summary)}\n{MONTHLY_END_MARKER}"
 
 
 # ---------------------------------------------------------------------------
@@ -463,17 +500,22 @@ def sync_docs(summary: Dict[str, Any] | None = None, path: Path | None = None) -
     new_readme = _MARKER_RE.sub(lambda _: render_with_markers(summary), readme, count=1)
     if _EAD_MARKER_RE.search(new_readme):
         new_readme = _EAD_MARKER_RE.sub(lambda _: render_ead_with_markers(summary), new_readme, count=1)
+    if _MONTHLY_MARKER_RE.search(new_readme):
+        new_readme = _MONTHLY_MARKER_RE.sub(lambda _: render_monthly_with_markers(summary), new_readme, count=1)
     if new_readme != readme:
         README_PATH.write_text(new_readme, encoding="utf-8", newline="\n")
         changed = True
 
     if REPORT_PATH.exists():
         report = REPORT_PATH.read_text(encoding="utf-8")
-        if _EAD_MARKER_RE.search(report):
-            new_report = _EAD_MARKER_RE.sub(lambda _: render_ead_with_markers(summary), report, count=1)
-            if new_report != report:
-                REPORT_PATH.write_text(new_report, encoding="utf-8", newline="\n")
-                changed = True
+        new_report = report
+        if _EAD_MARKER_RE.search(new_report):
+            new_report = _EAD_MARKER_RE.sub(lambda _: render_ead_with_markers(summary), new_report, count=1)
+        if _MONTHLY_MARKER_RE.search(new_report):
+            new_report = _MONTHLY_MARKER_RE.sub(lambda _: render_monthly_with_markers(summary), new_report, count=1)
+        if new_report != report:
+            REPORT_PATH.write_text(new_report, encoding="utf-8", newline="\n")
+            changed = True
     return changed
 
 
@@ -508,6 +550,7 @@ def check_docs(summary: Dict[str, Any] | None = None, path: Path | None = None) 
         )
     if path is None:
         ead_expected = render_ead_with_markers(summary)
+        monthly_expected = render_monthly_with_markers(summary)
         for target in (README_PATH, REPORT_PATH):
             if not target.exists():
                 continue
@@ -520,6 +563,17 @@ def check_docs(summary: Dict[str, Any] | None = None, path: Path | None = None) 
             if ead_match.group(0) != ead_expected:
                 raise AssertionError(
                     f"EAD reconciliation block is out of sync in {target}.\n"
+                    "Run `python -m src.report_tables --write` to regenerate it."
+                )
+            monthly_match = _MONTHLY_MARKER_RE.search(body)
+            if not monthly_match:
+                raise AssertionError(
+                    f"Monthly drift markers {MONTHLY_START_MARKER} / "
+                    f"{MONTHLY_END_MARKER} not found in {target}"
+                )
+            if monthly_match.group(0) != monthly_expected:
+                raise AssertionError(
+                    f"Monthly drift block is out of sync in {target}.\n"
                     "Run `python -m src.report_tables --write` to regenerate it."
                 )
     return expected

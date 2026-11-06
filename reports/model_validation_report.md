@@ -209,6 +209,10 @@ explains part of it. This is reported as a null result rather than hidden; the c
 PDs are still used downstream for EL/simulation because that is the operationally correct
 pipeline, but no improvement is claimed.
 
+<!-- MONTHLY-DRIFT:START -->
+**Monthly calibration drift.** Over the 24-month test window the observed-minus-predicted gap grows from 0.28 pp in 2014-01 to 3.72 pp in 2015-12, a least-squares slope of 0.124 pp per month (R-squared 0.807). Its minimum is 0.28 pp in 2014-01 and its maximum is 3.72 pp in 2015-12. Observed default rises from 12.47 % to 15.59 %, while predicted PD moves from 12.19 % to 11.87 %. This is descriptive: it may reflect changing loan mix or underwriting, not a proven cause. A monthly calibration monitor on this gap would have flagged the drift.
+<!-- MONTHLY-DRIFT:END -->
+
 ### 3.7 Cutoff / confusion matrix (OOT)
 
 Cutoff = **0.136088**, KS-optimal on the **training** window, applied out of time:

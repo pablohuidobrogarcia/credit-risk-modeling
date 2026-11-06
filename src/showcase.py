@@ -639,6 +639,50 @@ def _finite(value: Any, default: float = 0.0) -> float:
     return out if np.isfinite(out) else default
 
 
+def monthly_drift(items: List[Dict[str, Any]]) -> Dict[str, Any] | None:
+    """Monthly observed-minus-predicted drift from the Explorer vintage rows.
+
+    Uses the full-precision monthly rows written into ``portfolio_explorer.json``
+    (not the rounded display strings in ``docs/data.json``). The slope is the
+    least-squares change in percentage points per calendar month.
+    """
+    rows = [row for row in items if row.get("segment_type") == "month"]
+    rows.sort(key=lambda row: str(row.get("id")))
+    if len(rows) < 2:
+        return None
+    gaps = np.asarray(
+        [(float(row["default_rate"]) - float(row["pred_pd"])) * 100.0 for row in rows],
+        dtype=float,
+    )
+    x = np.arange(len(rows), dtype=float)
+    slope, intercept = np.polyfit(x, gaps, 1)
+    fitted = slope * x + intercept
+    total = float(((gaps - gaps.mean()) ** 2).sum())
+    r2 = 1.0 - float(((gaps - fitted) ** 2).sum()) / total if total else None
+    min_index = int(np.argmin(gaps))
+    max_index = int(np.argmax(gaps))
+    first, last = rows[0], rows[-1]
+    return {
+        "n_months": len(rows),
+        "first_month": str(first["id"]),
+        "last_month": str(last["id"]),
+        "first_gap_pp": float(gaps[0]),
+        "last_gap_pp": float(gaps[-1]),
+        "min_gap_pp": float(gaps[min_index]),
+        "min_gap_month": str(rows[min_index]["id"]),
+        "max_gap_pp": float(gaps[max_index]),
+        "max_gap_month": str(rows[max_index]["id"]),
+        "first_observed": float(first["default_rate"]),
+        "first_predicted_pd": float(first["pred_pd"]),
+        "last_observed": float(last["default_rate"]),
+        "last_predicted_pd": float(last["pred_pd"]),
+        "observed_change_pp": float((last["default_rate"] - first["default_rate"]) * 100.0),
+        "predicted_change_pp": float((last["pred_pd"] - first["pred_pd"]) * 100.0),
+        "slope_pp_per_month": float(slope),
+        "r_squared": None if r2 is None else float(r2),
+    }
+
+
 def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | None:
     """Aggregate the primary mature test window by every explorer dimension.
 
@@ -892,6 +936,7 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
             "el_amount": round(total_ead * headline_el, 2),
             "min_n": 500,
             "score_bins": [round(float(x), 4) for x in score_edges],
+            "monthly_drift": monthly_drift(dims.get("vintage", [])),
         },
         "metric_options": [
             {"id": "default_rate", "label": "Observed default rate"},

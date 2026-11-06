@@ -11,6 +11,7 @@ import json
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -108,6 +109,31 @@ def test_meta_mean_pd_keeps_the_full_precision_from_summary(pe, summary):
     assert pe["dimensions"]["total"][0]["pred_pd"] == pytest.approx(full_pd, rel=0, abs=1e-15)
     gap_pp = (pe["meta"]["default_rate_total"] - pe["meta"]["mean_pd"]) * 100
     assert round(gap_pp, 2) == 2.29
+
+
+def test_monthly_drift_matches_vintage_rows(pe, summary):
+    rows = sorted(
+        (item for item in pe["dimensions"]["vintage"] if item.get("segment_type") == "month"),
+        key=lambda item: item["id"],
+    )
+    assert len(rows) == 24
+    gaps = np.array([(row["default_rate"] - row["pred_pd"]) * 100 for row in rows])
+    x = np.arange(len(rows), dtype=float)
+    slope, intercept = np.polyfit(x, gaps, 1)
+    fitted = slope * x + intercept
+    r2 = 1 - ((gaps - fitted) ** 2).sum() / ((gaps - gaps.mean()) ** 2).sum()
+    drift = summary["pd"]["monthly_drift"]
+    assert drift["n_months"] == 24
+    assert drift["first_month"] == rows[0]["id"] == "2014-01"
+    assert drift["last_month"] == rows[-1]["id"] == "2015-12"
+    assert drift["first_gap_pp"] == pytest.approx(gaps[0], abs=1e-12)
+    assert drift["last_gap_pp"] == pytest.approx(gaps[-1], abs=1e-12)
+    assert drift["min_gap_month"] == rows[int(np.argmin(gaps))]["id"]
+    assert drift["max_gap_month"] == rows[int(np.argmax(gaps))]["id"]
+    assert drift["slope_pp_per_month"] == pytest.approx(slope, abs=1e-12)
+    assert drift["r_squared"] == pytest.approx(r2, abs=1e-12)
+    assert drift["first_observed"] == pytest.approx(rows[0]["default_rate"], abs=1e-12)
+    assert drift["last_predicted_pd"] == pytest.approx(rows[-1]["pred_pd"], abs=1e-12)
 
 
 def test_ead_at_default_reconciliation(summary):

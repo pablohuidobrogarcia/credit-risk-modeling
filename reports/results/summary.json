@@ -1120,6 +1120,25 @@
       "benchmark_auc_lender_grade": 0.718,
       "calibration_gap": -0.0243,
       "score_psi": 0.0028
+    },
+    "monthly_drift": {
+      "n_months": 24,
+      "first_month": "2014-01",
+      "last_month": "2015-12",
+      "first_gap_pp": 0.27773397357798296,
+      "last_gap_pp": 3.721425862448878,
+      "min_gap_pp": 0.27773397357798296,
+      "min_gap_month": "2014-01",
+      "max_gap_pp": 3.721425862448878,
+      "max_gap_month": "2015-12",
+      "first_observed": 0.12466289691170074,
+      "first_predicted_pd": 0.12188555717592091,
+      "last_observed": 0.15588108858834032,
+      "last_predicted_pd": 0.11866682996385154,
+      "observed_change_pp": 3.1218191676639586,
+      "predicted_change_pp": -0.32187272120693666,
+      "slope_pp_per_month": 0.12413077136723166,
+      "r_squared": 0.8067917365320185
     }
   },
   "lgd": {
@@ -2781,5 +2800,5 @@
       "note": "Illustrative only: the rejected applicants have no observed outcome, so the gap cannot be validated. Common variables are requested amount and DTI."
     }
   },
-  "test_count": 152
+  "test_count": 153
 }

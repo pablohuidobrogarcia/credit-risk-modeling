@@ -584,6 +584,7 @@ test("metric tabs re-sort the list when the segment map is illustrative", async 
   await page.locator("#metric-tabs button[data-metric='el_pct_ead']").click();
   await expect(page).toHaveURL(/metric=el_pct_ead/);
   await expect(page.locator("#map-subtitle")).toContainText("color = expected loss");
+  await expect.poll(() => category.evaluate((el) => getComputedStyle(el).fill)).not.toBe(before);
   const after = await category.evaluate((el) => getComputedStyle(el).fill);
   expect(after).not.toBe(before);
   const firstRow = page.locator("#rank-list .rank-row").first();
@@ -2256,6 +2257,8 @@ test("loss markers use a readable legend and the surface card is large with a ba
     expect(box.width).toBeGreaterThan(20);
     expect(await item.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
   }
+  const barColors = await page.locator("#loss-chart").evaluate((el) => el.data[0].marker.color);
+  expect(new Set(barColors).size).toBe(3);
   const surfaceHeight = await page.locator("#surface-chart").evaluate((el) => el.getBoundingClientRect().height);
   expect(surfaceHeight).toBeGreaterThanOrEqual(520);
   const surfaceData = await page.locator("#surface-chart").evaluate((el) => el.data);
@@ -2527,6 +2530,16 @@ test("axe reports no wcag2a, wcag2aa or best-practice violations in the four vie
     for (const view of ["explorer", "risk", "evidence", "learn"]) {
       await page.locator(`#view-tab-${view}`).click();
       await page.waitForTimeout(view === "risk" ? 1800 : 500);
+      if (view === "risk") {
+        await expect(page.locator("#surface-metrics button")).toHaveCount(3);
+        await expect(page.locator("#risk-gauge svg")).toBeVisible();
+        await expect(page.locator("#cutoff-tabs [role='tab']")).toHaveCount(2);
+        await expect(page.locator(".sim-outputs > div")).toHaveCount(3);
+        await expect(page.locator(".sim-point-bar")).toHaveCount(7);
+        for (const selector of ["#loss-chart", "#surface-chart", "#cutoff-chart", "#cutoff-extra-chart"]) {
+          await expect(page.locator(selector)).toHaveAttribute("aria-label", /.+/);
+        }
+      }
       await page.addScriptTag({ path: AXE_PATH });
       const violations = await page.evaluate(async () => {
         const results = await window.axe.run(document, {

@@ -1957,8 +1957,10 @@ function drawLossChart(hist, scenario) {
     const x = value * 100;
     shapes.push({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.6, dash } });
   });
-  const var99 = num(ex["var_0.99_pct_ead"]);
-  const var999 = num(ex["var_0.999_pct_ead"]);
+  const var99Raw = num(ex["var_0.99_pct_ead"]);
+  const var999Raw = num(ex["var_0.999_pct_ead"]);
+  const var99 = var99Raw == null ? null : var99Raw * 100;
+  const var999 = var999Raw == null ? null : var999Raw * 100;
   const barColors = centers.map((center) => {
     if (var999 != null && center >= var999) return p.lilacDark;
     if (var99 != null && center >= var99) return p.lilac;

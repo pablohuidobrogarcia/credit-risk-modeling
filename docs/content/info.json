@@ -59,6 +59,12 @@
     "try": "Increase LGD stress and see how far the whole distribution moves right.",
     "term": "loss-distribution"
   },
+  "gauge-ratio": {
+    "title": "VaR / EL ratio",
+    "text": "VaR 99.9% divided by expected loss for the same scenario. It shows how far the bad-year tail sits above the average simulated loss.",
+    "try": "Move PD or LGD stress and watch both the ratio and the gauge.",
+    "term": "var"
+  },
   "surface": {
     "title": "VaR surface",
     "text": "The surface shows the selected risk metric across ρ and PD stress on the precomputed grid. The dark marker is the current scenario and the outlined marker is the base case. It does not change the sliders.",
@@ -106,6 +112,12 @@
     "text": "Typical picks the most common test-window bin; lower-risk picks the highest-points bin; higher-risk picks the lowest-points bin.",
     "try": "Load Lower-risk, then Higher-risk, and compare the PD.",
     "term": "scorecard"
+  },
+  "cutoff-tabs": {
+    "title": "Cutoff diagnostics",
+    "text": "The Trade-off tab plots approval and approved bad rates against the cutoff. The KS curve plots cumulative good and bad shares; the largest gap is the binned KS statistic.",
+    "try": "Move the cutoff and compare the dots with the KPI cards.",
+    "term": "ks"
   },
   "cutoff-slider": {
     "title": "Score cutoff",

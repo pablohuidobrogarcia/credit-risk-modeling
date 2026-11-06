@@ -106,6 +106,20 @@ const SURFACE_METRICS = {
   "es_0.999": "ES 99.9%",
   el: "Expected loss",
 };
+const CUTOFF_STATISTICS = [
+  { id: "cut-approval", label: "Approval rate", color: "sky", meaning: "Share accepted." },
+  { id: "cut-bad", label: "Bad rate (approved)", color: "lilac", meaning: "Defaults among approved." },
+  { id: "cut-good", label: "Approved good", color: "teal", meaning: "Good loans kept." },
+  { id: "cut-bad-n", label: "Approved bad", color: "lilacDark", meaning: "Bad loans kept." },
+];
+const LOSS_STATISTICS = [
+  { id: "expected-loss", label: "EL", key: "expected_loss_pct_ead", color: "ink", dash: "solid", meaning: "Average loss across simulated paths." },
+  { id: "unexpected-loss", label: "UL", key: "unexpected_loss_pct_ead", color: "ink", dash: null, meaning: "Typical variation around expected loss." },
+  { id: "var-99", label: "VaR 99%", key: "var_0.99_pct_ead", color: "teal", dash: "dash", meaning: "Loss stays below this in 99 of 100 simulated years." },
+  { id: "var-999", label: "VaR 99.9%", key: "var_0.999_pct_ead", color: "lilacDark", dash: "dash", meaning: "Loss stays below this in 999 of 1,000 simulated years." },
+  { id: "es-99", label: "ES 99%", key: "es_0.99_pct_ead", color: "sky", dash: "dot", meaning: "Average loss in the worst 1% of simulated years." },
+  { id: "es-999", label: "ES 99.9%", key: "es_0.999_pct_ead", color: "green", dash: "dot", meaning: "Average loss in the worst 0.1% of simulated years." },
+];
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -134,6 +148,7 @@ const state = {
   risk: { rho: null, pd: null, lgd: null },
   surfaceMetric: "var_0.999",
   cutoff: null,
+  cutoffTab: "tradeoff",
   sim: {},
   term: null,
   glossaryQuery: "",
@@ -468,11 +483,13 @@ const STATIC_INFO = [
   ["#scenario-title", "risk-rho", "Scenario controls", "after"],
   ["#play-rho", "play-rho", "Play rho sweep", "after"],
   ["#risk-gauge", "gauge", "VaR gauge", "after"],
+  ["#gauge-ratio", "gauge-ratio", "VaR / EL ratio", "after"],
   ["#loss-title", "loss-histogram", "Loss distribution", "after"],
   ["#surface-title", "surface", "VaR surface", "after"],
   ["#surface-metrics", "surface-metric", "Surface metric", "before"],
   ["#sim-title", "sim-presets", "Applicant simulator", "after"],
   ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
+  ["#cutoff-tabs", "cutoff-tabs", "Cutoff diagnostics", "after"],
 ];
 
 function injectStaticInfo() {
@@ -1862,24 +1879,16 @@ function renderRisk() {
   const kpis = $("#risk-kpis");
   if (hist && hist.exact) {
     const ex = hist.exact;
-    const defs = [
-      ["EL", ex.expected_loss_pct_ead, "expected-loss"],
-      ["UL", ex.unexpected_loss_pct_ead, "unexpected-loss"],
-      ["VaR 99%", ex["var_0.99_pct_ead"], "var-99"],
-      ["ES 99%", ex["es_0.99_pct_ead"], "es-99"],
-      ["ES 99.9%", ex["es_0.999_pct_ead"], "es-999"],
-    ];
-    const meanings = {
-      "expected-loss": "Average loss across simulated paths.",
-      "unexpected-loss": "Typical variation around expected loss.",
-      "var-99": `Loss stays below this in 99 of 100 simulated years.`,
-      "es-99": "Average loss in the worst 1% of simulated years.",
-      "es-999": "Average loss in the worst 0.1% of simulated years.",
-    };
-    kpis.innerHTML = defs.map(([label, value, key]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="risk-${key}">—</p><p class="sub">${esc(meanings[key])}</p></div>`).join("");
-    defs.forEach(([label, value, key]) => countUp(kpis.querySelector(`[data-testid="risk-${key}"]`), value, (v) => fmtPct(v, 1)));
+    const p = palette();
+    const kpiStats = LOSS_STATISTICS.filter((stat) => stat.id !== "var-999");
+    kpis.innerHTML = kpiStats.map((stat) => {
+      const cssDash = stat.dash === "dot" ? "dotted" : stat.dash === "dash" ? "dashed" : "solid";
+      return `<div class="summary-kpi" data-stat="${stat.id}" style="--stat-color:${p[stat.color]};--stat-dash:${cssDash}"><p class="mini-label">${stat.label}</p><p class="value" data-testid="risk-${stat.id}">—</p><p class="sub">${esc(stat.meaning)}</p></div>`;
+    }).join("");
+    kpiStats.forEach((stat) => countUp(kpis.querySelector(`[data-testid="risk-${stat.id}"]`), ex[stat.key], (v) => fmtPct(v, 1)));
+    $("#risk-bar-note").textContent = (EXPLORER && EXPLORER.riskBarNote) || "";
     $("#loss-sub").textContent = `${scenario.key.replace(/_/g, " ")} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
-      renderGauge(ex["var_0.999_pct_ead"]);
+      renderGauge(ex["var_0.999_pct_ead"], ex.expected_loss_pct_ead);
   }
   if (state.view === "risk") {
     drawLossChart(hist, scenario);
@@ -1887,7 +1896,7 @@ function renderRisk() {
   }
 }
 
-function renderGauge(value) {
+function renderGauge(value, expectedLoss) {
   const host = $("#risk-gauge");
   if (!host) return;
   const v = num(value) || 0;
@@ -1898,17 +1907,30 @@ function renderGauge(value) {
   const cx = 115; const cy = 105; const r = 80;
   const nx = cx + 54 * Math.cos(angle);
   const ny = cy - 54 * Math.sin(angle);
+  const p = palette();
+  const tick = (pctValue) => {
+    const theta = Math.PI * (1 - pctValue / 60);
+    return { x: cx + 92 * Math.cos(theta), y: cy - 92 * Math.sin(theta), pct: pctValue };
+  };
+  const ticks = [0, 20, 40, 60].map(tick);
+  const gradientStops = p.risk.map((entry, index) => `<stop offset="${(index / (p.risk.length - 1) * 100).toFixed(1)}%" stop-color="${entry}"></stop>`).join("");
   host.innerHTML = `<svg viewBox="0 0 230 146" aria-hidden="true">
+    <defs><linearGradient id="gauge-ramp" x1="0" x2="1">${gradientStops}</linearGradient></defs>
     <path class="track" d="M25 105 A80 80 0 0 1 205 105" pathLength="100"></path>
+    <path class="ramp-track" d="M25 105 A80 80 0 0 1 205 105" pathLength="100" stroke="url(#gauge-ramp)"></path>
     <path class="value" d="M25 105 A80 80 0 0 1 205 105" pathLength="100" stroke="${color}" stroke-dasharray="${(pct * 100).toFixed(1)} 100"></path>
     <line class="needle" x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}"></line>
     <circle class="hub" cx="${cx}" cy="${cy}" r="4.2"></circle>
-    <text x="${cx}" y="140" text-anchor="middle" font-size="22">${fmtPct(v, 1)}</text>
-    <text class="scale" x="18" y="119">0%</text>
-    <text class="scale" x="212" y="119" text-anchor="end">${Math.round(max * 100)}%</text>
+    <text x="${cx}" y="140" text-anchor="middle" font-size="26">${fmtPct(v, 1)}</text>
+    ${ticks.map((entry) => `<text class="scale" x="${entry.x.toFixed(1)}" y="${entry.y.toFixed(1)}" text-anchor="middle">${entry.pct}%</text>`).join("")}
   </svg>`;
   const caption = $("#gauge-caption");
   if (caption) caption.textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale.`;
+  const ratio = $("#gauge-ratio");
+  if (ratio) {
+    const el = num(expectedLoss);
+    ratio.textContent = el && el > 0 ? `VaR 99.9% is ${(v / el).toFixed(1)}x the expected loss.` : "";
+  }
 }
 
 function drawLossChart(hist, scenario) {
@@ -1920,20 +1942,31 @@ function drawLossChart(hist, scenario) {
   const centers = edges.slice(0, -1).map((v, i) => (v + edges[i + 1]) / 2);
   const ex = hist.exact || {};
   const p = palette();
-  const markers = [
-    ["EL", ex.expected_loss_pct_ead, p.ink, "solid"],
-    ["VaR 99%", ex["var_0.99_pct_ead"], p.teal, "dash"],
-    ["VaR 99.9%", ex["var_0.999_pct_ead"], p.lilacDark, "dash"],
-    ["ES 99%", ex["es_0.99_pct_ead"], p.sky, "dot"],
-    ["ES 99.9%", ex["es_0.999_pct_ead"], p.green, "dot"],
-  ];
+  const markers = LOSS_STATISTICS.filter((stat) => stat.dash != null).map((stat) => ({
+    label: stat.label,
+    value: ex[stat.key],
+    color: p[stat.color],
+    dash: stat.dash,
+  }));
   const shapes = [];
-  markers.forEach(([label, value, color, dash]) => {
+  markers.forEach(({ value, color, dash }) => {
     if (num(value) == null) return;
     const x = value * 100;
     shapes.push({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.6, dash } });
   });
-  const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: p.periwinkle, line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
+  const var99 = num(ex["var_0.99_pct_ead"]);
+  const var999 = num(ex["var_0.999_pct_ead"]);
+  const barColors = centers.map((center) => {
+    if (var999 != null && center >= var999) return p.lilacDark;
+    if (var99 != null && center >= var99) return p.lilac;
+    return p.periwinkle;
+  });
+  const regions = [
+    ["Below VaR 99%", p.periwinkle],
+    ["VaR 99% to 99.9%", p.lilac],
+    ["Beyond VaR 99.9% (worst 0.1% of years)", p.lilacDark],
+  ];
+  const ok = plot(host, [{ x: centers, y: hist.counts, type: "bar", marker: { color: barColors, line: { width: 0 } }, hovertemplate: "%{x:.1f}% of EAD<br>%{y} paths<extra></extra>" }], {
     bargap: 0.02,
     xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02], tickformat: ".1f" },
     yaxis: { title: "Simulated paths" },
@@ -1942,10 +1975,12 @@ function drawLossChart(hist, scenario) {
   });
   const legend = $("#loss-legend");
   if (legend) {
-    legend.innerHTML = markers.filter(([, value]) => num(value) != null).map(([label, value, color, dash]) => {
+    const regionItems = regions.map(([label, color]) => `<span class="legend-item"><span class="region-swatch" style="background:${color}"></span><strong>${esc(label)}</strong></span>`).join("");
+    const markerItems = markers.filter(({ value }) => num(value) != null).map(({ label, value, color, dash }) => {
       const style = dash === "dot" ? "dotted" : dash;
       return `<span class="legend-item"><span class="legend-swatch" style="border-top-color:${color};border-top-style:${style}"></span><strong>${esc(label)}</strong> <span class="legend-value">${fmtPct(value, 1)}</span></span>`;
     }).join("");
+    legend.innerHTML = regionItems + markerItems;
   }
   if (!ok) showFallback(host, "assets/loss_distribution.png", "The interactive histogram could not be drawn; a static figure is shown.");
 }
@@ -1991,7 +2026,7 @@ function drawSurface() {
     ok = plot(host, [
       { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
-      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle-open", size: 13, color: p.ink, line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
+      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle", size: 20, color: p.surface, line: { width: 4, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
       title: { text: "2D heatmap fallback (no WebGL)", font: { size: 11 } },
@@ -2002,7 +2037,7 @@ function drawSurface() {
     ok = plot(host, [
       { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, colorbar: { tickformat: ".1f" }, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
-      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: p.ink }, marker: { size: 5, color: p.ink, symbol: "circle-open", line: { width: 2 } }, hoverinfo: "skip", showlegend: false },
+      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: p.ink }, marker: { size: 9, color: p.surface, symbol: "circle", line: { width: 3, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
       scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD", tickformat: ".1f" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
@@ -2172,7 +2207,7 @@ function setupSimulator() {
     wrap.innerHTML = `
       <div class="sim-ctrl-head">
         <label for="${id}">${esc(label)} ${INFO[`sim-${variable}`] ? infoButton(`sim-${variable}`, label) : ""}</label>
-        <output class="sim-contrib" id="sim-contrib-${variable}">—</output>
+        <span class="sim-ctrl-value"><output class="sim-contrib" id="sim-contrib-${variable}">—</output><span class="sim-point-bar" aria-hidden="true"><span id="sim-bar-${variable}"></span></span></span>
       </div>
       ${numeric
         ? `<input id="${id}" type="range" min="0" max="${Math.max(0, options.length - 1)}" step="1" value="${Math.max(0, options.findIndex((o) => o.key === key))}" aria-valuetext="${esc((options.find((o) => o.key === key) || options[0]).label)}">
@@ -2260,12 +2295,19 @@ function renderSimulator() {
   const portfolioRate = pe() ? pe().meta.default_rate_total : null;
   const testYears = pe() ? pe().meta.years.join("-") : "the test window";
   const typicalScore = Number(app.test_score_bins?.[0] || 0);
+  const contributions = simVariables(app).map((variable) => Number(simOption(app, variable, state.sim[variable]).points) || 0);
+  const maxContribution = Math.max(...contributions.map((value) => Math.abs(value)), 1);
 
-  simVariables(app).forEach((variable) => {
+  simVariables(app).forEach((variable, index) => {
     const opt = simOption(app, variable, state.sim[variable]);
     const contribution = Number(opt.points) || 0;
     const contrib = $(`#sim-contrib-${variable}`);
     if (contrib) contrib.textContent = signedPoints(contribution);
+    const bar = $(`#sim-bar-${variable}`);
+    if (bar) {
+      bar.style.width = `${(Math.abs(contribution) / maxContribution) * 50}%`;
+      bar.classList.toggle("is-negative", contribution < 0);
+    }
     const label = $(`#sim-label-${variable}`);
     if (label) label.textContent = opt.label;
     const share = $(`#sim-share-${variable}`);
@@ -2303,7 +2345,95 @@ function setupCutoff() {
   slider.value = String(Math.round(state.cutoff == null ? cut.cutoff_score : state.cutoff));
   slider.oninput = () => { state.cutoff = Number(slider.value); writeHash(false); renderCutoff(); };
   slider.onchange = () => { state.cutoff = Number(slider.value); commit({ push: true }); };
+  const tabs = $$("[data-cutoff-tab]");
+  const selectTab = (key, focus = false) => {
+    state.cutoffTab = key === "ks" ? "ks" : "tradeoff";
+    tabs.forEach((button) => button.setAttribute("aria-selected", button.dataset.cutoffTab === state.cutoffTab ? "true" : "false"));
+    if (focus) $(`[data-cutoff-tab="${state.cutoffTab}"]`)?.focus();
+    renderCutoff();
+  };
+  tabs.forEach((button, index) => {
+    button.onclick = () => selectTab(button.dataset.cutoffTab);
+    button.onkeydown = (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      const next = (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+      selectTab(tabs[next].dataset.cutoffTab, true);
+    };
+  });
+  selectTab(state.cutoffTab);
 }
+function cutoffExtraPlot(cut, bins, goods, bads, cutoff) {
+  const host = $("#cutoff-extra-chart");
+  if (!host) return;
+  if (!PLOTLY) { showFallback(host, null, "Plotly is blocked; the cutoff diagnostic is unavailable."); return; }
+  const p = palette();
+  const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
+  const caption = $("#cutoff-caption");
+  const plotHeight = Math.max(250, Math.round(host.clientHeight || 250));
+  const total = goods.reduce((sum, value) => sum + value, 0) + bads.reduce((sum, value) => sum + value, 0);
+  let ok = false;
+  if (state.cutoffTab === "ks") {
+    let totalGood = 0; let totalBad = 0;
+    goods.forEach((v) => { totalGood += v; });
+    bads.forEach((v) => { totalBad += v; });
+    let cg = 0; let cb = 0; let maxGap = -1; let maxAt = centers[0] || 0;
+    const goodShare = []; const badShare = [];
+    centers.forEach((center, index) => {
+      cg += goods[index]; cb += bads[index];
+      const g = totalGood ? cg / totalGood : 0;
+      const b = totalBad ? cb / totalBad : 0;
+      goodShare.push(g * 100); badShare.push(b * 100);
+      if (Math.abs(b - g) > maxGap) { maxGap = Math.abs(b - g); maxAt = center; }
+    });
+    const published = Number(D.pd.champion_ks);
+    const binned = Math.max(0, maxGap);
+    const mismatch = Math.abs(binned - published) > 0.005;
+    ok = plot(host, [
+      { x: centers, y: goodShare, mode: "lines", name: "Good cumulative", line: { color: p.teal, width: 2 } },
+      { x: centers, y: badShare, mode: "lines", name: "Bad cumulative", line: { color: p.lilacDark, width: 2 } },
+      { x: [maxAt], y: [Math.max(goodShare[centers.indexOf(maxAt)] || 0, badShare[centers.indexOf(maxAt)] || 0)], mode: "markers", name: "Max gap", marker: { size: 9, color: p.surface, line: { color: p.accent, width: 3 } }, hovertemplate: `KS ${Math.round(maxGap * 10000) / 10000}<extra></extra>` },
+    ], {
+      margin: { l: 48, r: 14, t: 22, b: 38 }, height: plotHeight,
+      xaxis: { title: "Scorecard score" }, yaxis: { title: "Cumulative share (%)", range: [0, 101] },
+      legend: { orientation: "h", y: -0.2 },
+      shapes: [{ type: "line", x0: maxAt, x1: maxAt, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 1.2, dash: "dot" } }],
+    }, { small: true });
+    if (caption) caption.textContent = `${EXPLORER.cutoffKs || "Cumulative good and bad shares by score."} Published KS ${published.toFixed(4)}; binned KS ${binned.toFixed(4)} at score ${Math.round(maxAt)}.${mismatch ? " The curve is binned; the published value is authoritative." : ""}`;
+  } else {
+    const xs = []; const approvalLine = []; const badLine = [];
+    centers.forEach((score) => {
+      let ga = 0; let ba = 0; let gr = 0; let br = 0;
+      centers.forEach((center, i) => {
+        if (center >= score) { ga += goods[i]; ba += bads[i]; } else { gr += goods[i]; br += bads[i]; }
+      });
+      const approved = ga + ba;
+      xs.push(score);
+      approvalLine.push(approved ? (approved / (ga + ba + gr + br)) * 100 : 0);
+      badLine.push(approved ? (ba / approved) * 100 : 0);
+    });
+    let exactApproved = 0; let exactBad = 0;
+    centers.forEach((center, index) => {
+      if (center >= cutoff) { exactApproved += goods[index] + bads[index]; exactBad += bads[index]; }
+    });
+    const exactApproval = total ? exactApproved / total : 0;
+    const exactBadRate = exactApproved ? exactBad / exactApproved : 0;
+    ok = plot(host, [
+      { x: xs, y: approvalLine, mode: "lines", name: "Approval rate", line: { color: p.sky, width: 2 } },
+      { x: xs, y: badLine, mode: "lines", name: "Bad rate (approved)", line: { color: p.lilac, width: 2 } },
+      { x: [cutoff], y: [exactApproval * 100], mode: "markers", name: "Approval at cutoff", marker: { size: 8, color: p.surface, line: { color: p.sky, width: 3 } } },
+      { x: [cutoff], y: [exactBadRate * 100], mode: "markers", name: "Bad rate at cutoff", marker: { size: 8, color: p.surface, line: { color: p.lilac, width: 3 } } },
+    ], {
+      margin: { l: 48, r: 14, t: 22, b: 38 }, height: plotHeight,
+      xaxis: { title: "Scorecard score" }, yaxis: { title: "Percent", range: [0, 101] },
+      legend: { orientation: "h", y: -0.2 },
+      shapes: [{ type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 1.4, dash: "dash" } }],
+    }, { small: true });
+    if (caption) caption.textContent = EXPLORER.cutoffTradeoff || "Approval and approved bad rates as the cutoff moves.";
+  }
+  if (!ok) showFallback(host, null, "The cutoff diagnostic could not be drawn.");
+}
+
 function renderCutoff() {
   const cut = D.interactive && D.interactive.cutoff_explorer;
   if (!cut || !cut.histograms || !cut.histograms.bins?.length) return;
@@ -2326,21 +2456,26 @@ function renderCutoff() {
   const badApproved = approved ? badAbove / approved : 0;
   const overall = total ? (badAbove + badBelow) / total : 0;
   $("#cutoff-sub").textContent = `At cutoff ${Math.round(cutoff)}, ${fmtPct(approval, 1)} of applicants are approved; ${fmtPct(badApproved, 1)} of approved loans default, versus ${fmtPct(overall, 2)} overall. Approve everyone: ${fmtPct(overall, 2)} bad rate.`;
-  const defs = [
-    ["Approval rate", approval, "cut-approval", (v) => fmtPct(v, 1), "Share accepted."],
-    ["Bad rate (approved)", badApproved, "cut-bad", (v) => fmtPct(v, 1), "Defaults among approved."],
-    ["Approved good", goodAbove, "cut-good", fmtInt, "Good loans kept."],
-    ["Approved bad", badAbove, "cut-bad-n", fmtInt, "Bad loans kept."],
-  ];
+  const values = { "cut-approval": approval, "cut-bad": badApproved, "cut-good": goodAbove, "cut-bad-n": badAbove };
+  const formatters = { "cut-approval": (v) => fmtPct(v, 1), "cut-bad": (v) => fmtPct(v, 1), "cut-good": fmtInt, "cut-bad-n": fmtInt };
+  const p = palette();
   const host = $("#cutoff-kpis");
-  host.innerHTML = defs.map(([label, , key, , meaning]) => `<div class="summary-kpi"><p class="mini-label">${label}</p><p class="value" data-testid="${key}">—</p><p class="sub">${esc(meaning)}</p></div>`).join("");
-  defs.forEach(([, value, key, formatter]) => countUp(host.querySelector(`[data-testid="${key}"]`), value, formatter));
+  host.innerHTML = CUTOFF_STATISTICS.map((stat) => `<div class="summary-kpi" style="--stat-color:${p[stat.color]}"><p class="mini-label">${stat.label}</p><p class="value" data-testid="${stat.id}">—</p><p class="sub">${esc(stat.meaning)}</p></div>`).join("");
+  CUTOFF_STATISTICS.forEach((stat) => countUp(host.querySelector(`[data-testid="${stat.id}"]`), values[stat.id], formatters[stat.id]));
+  $$("[data-cutoff-tab]").forEach((button) => button.setAttribute("aria-selected", button.dataset.cutoffTab === state.cutoffTab ? "true" : "false"));
   if (!PLOTLY) { showFallback($("#cutoff-chart"), null, "Plotly is blocked; the cutoff chart is unavailable."); return; }
   const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
-  const p = palette();
+  const approvedGood = []; const approvedBad = []; const rejectedGood = []; const rejectedBad = [];
+  centers.forEach((center, i) => {
+    if (center >= cutoff) { approvedGood.push(goods[i]); approvedBad.push(bads[i]); rejectedGood.push(0); rejectedBad.push(0); }
+    else { approvedGood.push(0); approvedBad.push(0); rejectedGood.push(goods[i]); rejectedBad.push(bads[i]); }
+  });
+  const rgba = (hex, alpha) => { const [r, g, b] = hexToRgb(hex); return `rgba(${r}, ${g}, ${b}, ${alpha})`; };
   const ok = plot($("#cutoff-chart"), [
-    { x: centers, y: goods, type: "bar", name: "Good", marker: { color: p.teal } },
-    { x: centers, y: bads, type: "bar", name: "Bad", marker: { color: p.lilacDark } },
+    { x: centers, y: approvedGood, type: "bar", name: "Good (approved)", marker: { color: p.teal } },
+    { x: centers, y: approvedBad, type: "bar", name: "Bad (approved)", marker: { color: p.lilacDark } },
+    { x: centers, y: rejectedGood, type: "bar", name: "Good (rejected)", marker: { color: rgba(p.teal, 0.22) } },
+    { x: centers, y: rejectedBad, type: "bar", name: "Bad (rejected)", marker: { color: rgba(p.lilacDark, 0.22) } },
   ], {
     barmode: "overlay", bargap: 0.03,
     xaxis: { title: "Scorecard score" }, yaxis: { title: "Loans" },
@@ -2352,6 +2487,7 @@ function renderCutoff() {
     margin: { l: 52, r: 16, t: 36, b: 44 }, showlegend: true,
   }, { small: true });
   if (!ok) showFallback($("#cutoff-chart"), null, "The cutoff chart could not be drawn.");
+  else cutoffExtraPlot(cut, bins, goods, bads, cutoff);
 }
 
 /* ---------------------------------------------------------------- learn */

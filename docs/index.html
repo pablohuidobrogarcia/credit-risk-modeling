@@ -303,6 +303,7 @@
             </label>
           </div>
           <div class="risk-kpis" id="risk-kpis"></div>
+          <p class="risk-bar-note" id="risk-bar-note"></p>
         </section>
 
         <div class="risk-grid">
@@ -315,6 +316,7 @@
                 <div class="gauge" id="risk-gauge" role="img" aria-label="VaR 99.9 percent gauge"></div>
                 <p class="panel-foot gauge-note" id="gauge-caption">—</p>
               </div>
+              <p class="gauge-ratio" id="gauge-ratio">—</p>
             </section>
 
             <section class="panel" aria-labelledby="loss-title">
@@ -391,6 +393,15 @@
             </label>
             <div class="cutoff-kpis" id="cutoff-kpis"></div>
             <div class="chart-host small" id="cutoff-chart" role="img" aria-label="Score distributions for goods and bads with the selected cutoff"></div>
+            <p class="cutoff-legend-note" id="cutoff-legend-note">Muted = rejected at this cutoff.</p>
+            <div class="cutoff-tabs" id="cutoff-tabs" role="tablist" aria-label="Cutoff diagnostics">
+              <button type="button" role="tab" data-cutoff-tab="tradeoff" aria-selected="true">Trade-off</button>
+              <button type="button" role="tab" data-cutoff-tab="ks" aria-selected="false">KS curve</button>
+            </div>
+            <div class="cutoff-tab-panel" id="cutoff-tab-panel">
+              <div class="chart-host cutoff-extra" id="cutoff-extra-chart" role="img" aria-label="Cutoff trade-off or KS curve"></div>
+              <p class="cutoff-caption" id="cutoff-caption">—</p>
+            </div>
             <p class="chart-fallback" id="cutoff-fallback" hidden></p>
           </section>
         </div>

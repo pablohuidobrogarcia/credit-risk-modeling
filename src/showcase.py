@@ -709,10 +709,17 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
     if headline_el is None:
         headline_el = summary.get("simulation", {}).get("statistics", {}).get("expected_loss_pct_ead", 0.0)
     headline_el = _finite(headline_el, 0.0)
-    # Keep the published mean predicted PD. The model artifact may come from a
-    # fresh deterministic fit; rescaling preserves its within-window ordering
-    # while anchoring the level to the number in summary.json.
-    target_pd = lgd_summary.get("mean_pd_oot")
+    # Keep the published mean predicted PD at full precision. The summary's
+    # lgd.mean_pd_oot is rounded to four decimals for display; the calibrated
+    # OOT calibration record carries the unrounded mean, which is what the
+    # observed-minus-predicted reconciliation needs (14.4631% - 12.1752% =
+    # 2.29 pp, not 2.28 pp).
+    calibrated_oot = (
+        ((summary.get("pd") or {}).get("calibration_metrics") or {})
+        .get("calibrated_oot")
+        or {}
+    )
+    target_pd = calibrated_oot.get("mean_predicted") or lgd_summary.get("mean_pd_oot")
     if target_pd and float(test["pd_calibrated"].mean()) > 0:
         scale = float(target_pd) / float(test["pd_calibrated"].mean())
         test["pd_calibrated"] = (test["pd_calibrated"] * scale).clip(0.0, 1.0)
@@ -745,10 +752,10 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
             "id": str(seg_id),
             "name": str(name),
             "n": n,
-            "default_rate": round(dr, 8),
+            "default_rate": dr,
             "ci_low": round(low, 8),
             "ci_high": round(high, 8),
-            "pred_pd": round(pred_pd, 8),
+            "pred_pd": pred_pd,
             "mean_lgd": round(effective_lgd, 8),
             "ead": round(ead, 2),
             "ead_share": round(ead / total_ead, 8) if total_ead else 0.0,
@@ -761,10 +768,10 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
         "id": "total",
         "name": "Portfolio",
         "n": total_n,
-        "default_rate": round(total_dr, 8),
+        "default_rate": total_dr,
         "ci_low": round(ci_low, 8),
         "ci_high": round(ci_high, 8),
-        "pred_pd": round(total_pd, 8),
+        "pred_pd": total_pd,
         "mean_lgd": round(effective_lgd, 8),
         "ead": round(total_ead, 2),
         "ead_share": 1.0,
@@ -874,11 +881,11 @@ def build_portfolio_explorer(summary: Dict[str, Any], results: Path) -> Path | N
             "years": [2014, 2015],
             "term": "36",
             "n_total": total_n,
-            "default_rate_total": round(total_dr, 8),
+            "default_rate_total": total_dr,
             "ead_total": round(total_ead, 2),
             "funded_total": round(total_funded, 2),
             "ead_basis": "expected EAD at default = funded_amnt x train grade ead_rate",
-            "mean_pd": round(total_pd, 8),
+            "mean_pd": total_pd,
             "mean_lgd": round(effective_lgd, 8),
             "el_pct_ead": round(headline_el, 8),
             "el_pct_funded": round((total_ead * headline_el) / total_funded, 8) if total_funded else None,

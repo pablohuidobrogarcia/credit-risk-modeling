@@ -724,7 +724,7 @@ function renderShell() {
   countUp($("#kpi-auc"), D.pd.champion_auc, (v) => fmtNum(v, 4));
   $("#kpi-auc-sub").textContent = `Ranks a defaulter above a non-defaulter about ${Math.round(D.pd.champion_auc * 100)}% of the time · tested on ${disp.oot_years || "2014-2015"} loans`;
   countUp($("#kpi-el"), D.lgd.el_rate_oot, (v) => fmtPct(v, 2));
-  $("#kpi-el-sub").textContent = `of EAD: about ${fmtMoney(D.lgd.expected_loss_oot)} expected loss`;
+  $("#kpi-el-sub").textContent = `${fmtMoney(D.lgd.expected_loss_oot)} expected loss on ${fmtMoney(pe().meta.ead_total)} of EAD`;
   const stats = D.simulation.statistics;
   countUp($("#kpi-var"), stats["var_0.999_pct_ead"], (v) => fmtPct(v, 1));
   $("#kpi-var-sub").textContent = `Exceeded once in 1,000 simulated years · ${fmtMoney(stats["var_0.999"])}`;
@@ -1601,13 +1601,16 @@ function signedPp(diff) {
 }
 
 function selectionModelCheck(item) {
+  // The portfolio row must use the unrounded meta.mean_pd so its gap agrees
+  // with the folder sheet and README (14.4631% - 12.1752% = 2.29 pp).
+  const predictedValue = item.id === "total" && pe() ? pe().meta.mean_pd : item.pred_pd;
   const observed = fmtPct(item.default_rate, 2);
-  const predicted = fmtPct(item.pred_pd, 2);
-  const gap = Math.abs((num(item.default_rate) || 0) - (num(item.pred_pd) || 0)) * 100;
-  if (num(item.pred_pd) < num(item.ci_low)) {
+  const predicted = fmtPct(predictedValue, 2);
+  const gap = Math.abs((num(item.default_rate) || 0) - (num(predictedValue) || 0)) * 100;
+  if (num(predictedValue) < num(item.ci_low)) {
     return `Model check: observed ${observed} vs predicted ${predicted}: the model underestimates risk by ${gap.toFixed(2)} pp (predicted PD is outside the 95% CI).`;
   }
-  if (num(item.pred_pd) > num(item.ci_high)) {
+  if (num(predictedValue) > num(item.ci_high)) {
     return `Model check: observed ${observed} vs predicted ${predicted}: the model overestimates risk by ${gap.toFixed(2)} pp (predicted PD is outside the 95% CI).`;
   }
   return `Model check: observed ${observed} vs predicted ${predicted}: predicted PD is within the 95% CI.`;
@@ -2484,6 +2487,7 @@ function folderVisualMarkup(sheet) {
   const whole = Math.floor(primary + 1e-9);
   const fraction = primary - whole;
   const predictedWhole = Math.floor(predicted + 1e-9);
+  const predictedFraction = predicted - predictedWhole;
   const dots = Array.from({ length: 100 }, (_, index) => {
     const classes = ["folder-dot"];
     let style = `--i:${index}`;
@@ -2492,7 +2496,12 @@ function folderVisualMarkup(sheet) {
       classes.push("is-partial");
       style += `;--fill:${fraction.toFixed(3)}`;
     }
-    if (sheet.id === "predicted" && index < predictedWhole) classes.push("is-outline");
+    if (sheet.id === "predicted" && index < predictedWhole) {
+      classes.push("is-outline");
+    } else if (sheet.id === "predicted" && index === predictedWhole && predictedFraction > 0.001) {
+      classes.push("is-outline", "is-outline-partial");
+      style += `;--outline-fill:${predictedFraction.toFixed(3)}`;
+    }
     return `<span class="${classes.join(" ")}" style="${style}" aria-hidden="true"></span>`;
   }).join("");
   const label = resolveInfoText(sheet.visual_label || "");

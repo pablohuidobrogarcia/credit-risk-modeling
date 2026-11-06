@@ -1126,6 +1126,11 @@ test("portfolio folder opens, traps focus, navigates and closes", async ({ page 
   await expect(page.locator("#folder-tab-1")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#folder-sheet-1 .folder-headline")).toHaveText(pct(meta.mean_pd));
   await expect(page.locator("#folder-sheet-1")).not.toContainText(/\{[a-z0-9_]+\}/i);
+  await expect(page.locator("#folder-sheet-1 .folder-gap")).toContainText("+2.29 pp");
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-filled")).toHaveCount(14);
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-partial")).toHaveCount(1);
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-outline")).toHaveCount(13);
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-outline-partial")).toHaveCount(1);
   await page.locator("[data-folder-next]").click();
   await expect(page.locator("#folder-tab-2")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#folder-sheet-2 .folder-headline")).toHaveText(`${pct(meta.el_pct_ead)} of EAD`);
@@ -1338,7 +1343,10 @@ test("hero KPI cards use resolved, non-redundant texts", async ({ page }) => {
   await expect(cards.nth(1)).toContainText(`about ${Math.round(DATA.pd.champion_auc * 100)}% of the time`);
   await expect(cards.nth(1)).toContainText(`tested on ${DATA.display.oot_years} loans`);
   await expect(cards.nth(2).locator(".mini-label")).toHaveText("Expected loss");
-  await expect(cards.nth(2)).toContainText(`of EAD: about ${DATA.display.el_amount} expected loss`);
+  const eadLabel = PE.meta.ead_total >= 1e9
+    ? `$${(PE.meta.ead_total / 1e9).toFixed(2)}B`
+    : `$${(PE.meta.ead_total / 1e6).toFixed(1)}M`;
+  await expect(cards.nth(2)).toContainText(`${DATA.display.el_amount} expected loss on ${eadLabel} of EAD`);
   await expect(cards.nth(3).locator(".mini-label")).toHaveText("Bad-year loss (VaR 99.9%)");
   await expect(cards.nth(3)).toContainText("Exceeded once in 1,000 simulated years");
   await expect(cards.nth(3).locator(".kpi-sub")).toContainText("$");

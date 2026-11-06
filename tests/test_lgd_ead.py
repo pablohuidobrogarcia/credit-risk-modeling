@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from src import lgd_ead
 
@@ -43,11 +44,21 @@ def test_lgd_eda_table_groups():
 
 def test_expected_loss_is_pd_times_lgd_times_ead():
     df = pd.DataFrame({"grade": ["A", "A", "B"], "loan_amnt": [1000.0] * 3, "funded_amnt": [1000.0] * 3, "default_flag": [0, 1, 0]})
-    el = lgd_ead.expected_loss_table(df, pd_hat=[0.1, 0.2, 0.3], lgd_hat=[0.5, 0.4, 0.9])
+    el = lgd_ead.expected_loss_table(
+        df, pd_hat=[0.1, 0.2, 0.3], lgd_hat=[0.5, 0.4, 0.9], ead=df["funded_amnt"]
+    )
     assert np.allclose(el["el"].to_numpy(), [0.1 * 0.5 * 1000, 0.2 * 0.4 * 1000, 0.3 * 0.9 * 1000])
     agg = lgd_ead.aggregate_el(el)
     assert agg["portfolio"]["expected_loss"].iloc[0] == el["el"].sum()
     assert len(agg["by_grade"]) == 2
+
+
+def test_expected_loss_requires_explicit_ead():
+    df = pd.DataFrame(
+        {"grade": ["A"], "loan_amnt": [1000.0], "funded_amnt": [1000.0], "default_flag": [0]}
+    )
+    with pytest.raises(ValueError, match="pass ead explicitly"):
+        lgd_ead.expected_loss_table(df, pd_hat=[0.1], lgd_hat=[0.5])
 
 
 def test_ead_at_default_is_bounded_by_funded():

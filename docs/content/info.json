@@ -145,7 +145,7 @@
   },
   "el-note": {
     "title": "Expected loss ranking",
-    "text": "Expected loss is roughly PD x the portfolio LGD ({lgd}), so it ranks segments almost like Predicted PD.",
+    "text": "Expected loss is PD x LGD x EAD, where EAD is the expected outstanding principal at default. The portfolio total is {el_amount} on {portfolio_ead} of EAD, so it ranks segments almost like Predicted PD.",
     "try": "Switch between Expected loss and Predicted PD and compare the order.",
     "term": "el"
   }

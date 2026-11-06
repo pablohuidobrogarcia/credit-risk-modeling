@@ -386,7 +386,8 @@ def render_ead_reconciliation(summary: Dict[str, Any]) -> str:
         "",
         "| Item | Value |",
         "|---|---|",
-        f"| Defaults, train / OOT | {sum(int(r.get('n_defaults_train') or 0) for r in rows):,} / "
+        f"| Defaults used for the LGD sample, train / OOT | "
+        f"{sum(int(r.get('n_defaults_train') or 0) for r in rows):,} / "
         f"{sum(int(r.get('n_defaults_oot') or 0) for r in rows):,} |",
         f"| EAD at default, OOT | {_usd_m(lgd.get('ead_total_oot'))} |",
         f"| Funded amount, OOT | {_usd_m(lgd.get('funded_total_oot'))} |",
@@ -403,7 +404,7 @@ def render_ead_reconciliation(summary: Dict[str, Any]) -> str:
         f"| Share of new-EL gap explained by PD under-prediction | "
         f"{_pct(lgd.get('gap_explained_by_pd_share'))} |",
         "",
-        "| Grade | Train defaults | Train EAD rate | OOT defaults | OOT EAD rate (diagnostic) |",
+        "| Grade | Train LGD-sample defaults | Train EAD rate | OOT LGD-sample defaults | OOT EAD rate (diagnostic) |",
         "|---|---:|---:|---:|---:|",
     ]
     for row in rows:

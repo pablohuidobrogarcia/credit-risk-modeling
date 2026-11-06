@@ -377,10 +377,12 @@ def expected_loss_table(
     out["pd"] = np.asarray(pd_hat, dtype=float)
     out["lgd"] = np.asarray(lgd_hat, dtype=float)
     if ead is None:
-        if "ead" in df.columns:
-            ead_values = pd.to_numeric(df["ead"], errors="coerce").to_numpy()
-        else:
-            ead_values = pd.to_numeric(df[funded_col], errors="coerce").to_numpy()
+        if "ead" not in df.columns:
+            raise ValueError(
+                "expected_loss_table requires an EAD: pass ead explicitly; for the "
+                "superseded funded-basis calculation pass funded_amnt as ead"
+            )
+        ead_values = pd.to_numeric(df["ead"], errors="coerce").to_numpy()
     else:
         ead_values = np.asarray(ead, dtype=float)
     out["ead"] = ead_values

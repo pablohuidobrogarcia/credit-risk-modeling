@@ -496,12 +496,18 @@ body.folder-open { overflow: hidden; }
 .folder-caveat { color: var(--fg-soft); }
 .folder-visual { margin: 0; align-self: center; min-width: 0; }
 .folder-dots { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; width: min(100%, 220px); margin: 0 auto; }
-.folder-dot { aspect-ratio: 1; border: 1.5px solid var(--border-strong); border-radius: 50%; background: transparent; }
+.folder-dot { position: relative; aspect-ratio: 1; border: 1.5px solid var(--border-strong); border-radius: 50%; background: transparent; }
 .folder-sheet-card:not([hidden]) .folder-dot { animation: folder-dot-in 260ms var(--ease) both; animation-delay: calc(var(--i) * 4ms); }
 .folder-dot.is-filled { background: var(--dot-fill); border-color: var(--dot-fill); }
 .folder-dot.is-partial { border-color: var(--dot-fill); background: linear-gradient(90deg, var(--dot-fill) calc(var(--fill) * 100%), transparent calc(var(--fill) * 100%)); }
 .folder-sheet-1 .folder-dot.is-filled { background: var(--lilac); border-color: var(--lilac); }
-.folder-sheet-1 .folder-dot.is-outline { background: var(--card-solid); border-color: var(--periwinkle); box-shadow: inset 0 0 0 1px var(--periwinkle); }
+.folder-sheet-1 .folder-dot.is-outline { border-color: var(--periwinkle); box-shadow: inset 0 0 0 2px var(--periwinkle); }
+.folder-sheet-1 .folder-dot.is-outline-partial::after {
+  content: ""; position: absolute; inset: -1.5px; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(var(--periwinkle) calc(var(--outline-fill, 0) * 100%), transparent 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 2.5px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3.5px), #000 calc(100% - 2.5px));
+}
 .folder-visual figcaption { color: var(--fg-muted); font-size: 0.72rem; text-align: center; margin-top: 0.35rem; }
 .folder-gap { display: block; margin-top: 0.2rem; color: var(--fg); font-weight: 750; }
 .folder-nav { display: flex; align-items: center; justify-content: space-between; gap: 0.7rem; margin-top: 1rem; }

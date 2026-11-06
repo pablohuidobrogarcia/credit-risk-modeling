@@ -80,7 +80,7 @@ is reported separately as the censoring-exposed secondary analysis.
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
 | **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.3 %**, UL **5.9 %**, VaR 99 % **28.8 %**, VaR 99.9 % **37.7 %**, ES 99 % **32.7 %**, ES 99.9 % **41.0 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
-| **Test suite** | **150** unit tests on synthetic data, `ruff check .` clean, run on Python 3.10 and 3.11 in CI |
+| **Test suite** | **152** unit tests on synthetic data, `ruff check .` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 
@@ -375,7 +375,7 @@ The new EL is $332.1M (10.29 % of EAD, 5.86 % of funded). Realised loss on the O
 
 | Item | Value |
 |---|---|
-| Defaults, train / OOT | 20,622 / 64,445 |
+| Defaults used for the LGD sample, train / OOT | 20,622 / 64,445 |
 | EAD at default, OOT | $3,226.7M |
 | Funded amount, OOT | $5,670.3M |
 | Realised loss on funded basis | $400.2M (7.06 % of funded) |
@@ -386,7 +386,7 @@ The new EL is $332.1M (10.29 % of EAD, 5.86 % of funded). Realised loss on the O
 | PD-scaled EL / unexplained gap | $394.5M / $5.7M |
 | Share of new-EL gap explained by PD under-prediction | 91.65 % |
 
-| Grade | Train defaults | Train EAD rate | OOT defaults | OOT EAD rate (diagnostic) |
+| Grade | Train LGD-sample defaults | Train EAD rate | OOT LGD-sample defaults | OOT EAD rate (diagnostic) |
 |---|---:|---:|---:|---:|
 | A | 2,024 | 53.47 % | 5,704 | 50.11 % |
 | B | 6,804 | 55.35 % | 16,643 | 53.57 % |

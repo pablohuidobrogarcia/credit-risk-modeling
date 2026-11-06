@@ -285,7 +285,7 @@ The new EL is $332.1M (10.29 % of EAD, 5.86 % of funded). Realised loss on the O
 
 | Item | Value |
 |---|---|
-| Defaults, train / OOT | 20,622 / 64,445 |
+| Defaults used for the LGD sample, train / OOT | 20,622 / 64,445 |
 | EAD at default, OOT | $3,226.7M |
 | Funded amount, OOT | $5,670.3M |
 | Realised loss on funded basis | $400.2M (7.06 % of funded) |
@@ -296,7 +296,7 @@ The new EL is $332.1M (10.29 % of EAD, 5.86 % of funded). Realised loss on the O
 | PD-scaled EL / unexplained gap | $394.5M / $5.7M |
 | Share of new-EL gap explained by PD under-prediction | 91.65 % |
 
-| Grade | Train defaults | Train EAD rate | OOT defaults | OOT EAD rate (diagnostic) |
+| Grade | Train LGD-sample defaults | Train EAD rate | OOT LGD-sample defaults | OOT EAD rate (diagnostic) |
 |---|---:|---:|---:|---:|
 | A | 2,024 | 53.47 % | 5,704 | 50.11 % |
 | B | 6,804 | 55.35 % | 16,643 | 53.57 % |

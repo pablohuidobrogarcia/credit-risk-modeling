@@ -102,6 +102,14 @@ def test_total_reconciles_with_headline_summary(pe, summary):
     assert total["el_amount"] == pytest.approx(summary["lgd"]["expected_loss_oot"], rel=1e-4)
 
 
+def test_meta_mean_pd_keeps_the_full_precision_from_summary(pe, summary):
+    full_pd = summary["pd"]["calibration_metrics"]["calibrated_oot"]["mean_predicted"]
+    assert pe["meta"]["mean_pd"] == pytest.approx(full_pd, rel=0, abs=1e-15)
+    assert pe["dimensions"]["total"][0]["pred_pd"] == pytest.approx(full_pd, rel=0, abs=1e-15)
+    gap_pp = (pe["meta"]["default_rate_total"] - pe["meta"]["mean_pd"]) * 100
+    assert round(gap_pp, 2) == 2.29
+
+
 def test_ead_at_default_reconciliation(summary):
     lgd = summary["lgd"]
     assert lgd["ead_total_oot"] < lgd["funded_total_oot"]

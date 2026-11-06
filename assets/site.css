@@ -828,7 +828,6 @@ body.folder-open { overflow: hidden; }
 .gauge-panel .panel-head h3 { font-size: 0.95rem; }
 .gauge-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.8rem; flex-wrap: wrap; }
 .gauge-panel .gauge-row { margin-top: 0; gap: 0.9rem; }
-.gauge-panel .gauge-note { margin-top: 0; flex: 1 1 180px; min-width: 0; }
 .gauge { width: 100%; max-width: none; }
 #risk-gauge { width: 100% !important; min-width: 100%; }
 .gauge svg { width: 100%; height: auto; overflow: visible; }
@@ -841,8 +840,10 @@ body.folder-open { overflow: hidden; }
 .gauge .hub { fill: var(--fg); }
 .gauge text { fill: var(--fg); font-family: var(--serif); font-weight: 650; }
 .gauge .scale { fill: var(--fg-soft); font-family: var(--sans); font-size: 9px; font-weight: 600; }
-.risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; align-items: start; }
+.risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; align-items: stretch; }
 .risk-grid > * { min-width: 0; }
+.risk-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
+.surface-host { flex: 1 1 auto; }
 .summary-body > * { min-width: 0; }
 .risk-grid.lower { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin-top: 0.55rem; font-size: 0.74rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
@@ -1041,6 +1042,9 @@ body.welcome-open { overflow: hidden; }
 @keyframes shimmer { to { background-position: -220% 0; } }
 
 /* ------------------------------------------------------------ responsive */
+@media (min-width: 1001px) {
+  .surface-host { height: auto; min-height: 540px; }
+}
 @media (max-width: 1120px) {
   .insight-card { grid-column: 1 / -1; position: static; }
 @media (max-width: 1000px) {
@@ -1068,7 +1072,6 @@ body.welcome-open { overflow: hidden; }
 @media (max-width: 860px) {
   .explorer-grid { grid-template-columns: 1fr; }
   .risk-grid, .risk-grid.lower, .evidence-columns { grid-template-columns: 1fr; }
-  .gauge-panel .gauge-note { flex-basis: 100%; }
   .summary-body { grid-template-columns: 1fr; }
   .explorer-controls { align-items: flex-start; width: 100%; max-width: 100%; min-width: 0; }
   .explorer-tools { justify-content: flex-start; width: 100%; max-width: 100%; min-width: 0; }

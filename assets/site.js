@@ -1927,8 +1927,6 @@ function renderGauge(value, expectedLoss) {
     <text x="${cx}" y="140" text-anchor="middle" font-size="26">${fmtPct(v, 1)}</text>
     ${ticks.map((entry) => `<text class="scale" x="${entry.x.toFixed(1)}" y="${entry.y.toFixed(1)}" text-anchor="middle">${entry.pct}%</text>`).join("")}
   </svg>`;
-  const caption = $("#gauge-caption");
-  if (caption) caption.textContent = `VaR 99.9% on a ${Math.round(max * 100)}% loss scale.`;
   const ratio = $("#gauge-ratio");
   if (ratio) {
     const el = num(expectedLoss);
@@ -2007,6 +2005,13 @@ function surfaceMatrix(metric) {
   }));
   return { rhos, pds, z };
 }
+function surfaceHeight(host) {
+  if (window.innerWidth < 700) return 340;
+  if (window.matchMedia("(min-width: 1001px)").matches) {
+    return Math.max(540, Math.round(host.clientHeight || 540));
+  }
+  return 540;
+}
 function drawSurface() {
   const host = $("#surface-chart");
   const surf = D.interactive && D.interactive.risk_surface;
@@ -2025,7 +2030,7 @@ function drawSurface() {
   const baseRho = nearestValue(rhos, surf.base_case?.rho ?? rhos[0]);
   const basePd = nearestValue(pds, surf.base_case?.pd_mult ?? pds[0]);
   const baseZ = z[pds.indexOf(basePd)]?.[rhos.indexOf(baseRho)] || 0;
-  const height = window.innerWidth < 700 ? 340 : 540;
+  const height = surfaceHeight(host);
   let ok = false;
   if (!hasWebGL() || window.innerWidth < 700) {
     ok = plot(host, [
@@ -2051,6 +2056,15 @@ function drawSurface() {
     host.dataset.mode = "surface";
   }
   if (!ok) { showFallback(host, "assets/risk_surface_static.png", "The surface could not be drawn; a static figure is shown."); return; }
+  if (!host.__surfaceResizeObserver && window.ResizeObserver) {
+    host.__surfaceResizeObserver = new ResizeObserver(() => {
+      if (!PLOTLY || !host.__plotted) return;
+      const target = surfaceHeight(host);
+      const current = Math.round(host._fullLayout?.height || 0);
+      if (Math.abs(target - current) > 1) PLOTLY.relayout(host, { height: target });
+    });
+    host.__surfaceResizeObserver.observe(host);
+  }
 }
 function nearestValue(values, target) {
   return values[nearestIndex(values, target)];

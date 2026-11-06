@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master, "showcase-*"]
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 
@@ -32,7 +32,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check src tests scripts
+        run: ruff check .
 
       - name: Docs number-integrity check
         # Fails if the README results tables drift from reports/results/summary.json.

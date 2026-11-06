@@ -1600,7 +1600,9 @@ test("VaR gauge moves above the loss distribution and tracks every slider", asyn
   await expect(gaugePanel).toContainText("VaR 99.9% gauge");
   await expect(gaugePanel.locator("#risk-gauge")).toBeVisible();
   await expect(gaugePanel.locator('[data-info="gauge"]')).toBeVisible();
-  await expect(gaugePanel.locator("#gauge-caption")).toContainText("VaR 99.9% on a 60% loss scale");
+  await expect(gaugePanel.locator("#gauge-caption")).toHaveCount(0);
+  await expect(gaugePanel.locator("#gauge-ratio")).toContainText("VaR 99.9% is");
+  await expect(gaugePanel.locator("#gauge-ratio")).toContainText("x the expected loss.");
   const gaugeBeforeLoss = await page.evaluate(() => {
     const gauge = document.querySelector(".gauge-panel").getBoundingClientRect();
     const loss = document.querySelector(".risk-stack > .panel:nth-child(2)").getBoundingClientRect();
@@ -1687,7 +1689,7 @@ test("Scenario KPI row has five cards with no empty cell at 1360, 1000 and 390",
 
 test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", async ({ page }) => {
   const errors = await open(page);
-  for (const [width, height] of [[1360, 900], [1000, 900], [390, 844]]) {
+  for (const [width, height] of [[1360, 900], [1215, 900], [1000, 900], [390, 844]]) {
     for (const scheme of ["light", "dark"]) {
       await page.setViewportSize({ width, height });
       await page.emulateMedia({ colorScheme: scheme });
@@ -1701,12 +1703,15 @@ test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", 
         const loss = box(".risk-stack > .panel:nth-child(2)");
         const stack = box(".risk-stack");
         const surface = box(".risk-grid > .panel");
+        const surfaceHost = box("#surface-chart");
         const scenario = box(".scenario-panel");
         return {
           gauge: { top: gauge.top + window.scrollY, height: gauge.height },
           loss: { top: loss.top + window.scrollY, height: loss.height },
           stack: { top: stack.top + window.scrollY, height: stack.height },
           surface: { top: surface.top + window.scrollY, height: surface.height },
+          surfaceHost: { top: surfaceHost.top + window.scrollY, height: surfaceHost.height },
+          surfacePlotHeight: document.querySelector("#surface-chart")._fullLayout?.height,
           scenario: { top: scenario.top + window.scrollY },
           overflow: document.documentElement.scrollWidth - window.innerWidth,
         };
@@ -1716,9 +1721,18 @@ test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", 
         expect(layout.scenario.top).toBeLessThan(layout.gauge.top);
         expect(layout.gauge.top).toBeLessThan(layout.loss.top);
         expect(layout.loss.top).toBeLessThan(layout.surface.top);
+        await expect(page.locator("#gauge-caption")).toHaveCount(0);
+        await expect(page.locator("#gauge-ratio")).toBeVisible();
       } else {
         expect(layout.stack.height, `${width}px ${scheme}`).toBeGreaterThan(0);
         expect(layout.surface.height, `${width}px ${scheme}`).toBeGreaterThan(0);
+      }
+      if (width > 1000) {
+        expect(Math.abs(layout.surface.top - layout.gauge.top), `${width}px ${scheme} surface/gauge top`).toBeLessThanOrEqual(0.5);
+        expect(Math.abs((layout.surface.top + layout.surface.height) - (layout.loss.top + layout.loss.height)), `${width}px ${scheme} surface/loss bottom`).toBeLessThanOrEqual(0.5);
+        expect(Math.abs(layout.surface.height - layout.stack.height), `${width}px ${scheme} surface/stack height`).toBeLessThanOrEqual(0.5);
+        expect(layout.surfaceHost.height, `${width}px ${scheme} surface host height`).toBeGreaterThan(540);
+        expect(Math.abs(layout.surfaceHost.height - layout.surfacePlotHeight), `${width}px ${scheme} surface plot height`).toBeLessThanOrEqual(1);
       }
     }
   }

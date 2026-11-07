@@ -2464,14 +2464,17 @@ function cutoffExtraPlot(cut, bins, goods, bads, cutoff) {
     });
     const exactApproval = total ? exactApproved / total : 0;
     const exactBadRate = exactApproved ? exactBad / exactApproved : 0;
+    const badMax = Math.max(20, Math.ceil((Math.max(...badLine, exactBadRate * 100) * 1.3) / 5) * 5);
     ok = plot(host, [
-      { x: xs, y: approvalLine, mode: "lines", name: "Approval rate", line: { color: p.sky, width: 2 } },
-      { x: xs, y: badLine, mode: "lines", name: "Bad rate (approved)", line: { color: p.lilac, width: 2 } },
+      { x: xs, y: approvalLine, mode: "lines", name: "Approval rate (left axis)", line: { color: p.sky, width: 2 } },
+      { x: xs, y: badLine, mode: "lines", name: "Bad rate (approved, right axis)", yaxis: "y2", line: { color: p.lilac, width: 2 } },
       { x: [cutoff], y: [exactApproval * 100], mode: "markers", name: "Approval at cutoff", marker: { size: 8, color: p.surface, line: { color: p.sky, width: 3 } } },
-      { x: [cutoff], y: [exactBadRate * 100], mode: "markers", name: "Bad rate at cutoff", marker: { size: 8, color: p.surface, line: { color: p.lilac, width: 3 } } },
+      { x: [cutoff], y: [exactBadRate * 100], mode: "markers", yaxis: "y2", name: "Bad rate at cutoff", marker: { size: 8, color: p.surface, line: { color: p.lilac, width: 3 } } },
     ], {
-      margin: { l: 48, r: 14, t: 22, b: 38 }, height: plotHeight,
-      xaxis: { title: "Scorecard score" }, yaxis: { title: "Percent", range: [0, 101] },
+      margin: { l: 50, r: 48, t: 22, b: 38 }, height: plotHeight,
+      xaxis: { title: "Scorecard score" },
+      yaxis: { title: "Approval rate (%)", range: [0, 100] },
+      yaxis2: { title: "Bad rate (approved, %)", overlaying: "y", side: "right", range: [0, badMax], tickformat: ".0f", showgrid: false },
       legend: { orientation: "h", y: -0.2 },
       shapes: [{ type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 1.4, dash: "dash" } }],
     }, { small: true });
@@ -2529,7 +2532,7 @@ function renderCutoff() {
       { type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 2, dash: "dash" } },
       { type: "line", x0: cut.cutoff_score, x1: cut.cutoff_score, yref: "paper", y0: 0, y1: 1, line: { color: p.lilacDark, width: 1.6, dash: "dot" } },
     ],
-    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 1.02, text: "Published KS cutoff", showarrow: false, font: { size: 9, color: p.lilacDark }, xanchor: "right" }],
+    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 0.02, text: "Published KS cutoff", showarrow: false, yanchor: "bottom", font: { size: 12, color: p.lilacDark }, xanchor: "right", bgcolor: p.surface, borderpad: 2 }],
     margin: { l: 52, r: 16, t: 36, b: 44 }, showlegend: true,
   }, { small: true });
   if (!ok) showFallback($("#cutoff-chart"), null, "The cutoff chart could not be drawn.");

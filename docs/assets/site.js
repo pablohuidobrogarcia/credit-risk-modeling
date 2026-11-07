@@ -482,15 +482,9 @@ function bindInfoDelegation() {
 const STATIC_INFO = [
   ["#segment-search", "filter", "Filter segments", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
-  ["#scenario-title", "risk-rho", "Scenario controls", "after"],
-  ["#play-rho", "play-rho", "Play rho sweep", "after"],
-  ["#risk-gauge", "gauge", "VaR gauge", "after"],
-  ["#gauge-ratio", "gauge-ratio", "VaR / EL ratio", "after"],
+  ["#gauge-title", "gauge", "VaR gauge", "after"],
   ["#loss-title", "loss-histogram", "Loss distribution", "after"],
   ["#surface-title", "surface", "VaR surface", "after"],
-  ["#surface-metrics", "surface-metric", "Surface metric", "before"],
-  ["#sim-title", "sim-presets", "Applicant simulator", "after"],
-  ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
   ["#cutoff-tabs", "cutoff-tabs", "Cutoff diagnostics", "after"],
 ];
 
@@ -515,7 +509,7 @@ function injectStaticInfo() {
   $$(".slider-field").forEach((field) => {
     const input = field.querySelector("input[type=range]");
     if (!input || field.dataset.infoInjected === "1") return;
-    const map = { "risk-rho": "risk-rho", "risk-pd": "risk-pd", "risk-lgd": "risk-lgd", "cutoff-slider": "cutoff-slider" };
+    const map = { "risk-rho": "risk-rho", "risk-pd": "risk-pd", "risk-lgd": "risk-lgd" };
     const id = map[input.id];
     if (!id) return;
     const wrapper = document.createElement("div");
@@ -647,11 +641,11 @@ function plotTheme() {
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 11, color: p.fg },
+    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 12, color: p.fg },
     margin: { l: 58, r: 18, t: 26, b: 46 },
     xaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
     yaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
-    legend: { orientation: "h", y: 1.12, x: 0, font: { color: p.fg } },
+    legend: { orientation: "h", y: 1.12, x: 0, font: { color: p.fg, size: 12 } },
     colorway: [p.periwinkle, p.teal, p.sky, p.lilac, p.lilacDark],
   };
 }
@@ -1830,6 +1824,10 @@ function scenarioForState() {
   if (!sc) return null;
   return sc.scenarios.find((s) => Math.abs(s.rho - state.risk.rho) < 1e-9 && Math.abs(s.pd_mult - state.risk.pd) < 1e-9 && Math.abs(s.lgd_mult - state.risk.lgd) < 1e-9) || sc.scenarios[0];
 }
+function scenarioNotation(scenario) {
+  if (!scenario) return "-";
+  return `ρ = ${fmtNum(scenario.rho, 2)} · PD ×${fmtNum(scenario.pd_mult, 2)} · LGD ×${fmtNum(scenario.lgd_mult, 2)}`;
+}
 function setupRiskControls() {
   const opts = riskOptions();
   if (!opts.rhos.length) return;
@@ -1878,7 +1876,7 @@ function renderRisk() {
   const scenario = scenarioForState();
   const hist = scenario && sc.histograms[scenario.key];
   $("#scenario-sub").textContent = "The same state drives the histogram and the surface.";
-  $("#scenario-badge").textContent = scenario ? scenario.key.replace(/_/g, " · ") : "—";
+  $("#scenario-badge").textContent = scenarioNotation(scenario);
   const kpis = $("#risk-kpis");
   if (hist && hist.exact) {
     const ex = hist.exact;
@@ -1890,7 +1888,7 @@ function renderRisk() {
     }).join("");
     kpiStats.forEach((stat) => countUp(kpis.querySelector(`[data-testid="risk-${stat.id}"]`), ex[stat.key], (v) => fmtPct(v, 1)));
     $("#risk-bar-note").textContent = (EXPLORER && EXPLORER.riskBarNote) || "";
-    $("#loss-sub").textContent = `${scenario.key.replace(/_/g, " ")} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
+    $("#loss-sub").textContent = `${scenarioNotation(scenario)} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
       renderGauge(ex["var_0.999_pct_ead"], ex.expected_loss_pct_ead);
   }
   if (state.view === "risk") {
@@ -1954,10 +1952,15 @@ function drawLossChart(hist, scenario) {
     dash: stat.dash,
   }));
   const shapes = [];
-  markers.forEach(({ value, color, dash }) => {
+  const annotations = [];
+  markers.forEach(({ label, value, color, dash }) => {
     if (num(value) == null) return;
     const x = value * 100;
     shapes.push({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.6, dash } });
+    annotations.push({
+      x, yref: "paper", y: 0.97, text: label, showarrow: false,
+      font: { size: 10, color }, textangle: -90, xanchor: "left", yanchor: "top",
+    });
   });
   const var99Raw = num(ex["var_0.99_pct_ead"]);
   const var999Raw = num(ex["var_0.999_pct_ead"]);
@@ -1977,8 +1980,8 @@ function drawLossChart(hist, scenario) {
     bargap: 0.02,
     xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02], tickformat: ".1f" },
     yaxis: { title: "Simulated paths" },
-    showlegend: false, shapes,
-    margin: { l: 64, r: 20, t: 24, b: 52 },
+    showlegend: false, shapes, annotations,
+    margin: { l: 64, r: 20, t: 36, b: 52 },
   });
   const legend = $("#loss-legend");
   if (legend) {
@@ -2242,7 +2245,7 @@ function setupSimulator() {
     const optionHtml = options.map((opt) => `<option value="${esc(opt.key)}">${esc(opt.label)}${opt.share ? ` — ${(opt.share * 100).toFixed(1)}% of test window` : ""}</option>`).join("");
     wrap.innerHTML = `
       <div class="sim-ctrl-head">
-        <label for="${id}">${esc(label)} ${INFO[`sim-${variable}`] ? infoButton(`sim-${variable}`, label) : ""}</label>
+        <label for="${id}">${esc(label)} ${SIM_INFO_KEEP.has(variable) && INFO[`sim-${variable}`] ? infoButton(`sim-${variable}`, label) : ""}</label>
         <span class="sim-ctrl-value"><output class="sim-contrib" id="sim-contrib-${variable}">—</output><span class="sim-point-bar" aria-hidden="true"><span id="sim-bar-${variable}"></span></span></span>
       </div>
       ${numeric
@@ -2268,9 +2271,6 @@ function setupSimulator() {
   $$("#sim-presets [data-preset]").forEach((button) => {
     button.onclick = () => applySimPreset(button.dataset.preset);
   });
-  const presetInfo = document.createElement("span");
-  presetInfo.innerHTML = infoButton("sim-presets", "Applicant presets");
-  $("#sim-presets").appendChild(presetInfo.firstChild);
   renderSimulator();
 }
 

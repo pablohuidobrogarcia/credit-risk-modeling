@@ -259,7 +259,7 @@ button, input, select { font: inherit; color: inherit; }
 .kpi-card::after { content: ""; position: absolute; inset: 0; background: var(--grad-soft); opacity: 0.5; pointer-events: none; }
 .kpi-card > * { position: relative; z-index: 1; }
 .kpi-card.risk { border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); }
-.mini-label { text-transform: uppercase; letter-spacing: 0.11em; font-size: 0.69rem; font-weight: 750; color: var(--fg-soft); }
+.mini-label { text-transform: uppercase; letter-spacing: 0.11em; font-size: 0.75rem; font-weight: 750; color: var(--fg-soft); }
 .kpi-value { font-family: var(--serif); font-size: clamp(1.5rem, 2.3vw, 2.1rem); font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin: 0.15rem 0 0.1rem; }
 .kpi-card.risk .kpi-value { color: var(--warning); }
 .kpi-sub { color: var(--fg-muted); font-size: 0.8rem; }
@@ -337,7 +337,7 @@ button, input, select { font: inherit; color: inherit; }
 .panel-sub { color: var(--fg-muted); font-size: 0.82rem; margin-top: 0.2rem; }
 .panel-badge, .sort-pill, .warning-pill {
   flex: 0 0 auto; padding: 0.28rem 0.62rem; border-radius: 999px;
-  border: 1px solid var(--border); font-size: 0.72rem; font-weight: 700;
+  border: 1px solid var(--border); font-size: 0.75rem; font-weight: 700;
   color: var(--fg-muted); background: color-mix(in srgb, var(--card-solid) 60%, transparent);
   white-space: nowrap;
 }
@@ -800,7 +800,7 @@ body.folder-open { overflow: hidden; }
 .summary-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.55rem; }
 .summary-kpi { padding: 0.7rem 0.75rem; border: 1px solid var(--border); border-radius: 10px; background: color-mix(in srgb, var(--card-solid) 45%, transparent); }
 .summary-kpi .value { font-family: var(--serif); font-size: clamp(1.1rem, 1.8vw, 1.45rem); font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.summary-kpi .sub { font-size: 0.68rem; color: var(--fg-soft); }
+.summary-kpi .sub { font-size: 0.75rem; color: var(--fg-soft); }
 .score-figure { margin: 0; }
 .score-figure figcaption { font-size: 0.76rem; color: var(--fg-soft); margin-bottom: 0.35rem; }
 .score-hist { min-height: 92px; display: flex; align-items: flex-end; }
@@ -900,18 +900,18 @@ body.folder-open { overflow: hidden; }
 [data-theme="light"] .sim-outputs .sim-value,
 [data-theme="light"] .sim-outputs .sub { color: var(--ink); }
 .sim-value { font-family: var(--serif); font-size: 1.75rem; font-weight: 650; font-variant-numeric: tabular-nums; text-align: center; }
-.sim-outputs .sub { font-size: 0.66rem; color: var(--fg-soft); line-height: 1.35; }
+.sim-outputs .sub { font-size: 0.75rem; color: var(--fg-soft); line-height: 1.35; }
 .cutoff-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45rem; margin: 0.85rem 0; }
 .cutoff-kpis .summary-kpi { position: relative; overflow: hidden; padding: 0.72rem 0.55rem 0.5rem; background: var(--surface); }
 .cutoff-kpis .summary-kpi::before { content: ""; position: absolute; left: 0; right: 0; top: 0; border-top: 3px solid var(--stat-color, var(--ink)); }
 .cutoff-kpis .summary-kpi .value { font-size: 1.05rem; }
-.cutoff-legend-note { margin: -0.3rem 0 0.5rem; color: var(--fg-muted); font-size: 0.72rem; }
+.cutoff-legend-note { margin: -0.3rem 0 0.5rem; color: var(--fg-muted); font-size: 0.75rem; }
 .cutoff-tabs { display: flex; gap: 0.3rem; border-bottom: 1px solid var(--border); margin-top: 0.5rem; }
 .cutoff-tabs button { border: 0; background: transparent; padding: 0.4rem 0.65rem; color: var(--fg-muted); font-size: 0.76rem; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
 .cutoff-tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
 .cutoff-tab-panel { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .cutoff-tab-panel .chart-host.cutoff-extra { flex: 1 1 auto; height: auto; min-height: 250px; }
-.cutoff-caption { margin: 0.35rem 0 0; color: var(--fg-muted); font-size: 0.72rem; line-height: 1.35; }
+.cutoff-caption { margin: 0.35rem 0 0; color: var(--fg-muted); font-size: 0.75rem; line-height: 1.35; }
 .risk-grid.lower { align-items: stretch; }
 .risk-grid.lower > .panel { display: flex; flex-direction: column; min-height: 0; }
 

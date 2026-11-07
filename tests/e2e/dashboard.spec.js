@@ -1612,8 +1612,11 @@ test("VaR gauge moves above the loss distribution and tracks every slider", asyn
 
   const gaugeValue = page.locator("#risk-gauge text:not(.scale)");
   const expectedGauge = async () => {
-    const key = (await page.locator("#scenario-badge").innerText()).replace(/ · /g, "_");
-    const exact = DATA.interactive.scenario_explorer.histograms[key].exact;
+    const numbers = (await page.locator("#scenario-badge").innerText()).match(/[\d.]+/g).map(Number);
+    const [rho, pd, lgd] = numbers;
+    const scenario = DATA.interactive.scenario_explorer.scenarios.find((s) => Math.abs(s.rho - rho) < 1e-9 && Math.abs(s.pd_mult - pd) < 1e-9 && Math.abs(s.lgd_mult - lgd) < 1e-9);
+    expect(scenario, "scenario badge should resolve to generated scenario data").toBeTruthy();
+    const exact = DATA.interactive.scenario_explorer.histograms[scenario.key].exact;
     return `${(exact["var_0.999_pct_ead"] * 100).toFixed(1)}%`;
   };
   let before = await gaugeValue.textContent();

@@ -2125,6 +2125,16 @@ const BIN_CATEGORY_LABELS = {
   house: "House", moving: "Moving", vacation: "Vacation", renewable_energy: "Renewable energy",
   educational: "Educational", wedding: "Wedding",
 };
+const SIM_LABELS = {
+  annual_inc: "Annual income ($)",
+  dti: "Debt-to-income (%)",
+  revol_util: "Credit utilization (%)",
+  inq_last_6mths: "Credit inquiries, last 6 months",
+  installment_to_income: "Payment-to-income (%)",
+  home_ownership: "Home ownership",
+  purpose: "Loan purpose",
+};
+const SIM_INFO_KEEP = new Set(["installment_to_income"]);
 function parseBinParts(binKey) {
   return String(binKey).split("&").map((raw) => {
     const text = raw.trim();
@@ -2224,7 +2234,7 @@ function simOptions(app, variable) {
   }));
 }
 function simLabel(app, variable) {
-  return (simMeta(app, variable) || {}).label || variable.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return SIM_LABELS[variable] || (simMeta(app, variable) || {}).label || variable.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function setupSimulator() {

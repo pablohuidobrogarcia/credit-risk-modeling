@@ -1152,6 +1152,14 @@ body.welcome-open { overflow: hidden; }
   .tilemap.matrix { grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); }
   .brand span:last-child { max-width: 138px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+@media (max-width: 700px), (pointer: coarse) {
+  #view-risk input[type="range"] { --slider-thumb: 24px; -webkit-appearance: none; appearance: none; background: transparent; height: 32px; }
+  #view-risk input[type="range"]::-webkit-slider-runnable-track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 16%, var(--surface)); }
+  #view-risk input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--slider-thumb); height: var(--slider-thumb); margin-top: -8px; border-radius: 50%; border: 2px solid var(--surface); background: var(--accent); box-shadow: 0 1px 4px color-mix(in srgb, var(--ink) 35%, transparent); }
+  #view-risk input[type="range"]::-moz-range-track { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 16%, var(--surface)); }
+  #view-risk input[type="range"]::-moz-range-thumb { width: var(--slider-thumb); height: var(--slider-thumb); border-radius: 50%; border: 2px solid var(--surface); background: var(--accent); }
+  #view-risk input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

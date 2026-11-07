@@ -2343,7 +2343,7 @@ function renderSimulator() {
   const minScore = Number(bins[0] || typicalScore);
   const maxScore = Number(bins[bins.length - 1] || minScore + 1);
   const pos = clamp((score - minScore) / (maxScore - minScore || 1), 0, 1);
-  $("#sim-scale").innerHTML = `<div class="sim-scale-labels"><span>Lower risk / higher score</span><span>Higher risk / lower score</span></div><div class="sim-scale-track"><span class="sim-scale-fill" style="width:${(pos * 100).toFixed(1)}%"></span><span class="sim-scale-marker" style="left:${(pos * 100).toFixed(1)}%" aria-hidden="true"></span></div><div class="sim-scale-labels"><span>${Math.round(minScore)}</span><span>Score ${Math.round(score)}</span><span>${Math.round(maxScore)}</span></div>`;
+  $("#sim-scale").innerHTML = `<div class="sim-scale-labels"><span class="sim-scale-risk-high" data-testid="sim-scale-risk-left">Higher risk / lower score</span><span class="sim-scale-risk-low" data-testid="sim-scale-risk-right">Lower risk / higher score</span></div><div class="sim-scale-track"><span class="sim-scale-fill" style="width:${(pos * 100).toFixed(1)}%"></span><span class="sim-scale-marker" style="left:${(pos * 100).toFixed(1)}%" aria-hidden="true"></span></div><div class="sim-scale-labels"><span>${Math.round(minScore)}</span><span>Score ${Math.round(score)}</span><span>${Math.round(maxScore)}</span></div>`;
   const rows = simVariables(app).map((variable) => {
     const opt = simOption(app, variable, state.sim[variable]);
     return `<tr><td>${esc(simLabel(app, variable))}<span class="breakdown-choice">${esc(opt.label)}</span></td><td>${signedPoints(Number(opt.points) || 0)}</td></tr>`;

@@ -1118,9 +1118,11 @@ test("portfolio folder opens, traps focus, navigates and closes", async ({ page 
   await expect(page.locator("#folder-dialog")).toBeFocused();
   await expect(page.locator("#folder-tab-0")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#folder-sheet-0 .folder-headline")).toHaveText(pct(meta.default_rate_total));
-  await expect(page.locator("#folder-sheet-0 .folder-scope")).toContainText(`${meta.n_total.toLocaleString("en-US")} loans`);
-  await expect(page.locator("#folder-sheet-0 .folder-scope")).toContainText(`${meta.years.join("-")} test window`);
-  await expect(page.locator("#folder-sheet-0 .folder-scope")).toContainText(`${meta.term}-month term`);
+  await expect(page.locator("#folder-scope")).toHaveCount(1);
+  await expect(page.locator("#folder-scope")).toContainText(`${meta.n_total.toLocaleString("en-US")} loans`);
+  await expect(page.locator("#folder-scope")).toContainText(`${meta.years.join("-")} test window`);
+  await expect(page.locator("#folder-scope")).toContainText(`${meta.term}-month term`);
+  await expect(page.locator("#folder-sheet-0 .folder-scope")).toHaveCount(0);
   await expect(page.locator("#folder-sheet-0")).not.toContainText(/\{[a-z0-9_]+\}/i);
 
   await page.locator("#folder-tab-1").click();
@@ -1128,10 +1130,14 @@ test("portfolio folder opens, traps focus, navigates and closes", async ({ page 
   await expect(page.locator("#folder-sheet-1 .folder-headline")).toHaveText(pct(meta.mean_pd));
   await expect(page.locator("#folder-sheet-1")).not.toContainText(/\{[a-z0-9_]+\}/i);
   await expect(page.locator("#folder-sheet-1 .folder-compare-delta")).toContainText("+2.29 pp");
-  await expect(page.locator("#folder-sheet-1 .folder-dot.is-filled")).toHaveCount(14);
+  await expect(page.locator("#folder-sheet-1 .folder-compare")).toContainText("Predicted");
+  await expect(page.locator("#folder-sheet-1 .folder-compare")).toContainText("Observed");
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-filled")).toHaveCount(12);
   await expect(page.locator("#folder-sheet-1 .folder-dot.is-partial")).toHaveCount(1);
-  await expect(page.locator("#folder-sheet-1 .folder-dot.is-predicted")).toHaveCount(1);
-  await expect(page.locator("#folder-sheet-1 .folder-dot.is-predicted")).toHaveCSS("outline-width", "2px");
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-observed")).toHaveCount(1);
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-observed")).toHaveCSS("outline-width", "2px");
+  await expect(page.locator("#folder-sheet-1 .folder-dots")).toHaveAttribute("aria-label", /12\.18 predicted filled/);
+  await expect(page.locator("#folder-sheet-1 .folder-dots")).toHaveAttribute("aria-label", /ink ring marks observed 14\.46/);
   await page.locator("[data-folder-next]").click();
   await expect(page.locator("#folder-tab-2")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#folder-sheet-2 .folder-headline")).toHaveText(`${pct(meta.el_pct_ead)} of EAD`);
@@ -1141,12 +1147,17 @@ test("portfolio folder opens, traps focus, navigates and closes", async ({ page 
   await expect(page.locator("#folder-sheet-2 .folder-bar")).toHaveAttribute("aria-label", /10\.29 expected loss/);
   await expect(page.locator("#folder-sheet-2 .folder-bar")).toHaveAttribute("aria-label", /89\.71 not lost/);
   await expect(page.locator("#folder-sheet-2 .folder-bar-fill")).toHaveAttribute("style", /10\.29%/);
-  await expect(page.locator("#folder-sheet-2 .folder-metrics tbody tr")).toHaveCount(3);
+  await expect(page.locator("#folder-sheet-2 .folder-bar-value")).toHaveText("$10.29");
+  await expect(page.locator("#folder-sheet-2 .folder-metrics tbody tr")).toHaveCount(4);
   await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("$332.1M");
   await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("10.29% of EAD");
   await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("$3.23B");
   await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("$5.67B");
   await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("5.86% of funded");
+  await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("LGD at default");
+  await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("86.50%");
+  await expect(page.locator("#folder-sheet-2 .folder-copy").first()).toContainText("EL = PD x LGD x EAD");
+  await expect(page.locator("#folder-sheet-2 .folder-copy").first()).toContainText("EAD = funded amount x train-grade EAD rate");
   await page.locator("[data-folder-prev]").click();
   await expect(page.locator("#folder-tab-1")).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowLeft");
@@ -1246,20 +1257,34 @@ test("portfolio folder keeps one frame, height and bottom nav across tabs at 120
           return { height: rect.height, left: rect.left, width: rect.width, paddingLeft: getComputedStyle(sheet).paddingLeft };
         });
         const size = (selector) => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize);
+        const scope = document.querySelector("#folder-scope");
+        const scopeStyle = getComputedStyle(scope);
         return {
           dialog: box("#folder-dialog"),
           active: { left: activeRect.left, width: activeRect.width, height: activeRect.height, paddingLeft: getComputedStyle(active).paddingLeft },
           sheets,
+          tabs: box(".folder-tabs"),
+          scope: { ...box("#folder-scope"), scrollHeight: scope.scrollHeight, clientHeight: scope.clientHeight, borderTop: parseFloat(scopeStyle.borderTopWidth), borderBottom: parseFloat(scopeStyle.borderBottomWidth) },
+          main: box(".folder-main"),
           nav: box(".folder-nav"),
           overflow: document.documentElement.scrollWidth - innerWidth,
           dialogOverflow: document.querySelector("#folder-dialog").scrollWidth - document.querySelector("#folder-dialog").clientWidth,
           titleDecoration: getComputedStyle(document.querySelector("#folder-title")).textDecorationLine,
           sizes: {
             copy: size("#folder-sheet-0 .folder-copy"),
-            scope: size("#folder-sheet-0 .folder-scope"),
+            scope: size("#folder-scope"),
             caption: size("#folder-sheet-0 .folder-visual figcaption"),
             caveatLabel: size("#folder-sheet-0 .folder-caveat-label"),
           },
+          badges: [...document.querySelectorAll(".folder-fan-badge")].map((badge) => {
+            const rect = badge.getBoundingClientRect();
+            const fan = document.querySelector(".folder-fan").getBoundingClientRect();
+            return {
+              text: badge.textContent,
+              visible: rect.width > 0 && rect.height > 0,
+              insideFan: rect.left >= fan.left && rect.right <= fan.right && rect.top >= fan.top && rect.bottom <= fan.bottom,
+            };
+          }),
         };
       }));
     }
@@ -1273,6 +1298,14 @@ test("portfolio folder keeps one frame, height and bottom nav across tabs at 120
     expect(first.sizes.caption).toBeGreaterThanOrEqual(12);
     expect(first.sizes.caveatLabel).toBeGreaterThanOrEqual(12);
     for (const frame of frames) {
+      expect(frame.scope.top, `${width} chip after tabs`).toBeGreaterThanOrEqual(frame.tabs.bottom - 1);
+      expect(frame.scope.bottom, `${width} chip before panel`).toBeLessThanOrEqual(frame.main.top + 1);
+      expect(frame.scope.height, `${width} chip content height`).toBeLessThanOrEqual(frame.scope.scrollHeight + frame.scope.borderTop + frame.scope.borderBottom + 2);
+      expect(frame.badges.map((badge) => badge.text).join("")).toBe("123");
+      for (const badge of frame.badges) {
+        expect(badge.visible, `${width} fan badge visibility`).toBe(true);
+        expect(badge.insideFan, `${width} fan badge bounds`).toBe(true);
+      }
       expect(Math.abs(frame.dialog.height - first.dialog.height), `${width} dialog height`).toBeLessThanOrEqual(1);
       expect(Math.abs(frame.active.left - first.active.left), `${width} card left`).toBeLessThanOrEqual(1);
       expect(Math.abs(frame.active.width - first.active.width), `${width} card width`).toBeLessThanOrEqual(1);

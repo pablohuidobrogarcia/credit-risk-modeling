@@ -641,7 +641,8 @@ test("ranked segment bars use the same metric colors as their maps", async ({ pa
       return el instanceof SVGElement ? style.fill : style.backgroundColor;
     });
     const barColor = await page.locator(`#rank-list .rank-row[data-id="${id}"] .rank-bar span`).evaluate((el) => getComputedStyle(el).backgroundColor);
-    expect(barColor, `${dim} ranked bar`).toBe(mapColor);
+    const normalizeColor = (value) => value.replace(/^rgba\((\d+), (\d+), (\d+), 1\)$/, "rgb($1, $2, $3)");
+    expect(normalizeColor(barColor), `${dim} ranked bar`).toBe(normalizeColor(mapColor));
   }
   await expectNoErrors(errors);
 });
@@ -2287,6 +2288,113 @@ test("loss markers use a readable legend and the surface card is large with a ba
     expect(box.width).toBeGreaterThan(20);
     expect(await button.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
   }
+  await expectNoErrors(errors);
+});
+
+test("score bar puts lower risk at the high-score end and its marker follows the score", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await page.locator("#sim-title").scrollIntoViewIfNeeded();
+  const leftLabel = page.locator('[data-testid="sim-scale-risk-left"]');
+  const rightLabel = page.locator('[data-testid="sim-scale-risk-right"]');
+  await expect(leftLabel).toHaveText("Higher risk / lower score");
+  await expect(rightLabel).toHaveText("Lower risk / higher score");
+  const [leftBox, rightBox] = await Promise.all([leftLabel.boundingBox(), rightLabel.boundingBox()]);
+  expect(leftBox.x).toBeLessThan(rightBox.x);
+  const endLabels = page.locator(".sim-scale-labels").nth(1).locator("span");
+  await expect(endLabels.nth(0)).toHaveText("490");
+  await expect(endLabels.nth(2)).toHaveText("600");
+  const gradient = await page.locator(".sim-scale-track").evaluate((el) => getComputedStyle(el).backgroundImage);
+  expect(gradient).toContain("linear-gradient");
+  const readScale = () => page.evaluate(() => ({
+    score: Number(document.querySelector("#sim-score").textContent.replace(/[^\d.-]/g, "")),
+    marker: parseFloat(document.querySelector(".sim-scale-marker").style.left),
+  }));
+  const income = page.locator("#sim-annual_inc");
+  const maxIndex = await income.getAttribute("max");
+  await income.fill("0");
+  await page.waitForTimeout(900);
+  const lower = await readScale();
+  await income.fill(maxIndex);
+  await page.waitForTimeout(900);
+  const higher = await readScale();
+  expect(higher.score).toBeGreaterThan(lower.score);
+  expect(higher.marker).toBeGreaterThan(lower.marker);
+  await expectNoErrors(errors);
+});
+
+test("surface mode buttons expose an active state and update the vertical-axis title", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#surface-chart canvas")).toBeVisible({ timeout: 20_000 });
+  const buttons = page.locator("#surface-metrics button");
+  const count = await buttons.count();
+  expect(count).toBe(3);
+  for (let index = 0; index < count; index += 1) {
+    const button = buttons.nth(index);
+    const label = (await button.innerText()).trim();
+    const axisLabel = label === "EL" ? "Expected loss" : label;
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    for (let other = 0; other < count; other += 1) {
+      if (other !== index) await expect(buttons.nth(other)).toHaveAttribute("aria-pressed", "false");
+    }
+    await expect(page.locator("#surface-z-label")).toHaveText(`${axisLabel} (% of EAD)`);
+    const active = await button.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return { weight: Number(style.fontWeight), background: style.backgroundColor };
+    });
+    expect(active.weight).toBeGreaterThanOrEqual(700);
+    expect(active.background).not.toBe("rgba(0, 0, 0, 0)");
+    await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el._fullLayout?.scene?.zaxis?.title?.text)).toBe(`${axisLabel} (% of EAD)`);
+  }
+  await expectNoErrors(errors);
+});
+
+test("risk copy uses readable notation, direct tail labels and the generated path counts", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+  const notation = /ρ = \d+\.\d{2} · PD ×\d+\.\d{2} · LGD ×\d+\.\d{2}/;
+  await expect(page.locator("#scenario-badge")).toHaveText(notation);
+  expect(await page.locator("#loss-sub").innerText()).toMatch(notation);
+  expect(await page.locator("#loss-sub").innerText()).toMatch(/\d{1,3}(,\d{3})* paths$/);
+  expect(await page.locator(".scenario-panel").innerText()).not.toMatch(/rho\d/);
+  const annotations = await page.locator("#loss-chart").evaluate((el) => (el._fullLayout?.annotations || []).map((item) => item.text));
+  for (const label of ["EL", "VaR 99%", "VaR 99.9%", "ES 99%", "ES 99.9%"]) expect(annotations).toContain(label);
+  const note = await page.locator("#surface-note").innerText();
+  const sc = DATA.interactive.scenario_explorer;
+  const surface = DATA.interactive.risk_surface;
+  expect(note).toContain(sc.n_paths_per_scenario.toLocaleString("en-US"));
+  expect(note).toContain(surface.n_paths_per_point.toLocaleString("en-US"));
+  await expectNoErrors(errors);
+});
+
+test("Risk Lab, simulator and cutoff stay within 390px and keep the result bar above controls", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+  for (const selector of [".gauge-panel", ".sim-panel", "section[aria-labelledby='cutoff-title']"]) {
+    await page.locator(selector).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(200);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    expect(overflow, `${selector} overflow`).toBeLessThanOrEqual(1);
+  }
+  await page.locator("#sim-purpose").scrollIntoViewIfNeeded();
+  await page.waitForTimeout(250);
+  const outputs = page.locator(".sim-outputs");
+  await expect(outputs).toBeVisible();
+  const [outputBox, topbarBox, purposeBox] = await Promise.all([
+    outputs.boundingBox(),
+    page.locator(".topbar").boundingBox(),
+    page.locator("#sim-purpose").boundingBox(),
+  ]);
+  expect(outputBox.y).toBeGreaterThanOrEqual(topbarBox.height - 2);
+  expect(outputBox.y).toBeLessThan(140);
+  expect(purposeBox.y).toBeGreaterThanOrEqual(outputBox.y + outputBox.height - 1);
+  const thumb = await page.locator("#sim-revol_util").evaluate((el) => getComputedStyle(el).getPropertyValue("--slider-thumb"));
+  expect(parseFloat(thumb)).toBeGreaterThanOrEqual(24);
   await expectNoErrors(errors);
 });
 

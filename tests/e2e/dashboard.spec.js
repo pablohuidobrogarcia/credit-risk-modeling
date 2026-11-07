@@ -1127,16 +1127,26 @@ test("portfolio folder opens, traps focus, navigates and closes", async ({ page 
   await expect(page.locator("#folder-tab-1")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#folder-sheet-1 .folder-headline")).toHaveText(pct(meta.mean_pd));
   await expect(page.locator("#folder-sheet-1")).not.toContainText(/\{[a-z0-9_]+\}/i);
-  await expect(page.locator("#folder-sheet-1 .folder-gap")).toContainText("+2.29 pp");
+  await expect(page.locator("#folder-sheet-1 .folder-compare-delta")).toContainText("+2.29 pp");
   await expect(page.locator("#folder-sheet-1 .folder-dot.is-filled")).toHaveCount(14);
   await expect(page.locator("#folder-sheet-1 .folder-dot.is-partial")).toHaveCount(1);
-  await expect(page.locator("#folder-sheet-1 .folder-dot.is-outline")).toHaveCount(13);
-  await expect(page.locator("#folder-sheet-1 .folder-dot.is-outline-partial")).toHaveCount(1);
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-predicted")).toHaveCount(1);
+  await expect(page.locator("#folder-sheet-1 .folder-dot.is-predicted")).toHaveCSS("outline-width", "2px");
   await page.locator("[data-folder-next]").click();
   await expect(page.locator("#folder-tab-2")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#folder-sheet-2 .folder-headline")).toHaveText(`${pct(meta.el_pct_ead)} of EAD`);
   await expect(page.locator("#folder-sheet-2")).not.toContainText(/\{[a-z0-9_]+\}/i);
   await expect(page.locator("#folder-sheet-2")).not.toContainText(/\d+(?:\.\d+)?%\s*[×x]\s*\d+(?:\.\d+)?%/);
+  await expect(page.locator("#folder-sheet-2 .folder-dots")).toHaveCount(0);
+  await expect(page.locator("#folder-sheet-2 .folder-bar")).toHaveAttribute("aria-label", /10\.29 expected loss/);
+  await expect(page.locator("#folder-sheet-2 .folder-bar")).toHaveAttribute("aria-label", /89\.71 not lost/);
+  await expect(page.locator("#folder-sheet-2 .folder-bar-fill")).toHaveAttribute("style", /10\.29%/);
+  await expect(page.locator("#folder-sheet-2 .folder-metrics tbody tr")).toHaveCount(3);
+  await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("$332.1M");
+  await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("10.29% of EAD");
+  await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("$3.23B");
+  await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("$5.67B");
+  await expect(page.locator("#folder-sheet-2 .folder-metrics")).toContainText("5.86% of funded");
   await page.locator("[data-folder-prev]").click();
   await expect(page.locator("#folder-tab-1")).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("ArrowLeft");
@@ -1208,6 +1218,75 @@ test("portfolio folder content and layout hold at 1360, 1100 and 390 with reduce
   expect(motion.dotAnimation).toBe("none");
   expect(motion.fan).toBe("none");
   await page.keyboard.press("Escape");
+  await expectNoErrors(errors);
+});
+
+test("portfolio folder keeps one frame, height and bottom nav across tabs at 1200 and 390", async ({ page }) => {
+  const errors = await open(page, { dim: "total" });
+  for (const [width, height] of [[1200, 700], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#view=explorer&dim=total");
+    await page.waitForTimeout(450);
+    await page.locator("#total-folder-button").click();
+    await page.waitForTimeout(350);
+
+    const frames = [];
+    for (const index of [0, 1, 2]) {
+      await page.locator(`#folder-tab-${index}`).click();
+      await page.waitForTimeout(300);
+      frames.push(await page.evaluate(() => {
+        const box = (selector) => {
+          const rect = document.querySelector(selector).getBoundingClientRect();
+          return { left: rect.left, top: rect.top, width: rect.width, height: rect.height, bottom: rect.bottom };
+        };
+        const active = document.querySelector('[data-folder-sheet][data-active="true"]');
+        const activeRect = active.getBoundingClientRect();
+        const sheets = [...document.querySelectorAll("[data-folder-sheet]")].map((sheet) => {
+          const rect = sheet.getBoundingClientRect();
+          return { height: rect.height, left: rect.left, width: rect.width, paddingLeft: getComputedStyle(sheet).paddingLeft };
+        });
+        const size = (selector) => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize);
+        return {
+          dialog: box("#folder-dialog"),
+          active: { left: activeRect.left, width: activeRect.width, height: activeRect.height, paddingLeft: getComputedStyle(active).paddingLeft },
+          sheets,
+          nav: box(".folder-nav"),
+          overflow: document.documentElement.scrollWidth - innerWidth,
+          dialogOverflow: document.querySelector("#folder-dialog").scrollWidth - document.querySelector("#folder-dialog").clientWidth,
+          titleDecoration: getComputedStyle(document.querySelector("#folder-title")).textDecorationLine,
+          sizes: {
+            copy: size("#folder-sheet-0 .folder-copy"),
+            scope: size("#folder-sheet-0 .folder-scope"),
+            caption: size("#folder-sheet-0 .folder-visual figcaption"),
+            caveatLabel: size("#folder-sheet-0 .folder-caveat-label"),
+          },
+        };
+      }));
+    }
+
+    const first = frames[0];
+    expect(first.overflow, `${width} page overflow`).toBeLessThanOrEqual(1);
+    expect(first.dialogOverflow, `${width} folder overflow`).toBeLessThanOrEqual(1);
+    expect(first.titleDecoration, `${width} title decoration`).toBe("none");
+    expect(first.sizes.copy).toBeGreaterThanOrEqual(14);
+    expect(first.sizes.scope).toBeGreaterThanOrEqual(12);
+    expect(first.sizes.caption).toBeGreaterThanOrEqual(12);
+    expect(first.sizes.caveatLabel).toBeGreaterThanOrEqual(12);
+    for (const frame of frames) {
+      expect(Math.abs(frame.dialog.height - first.dialog.height), `${width} dialog height`).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.active.left - first.active.left), `${width} card left`).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.active.width - first.active.width), `${width} card width`).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.active.height - first.active.height), `${width} card height`).toBeLessThanOrEqual(1);
+      expect(Math.abs(frame.nav.bottom - first.nav.bottom), `${width} nav bottom`).toBeLessThanOrEqual(1);
+      for (const sheet of frame.sheets) {
+        expect(Math.abs(sheet.height - frame.active.height), `${width} sheet height`).toBeLessThanOrEqual(1);
+        expect(Math.abs(sheet.left - frame.active.left), `${width} sheet left`).toBeLessThanOrEqual(1);
+        expect(Math.abs(sheet.width - frame.active.width), `${width} sheet width`).toBeLessThanOrEqual(1);
+        expect(sheet.paddingLeft, `${width} sheet padding`).toBe(frame.active.paddingLeft);
+      }
+    }
+    await page.keyboard.press("Escape");
+  }
   await expectNoErrors(errors);
 });
 
@@ -2568,6 +2647,37 @@ test("axe reports no wcag2a, wcag2aa or best-practice violations in the four vie
       });
       expect(violations, `${view} @ ${width}px: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
     }
+  }
+  await expectNoErrors(errors);
+});
+
+test("axe reports no violations in each portfolio folder tab", async ({ page }) => {
+  const errors = await open(page, { dim: "total" });
+  await page.addScriptTag({ path: AXE_PATH });
+  for (const [width, height] of [[1200, 700], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#view=explorer&dim=total");
+    await page.waitForTimeout(400);
+    await page.locator("#total-folder-button").click();
+    await expect(page.locator("#folder-overlay")).toBeVisible();
+    await page.waitForTimeout(300);
+    for (const index of [0, 1, 2]) {
+      await page.locator(`#folder-tab-${index}`).click();
+      await page.waitForTimeout(250);
+      const violations = await page.evaluate(async () => {
+        const results = await window.axe.run(document, {
+          runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "best-practice"] },
+        });
+        return results.violations.map((v) => ({
+          id: v.id,
+          impact: v.impact,
+          help: v.help,
+          nodes: v.nodes.slice(0, 4).map((n) => n.target.join(" ")),
+        }));
+      });
+      expect(violations, `folder tab ${index + 1} @ ${width}px: ${JSON.stringify(violations, null, 2)}`).toEqual([]);
+    }
+    await page.keyboard.press("Escape");
   }
   await expectNoErrors(errors);
 });

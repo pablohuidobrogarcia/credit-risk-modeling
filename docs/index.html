@@ -348,13 +348,15 @@
                 <button type="button" data-metric="el" aria-pressed="false">EL</button>
               </div>
             </div>
+            <p class="surface-axis-key" id="surface-axis-key"><span>x: ρ (correlation)</span><span>y: PD stress</span><span>z: <span id="surface-z-label">VaR 99.9% (% of EAD)</span></span></p>
             <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional surface of portfolio risk across correlation and PD stress"></div>
+            <p class="chart-note" id="surface-note"></p>
             <p class="chart-fallback" id="surface-fallback" hidden></p>
           </section>
         </div>
 
         <div class="risk-grid lower">
-          <section class="panel" aria-labelledby="sim-title">
+          <section class="panel sim-panel" aria-labelledby="sim-title">
             <div class="panel-head">
               <div>
                 <h3 id="sim-title">Applicant simulator</h3>

@@ -2021,9 +2021,16 @@ function drawSurface() {
   const surf = D.interactive && D.interactive.risk_surface;
   if (!host || !surf) return;
   const p = palette();
+  const sc = D.interactive && D.interactive.scenario_explorer;
   const base = surf.base_case;
   const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
   $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText}`;
+  const zLabel = $("#surface-z-label");
+  if (zLabel) zLabel.textContent = `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)`;
+  const note = $("#surface-note");
+  if (note && sc) {
+    note.textContent = `Histogram scenarios use ${fmtInt(sc.n_paths_per_scenario)} paths; surface grid points use ${fmtInt(surf.n_paths_per_point)}. The difference is Monte Carlo noise, not a different portfolio.`;
+  }
   if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
   const matrix = surfaceMatrix(state.surfaceMetric);
   if (!matrix) return;
@@ -2040,22 +2047,28 @@ function drawSurface() {
     ok = plot(host, [
       { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
-      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle", size: 20, color: p.surface, line: { width: 4, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
+      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { symbol: "circle", size: 24, color: p.surface, line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
-      title: { text: "2D heatmap fallback (no WebGL)", font: { size: 11 } },
-      xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, margin: { l: 55, r: 15, t: 40, b: 45 },
+      title: { text: "2D heatmap fallback (no WebGL)", font: { size: 12 } },
+      xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, margin: { l: 58, r: 18, t: 40, b: 45 },
     });
     host.dataset.mode = "heatmap";
   } else {
     ok = plot(host, [
       { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, colorbar: { tickformat: ".1f" }, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
-      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: p.ink }, marker: { size: 9, color: p.surface, symbol: "circle", line: { width: 3, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
+      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { size: 14, color: p.surface, symbol: "circle", line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
-      scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD", tickformat: ".1f" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
-      margin: { l: 0, r: 0, t: 8, b: 0 },
+      scene: {
+        xaxis: { title: { text: "ρ" } },
+        yaxis: { title: { text: "PD stress" } },
+        zaxis: { title: { text: `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)` }, tickformat: ".1f" },
+        camera: { eye: { x: 1.45, y: 1.45, z: 1.35 } },
+        aspectratio: { x: 1.2, y: 1, z: 0.78 },
+      },
+      margin: { l: 48, r: 8, t: 8, b: 8 },
     });
     host.dataset.mode = "surface";
   }

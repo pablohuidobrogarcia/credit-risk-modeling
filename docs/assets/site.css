@@ -312,7 +312,9 @@ button, input, select { font: inherit; color: inherit; }
 .segmented.compact button { padding: 0.32rem 0.6rem; font-size: 0.75rem; }
 .surface-toggle { flex-wrap: nowrap; width: auto; max-width: 100%; border-color: var(--border-strong); background: color-mix(in srgb, var(--card-solid) 74%, transparent); }
 .surface-toggle button { border-radius: 999px; }
-.surface-toggle button[aria-selected="true"] { background: var(--ink); color: var(--surface); }
+.surface-toggle button[aria-selected="true"],
+.surface-toggle button[aria-pressed="true"] { background: var(--lilac-light); color: var(--ink); font-weight: 800; box-shadow: inset 0 0 0 1px var(--lilac-dark); }
+.surface-toggle button[aria-pressed="true"]:hover { color: var(--ink); background: var(--lilac-light); }
 .chart-host.surface-host { height: 540px; min-height: 540px; cursor: default; }
 .chart-host.surface-host .plot-container, .chart-host.surface-host .svg-container, .chart-host.surface-host canvas { cursor: default; }
 
@@ -859,13 +861,17 @@ body.folder-open { overflow: hidden; }
 .chart-host .plot-container, .chart-host .svg-container { max-width: 100% !important; }
 .chart-host.small { height: 250px; min-height: 250px; }
 .chart-fallback { color: var(--fg-muted); font-size: 0.85rem; margin-top: 0.5rem; }
+.chart-note { margin: 0.45rem 0 0; color: var(--fg-muted); font-size: 0.75rem; line-height: 1.4; }
+.surface-axis-key { display: flex; flex-wrap: wrap; gap: 0.2rem 0.85rem; margin: 0.1rem 0 0.35rem; color: var(--fg-muted); font-size: 0.75rem; }
+.surface-axis-key #surface-z-label { color: var(--fg); font-weight: 650; }
 .sim-presets { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; align-items: center; }
 .sim-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
 .sim-ctrl { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; border: 1px solid var(--border); border-radius: 10px; padding: 0.55rem 0.6rem; background: color-mix(in srgb, var(--card-solid) 38%, transparent); }
-.sim-ctrl-head { display: flex; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
-.sim-ctrl label { font-size: 0.75rem; color: var(--fg); font-weight: 650; }
-.sim-ctrl-value { display: flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; }
-.sim-contrib { font-size: 0.7rem; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sim-ctrl:last-child { grid-column: 1 / -1; }
+.sim-ctrl-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.15rem 0.5rem; align-items: baseline; }
+.sim-ctrl label { flex: 1 0 100%; font-size: 0.75rem; color: var(--fg); font-weight: 650; white-space: nowrap; }
+.sim-ctrl-value { display: flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; margin-left: auto; }
+.sim-contrib { font-size: 0.75rem; font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sim-point-bar { position: relative; width: 42px; height: 6px; border-radius: 999px; background: color-mix(in srgb, var(--fg) 10%, transparent); overflow: hidden; }
 .sim-point-bar::after { content: ""; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1px solid var(--border-strong); }
 .sim-point-bar span { position: absolute; top: 0; bottom: 0; left: 50%; background: var(--teal); border-radius: 999px; }

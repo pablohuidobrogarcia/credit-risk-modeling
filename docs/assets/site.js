@@ -1913,7 +1913,7 @@ function renderGauge(value, expectedLoss) {
   const p = palette();
   const tick = (pctValue) => {
     const theta = Math.PI * (1 - pctValue / 60);
-    return { x: cx + 92 * Math.cos(theta), y: cy - 92 * Math.sin(theta), pct: pctValue };
+    return { x: cx + 101 * Math.cos(theta), y: cy - 101 * Math.sin(theta), pct: pctValue };
   };
   const ticks = [0, 20, 40, 60].map(tick);
   const gradientStops = p.risk.map((entry, index) => `<stop offset="${(index / (p.risk.length - 1) * 100).toFixed(1)}%" stop-color="${entry}"></stop>`).join("");
@@ -1927,10 +1927,14 @@ function renderGauge(value, expectedLoss) {
     <text x="${cx}" y="140" text-anchor="middle" font-size="26">${fmtPct(v, 1)}</text>
     ${ticks.map((entry) => `<text class="scale" x="${entry.x.toFixed(1)}" y="${entry.y.toFixed(1)}" text-anchor="middle">${entry.pct}%</text>`).join("")}
   </svg>`;
+  const el = num(expectedLoss);
+  const multiple = el && el > 0 ? v / el : null;
+  $("#gauge-var").textContent = fmtPct(v, 1);
+  $("#gauge-el").textContent = fmtPct(el, 1);
+  $("#gauge-multiple").textContent = multiple == null ? "-" : `${multiple.toFixed(1)}x`;
   const ratio = $("#gauge-ratio");
   if (ratio) {
-    const el = num(expectedLoss);
-    ratio.textContent = el && el > 0 ? `VaR 99.9% is ${(v / el).toFixed(1)}x the expected loss.` : "";
+    ratio.textContent = multiple == null ? "" : `VaR 99.9% is ${multiple.toFixed(1)}x the expected loss.`;
   }
 }
 

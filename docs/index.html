@@ -314,8 +314,13 @@
               </div>
               <div class="gauge-row">
                 <div class="gauge" id="risk-gauge" role="img" aria-label="VaR 99.9 percent gauge"></div>
+                <dl class="gauge-figures" aria-label="Current gauge values">
+                  <div><dt>VaR 99.9%</dt><dd id="gauge-var">-</dd></div>
+                  <div><dt>Expected loss</dt><dd id="gauge-el">-</dd></div>
+                  <div><dt>VaR / EL</dt><dd id="gauge-multiple">-</dd></div>
+                </dl>
               </div>
-              <p class="gauge-ratio" id="gauge-ratio">—</p>
+              <p class="gauge-ratio" id="gauge-ratio">-</p>
             </section>
 
             <section class="panel" aria-labelledby="loss-title">

@@ -827,26 +827,30 @@ body.folder-open { overflow: hidden; }
 .gauge-panel .panel-head { margin-bottom: 0.35rem; }
 .gauge-panel .panel-head h3 { font-size: 0.95rem; }
 .gauge-row { display: flex; align-items: center; gap: 1rem; margin-top: 0.8rem; flex-wrap: wrap; }
-.gauge-panel .gauge-row { margin-top: 0; gap: 0.9rem; }
+.gauge-panel .gauge-row { display: grid; grid-template-columns: minmax(220px, 360px) minmax(150px, 1fr); align-items: center; margin-top: 0; gap: 1rem; }
 .gauge { width: 100%; max-width: none; }
-#risk-gauge { width: 100% !important; min-width: 100%; }
+#risk-gauge { width: 100% !important; min-width: 0; max-width: 360px; margin-inline: auto; }
 .gauge svg { width: 100%; height: auto; overflow: visible; }
+.gauge-figures { display: grid; gap: 0.55rem; margin: 0; min-width: 0; }
+.gauge-figures > div { display: flex; justify-content: space-between; align-items: baseline; gap: 0.7rem; padding-bottom: 0.45rem; border-bottom: 1px solid var(--border); }
+.gauge-figures > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.gauge-figures dt { color: var(--fg-muted); font-size: 0.78rem; font-weight: 650; }
+.gauge-figures dd { margin: 0; color: var(--ink); font-family: var(--serif); font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .gauge .track { fill: none; stroke: color-mix(in srgb, var(--fg) 10%, transparent); stroke-width: 12; stroke-linecap: round; }
 .gauge .ramp-track { fill: none; stroke-width: 12; stroke-linecap: round; opacity: 0.22; }
 .gauge-ratio { margin: 0.25rem 0 0; color: var(--fg); font-size: 0.84rem; font-weight: 700; }
-.gauge-panel .gauge-row { display: block; }
 .gauge .value { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dasharray 520ms var(--ease), stroke 520ms var(--ease); }
 .gauge .needle { stroke: var(--fg); stroke-width: 2.4; stroke-linecap: round; }
 .gauge .hub { fill: var(--fg); }
 .gauge text { fill: var(--fg); font-family: var(--serif); font-weight: 650; }
-.gauge .scale { fill: var(--fg-soft); font-family: var(--sans); font-size: 9px; font-weight: 600; }
+.gauge .scale { fill: var(--fg-soft); font-family: var(--sans); font-size: 10px; font-weight: 650; }
 .risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; align-items: stretch; }
 .risk-grid > * { min-width: 0; }
 .risk-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
 .surface-host { flex: 1 1 auto; }
 .summary-body > * { min-width: 0; }
 .risk-grid.lower { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.chart-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin-top: 0.55rem; font-size: 0.74rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin-top: 0.55rem; font-size: 0.75rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
 .chart-legend .legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
 .chart-legend .legend-swatch { width: 22px; height: 0; border-top-width: 2.5px; border-top-style: solid; border-radius: 2px; }
 .chart-legend .region-swatch { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border); flex: 0 0 auto; }
@@ -1114,6 +1118,23 @@ body.welcome-open { overflow: hidden; }
   .panel-head .control-with-info { min-width: 0; max-width: 100%; }
   .panel-head .control-with-info > .info-btn { flex: 0 0 auto; }
   .segmented.surface-toggle { width: auto; max-width: 100%; min-width: 0; flex-wrap: wrap; overflow-x: visible; }
+  .gauge-panel .gauge-row { grid-template-columns: 1fr; }
+  .gauge-figures { width: 100%; }
+  #view-risk .risk-grid.lower > .panel.sim-panel { display: flex; flex-direction: column; }
+  .sim-presets { order: 1; }
+  .sim-outputs {
+    order: 2; position: sticky; top: 4.2rem; z-index: 20;
+    margin: 0.55rem 0 0.7rem; padding: 0.5rem;
+    border: 1px solid var(--border); border-radius: 14px;
+    background: var(--card-solid); box-shadow: 0 8px 22px -16px var(--ink);
+  }
+  .sim-outputs > div { padding: 0.55rem 0.35rem; }
+  .sim-outputs .sub { display: none; }
+  .sim-value { font-size: 1.45rem; }
+  .sim-controls { order: 3; }
+  .sim-scale { order: 4; }
+  #sim-hist { order: 5; }
+  .sim-breakdown { order: 6; }
 }
 @media (max-width: 420px) {
   body { font-size: 15px; }

@@ -31,15 +31,16 @@
       "title": "Expected loss",
       "headline": "{el_pct_ead} of EAD",
       "headline_label": "expected loss on EAD at default",
-      "computation": "EL reconciles portfolio PD, LGD and EAD at default.",
-      "reading": "EL equals PD x LGD x EAD, with EAD set by the train-grade EAD rate.",
+      "computation": "EL = PD x LGD x EAD; EAD = funded amount x train-grade EAD rate.",
+      "reading": "EL is the portfolio's expected credit loss at default under the train-grade EAD rate.",
       "caveat": "EAD at default is estimated on train defaults, not the full funded amount.",
       "visual": "expected-loss",
       "visual_label": "$100 of EAD",
       "metrics": [
         { "label": "Expected loss", "value": "{el_amount}", "note": "{el_pct_ead} of EAD" },
         { "label": "EAD at default", "value": "{ead_total}" },
-        { "label": "Funded amount", "value": "{funded_total}", "note": "EL is {el_pct_funded} of funded" }
+        { "label": "Funded amount", "value": "{funded_total}", "note": "EL is {el_pct_funded} of funded" },
+        { "label": "LGD at default", "value": "{mean_lgd_pct}" }
       ]
     }
   ]

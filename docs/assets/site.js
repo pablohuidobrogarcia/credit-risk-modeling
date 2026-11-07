@@ -2630,16 +2630,43 @@ function setWelcomeDismissed(dismissed) {
   }
 }
 
+function folderBarMarkup(sheet, expectedLoss) {
+  const remainder = Math.max(0, 100 - expectedLoss);
+  const aria = `$100 of EAD: $${expectedLoss.toFixed(2)} expected loss, $${remainder.toFixed(2)} not lost`;
+  return `<figure class="folder-visual folder-visual-bar">
+    <div class="folder-bar" role="img" aria-label="${esc(aria)}">
+      <span class="folder-bar-fill" style="width:${expectedLoss.toFixed(2)}%"></span>
+    </div>
+    <div class="folder-bar-legend" aria-hidden="true">
+      <span class="folder-bar-key"><span class="folder-bar-swatch"></span>$${expectedLoss.toFixed(2)} expected loss</span>
+      <span class="folder-bar-key"><span class="folder-bar-swatch is-rest"></span>$${remainder.toFixed(2)} not lost</span>
+    </div>
+    <figcaption>${esc(resolveInfoText(sheet.visual_label || ""))}</figcaption>
+  </figure>`;
+}
+
+function folderMetricsMarkup(sheet) {
+  const rows = Array.isArray(sheet.metrics) ? sheet.metrics : [];
+  if (!rows.length) return "";
+  return `<table class="folder-metrics">
+    <caption class="sr-only">Portfolio amounts behind the expected loss</caption>
+    <tbody>${rows.map((row) => `<tr>
+      <th scope="row">${esc(resolveInfoText(row.label))}</th>
+      <td>${esc(resolveInfoText(row.value))}${row.note ? `<span class="folder-metric-note">${esc(resolveInfoText(row.note))}</span>` : ""}</td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+}
+
 function folderVisualMarkup(sheet) {
   const meta = pe().meta;
   const observed = (meta.default_rate_total || 0) * 100;
   const predicted = (meta.mean_pd || 0) * 100;
   const expectedLoss = (meta.el_pct_ead || 0) * 100;
-  const primary = sheet.id === "expected-loss" ? expectedLoss : observed;
+  if (sheet.id === "expected-loss") return folderBarMarkup(sheet, expectedLoss);
+  const primary = observed;
   const whole = Math.floor(primary + 1e-9);
   const fraction = primary - whole;
-  const predictedWhole = Math.floor(predicted + 1e-9);
-  const predictedFraction = predicted - predictedWhole;
+  const predictedWhole = Math.min(99, Math.floor(predicted + 1e-9));
   const dots = Array.from({ length: 100 }, (_, index) => {
     const classes = ["folder-dot"];
     let style = `--i:${index}`;
@@ -2648,25 +2675,28 @@ function folderVisualMarkup(sheet) {
       classes.push("is-partial");
       style += `;--fill:${fraction.toFixed(3)}`;
     }
-    if (sheet.id === "predicted" && index < predictedWhole) {
-      classes.push("is-outline");
-    } else if (sheet.id === "predicted" && index === predictedWhole && predictedFraction > 0.001) {
-      classes.push("is-outline", "is-outline-partial");
-      style += `;--outline-fill:${predictedFraction.toFixed(3)}`;
-    }
+    if (sheet.id === "predicted" && index === predictedWhole) classes.push("is-predicted");
     return `<span class="${classes.join(" ")}" style="${style}" aria-hidden="true"></span>`;
   }).join("");
-  const label = resolveInfoText(sheet.visual_label || "");
-  const note = resolveInfoText(sheet.visual_note || "");
-  return `<figure class="folder-visual">
-    <div class="folder-dots" role="img" aria-label="100 dots; ${primary.toFixed(2)} filled">${dots}</div>
-    <figcaption>${esc(label)}${note ? `<span class="folder-gap">${esc(note)}</span>` : ""}</figcaption>
+  const gap = Math.max(0, observed - predicted).toFixed(2);
+  const aria = sheet.id === "predicted"
+    ? `100 loans; ${observed.toFixed(2)} observed filled; ink ring marks predicted ${predicted.toFixed(2)}; observed minus predicted +${gap} pp`
+    : `100 loans; ${observed.toFixed(2)} filled`;
+  const compare = sheet.id === "predicted" ? `<div class="folder-compare" aria-hidden="true">
+    <span class="folder-compare-key"><span class="folder-compare-dot"></span>Observed</span>
+    <span class="folder-compare-delta">+${gap} pp</span>
+    <span class="folder-compare-key"><span class="folder-compare-ring"></span>Predicted</span>
+  </div>` : "";
+  return `<figure class="folder-visual folder-visual-dots">
+    <div class="folder-dots" role="img" aria-label="${esc(aria)}">${dots}</div>
+    ${compare}
+    <figcaption>${esc(resolveInfoText(sheet.visual_label || ""))}</figcaption>
   </figure>`;
 }
 
 function folderSheetMarkup(sheet, index) {
-  const hidden = index === 0 ? "" : " hidden";
-  return `<article class="folder-sheet-card folder-sheet-${index}" id="folder-sheet-${index}" data-folder-sheet="${index}" role="tabpanel" aria-labelledby="folder-tab-${index}"${hidden}>
+  const active = index === 0;
+  return `<div class="folder-sheet-card folder-sheet-${index}" id="folder-sheet-${index}" data-folder-sheet="${index}" data-active="${active}" role="tabpanel" aria-labelledby="folder-tab-${index}" aria-hidden="${active ? "false" : "true"}"${active ? "" : " inert"}>
     <p class="folder-scope">${esc(resolveInfoText(FOLDER.scope || ""))}</p>
     <div class="folder-sheet-copy">
       <h3>${esc(resolveInfoText(sheet.title))}</h3>
@@ -2674,10 +2704,11 @@ function folderSheetMarkup(sheet, index) {
       <p class="folder-headline-label">${esc(resolveInfoText(sheet.headline_label))}</p>
       <p class="folder-copy"><strong>How it is computed here:</strong> ${esc(resolveInfoText(sheet.computation))}</p>
       <p class="folder-copy"><strong>How to read it:</strong> ${esc(resolveInfoText(sheet.reading))}</p>
-      <p class="folder-copy folder-caveat"><strong>Caveat:</strong> ${esc(resolveInfoText(sheet.caveat))}</p>
+      <p class="folder-copy folder-caveat"><span class="folder-caveat-label">Caveat</span>${esc(resolveInfoText(sheet.caveat))}</p>
+      ${folderMetricsMarkup(sheet)}
     </div>
     ${folderVisualMarkup(sheet)}
-  </article>`;
+  </div>`;
 }
 
 function folderOverlayMarkup() {
@@ -2693,11 +2724,11 @@ function folderOverlayMarkup() {
     <div class="folder-tabs" role="tablist" aria-label="Portfolio sheets">
       ${sheets.map((sheet, index) => `<button type="button" class="folder-tab folder-tab-${index}" id="folder-tab-${index}" data-folder-tab="${index}" role="tab" aria-selected="${index === 0}" aria-controls="folder-sheet-${index}" tabindex="${index === 0 ? 0 : -1}">${esc(sheet.tab)}</button>`).join("")}
     </div>
-    <div class="folder-main">
+    <div class="folder-main" tabindex="0" aria-label="Portfolio sheet content">
       <div class="folder-fan" id="folder-fan" data-active="0" aria-hidden="true">
-        <span class="folder-fan-sheet folder-fan-0"></span>
-        <span class="folder-fan-sheet folder-fan-1"></span>
-        <span class="folder-fan-sheet folder-fan-2"></span>
+        <span class="folder-fan-sheet folder-fan-0"><span class="folder-fan-index">1</span></span>
+        <span class="folder-fan-sheet folder-fan-1"><span class="folder-fan-index">2</span></span>
+        <span class="folder-fan-sheet folder-fan-2"><span class="folder-fan-index">3</span></span>
       </div>
       <div class="folder-sheet-stack">${sheets.map(folderSheetMarkup).join("")}</div>
     </div>
@@ -2753,7 +2784,12 @@ function setFolderSheet(index, { focusTab = false } = {}) {
     tab.setAttribute("aria-selected", active ? "true" : "false");
     tab.tabIndex = active ? 0 : -1;
   });
-  $$("[data-folder-sheet]", overlay).forEach((panel, panelIndex) => { panel.hidden = panelIndex !== folderActive; });
+  $$("[data-folder-sheet]", overlay).forEach((panel, panelIndex) => {
+    const active = panelIndex === folderActive;
+    panel.dataset.active = active ? "true" : "false";
+    panel.setAttribute("aria-hidden", active ? "false" : "true");
+    panel.toggleAttribute("inert", !active);
+  });
   const fan = $("#folder-fan", overlay);
   if (fan) fan.dataset.active = String(folderActive);
   const counter = $("#folder-counter", overlay);

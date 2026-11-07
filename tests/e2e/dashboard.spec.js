@@ -2302,8 +2302,9 @@ test("score bar puts lower risk at the high-score end and its marker follows the
   const [leftBox, rightBox] = await Promise.all([leftLabel.boundingBox(), rightLabel.boundingBox()]);
   expect(leftBox.x).toBeLessThan(rightBox.x);
   const endLabels = page.locator(".sim-scale-labels").nth(1).locator("span");
-  await expect(endLabels.nth(0)).toHaveText("490");
-  await expect(endLabels.nth(2)).toHaveText("600");
+  const scoreBins = DATA.interactive.applicant_simulator.test_score_bins;
+  await expect(endLabels.nth(0)).toHaveText(String(Math.round(scoreBins[0])));
+  await expect(endLabels.nth(2)).toHaveText(String(Math.round(scoreBins[scoreBins.length - 1])));
   const gradient = await page.locator(".sim-scale-track").evaluate((el) => getComputedStyle(el).backgroundImage);
   expect(gradient).toContain("linear-gradient");
   const readScale = () => page.evaluate(() => ({

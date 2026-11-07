@@ -1270,6 +1270,7 @@ test("portfolio folder keeps one frame, height and bottom nav across tabs at 120
           nav: box(".folder-nav"),
           overflow: document.documentElement.scrollWidth - innerWidth,
           dialogOverflow: document.querySelector("#folder-dialog").scrollWidth - document.querySelector("#folder-dialog").clientWidth,
+          fanDisplay: getComputedStyle(document.querySelector(".folder-fan")).display,
           titleDecoration: getComputedStyle(document.querySelector("#folder-title")).textDecorationLine,
           sizes: {
             copy: size("#folder-sheet-0 .folder-copy"),
@@ -1282,6 +1283,8 @@ test("portfolio folder keeps one frame, height and bottom nav across tabs at 120
             const fan = document.querySelector(".folder-fan").getBoundingClientRect();
             return {
               text: badge.textContent,
+              width: rect.width,
+              height: rect.height,
               visible: rect.width > 0 && rect.height > 0,
               insideFan: rect.left >= fan.left && rect.right <= fan.right && rect.top >= fan.top && rect.bottom <= fan.bottom,
             };
@@ -1303,9 +1306,17 @@ test("portfolio folder keeps one frame, height and bottom nav across tabs at 120
       expect(frame.scope.bottom, `${width} chip before panel`).toBeLessThanOrEqual(frame.main.top + 1);
       expect(frame.scope.height, `${width} chip content height`).toBeLessThanOrEqual(frame.scope.scrollHeight + frame.scope.borderTop + frame.scope.borderBottom + 2);
       expect(frame.badges.map((badge) => badge.text).join("")).toBe("123");
-      for (const badge of frame.badges) {
-        expect(badge.visible, `${width} fan badge visibility`).toBe(true);
-        expect(badge.insideFan, `${width} fan badge bounds`).toBe(true);
+      if (width <= 600) {
+        expect(frame.fanDisplay, `${width} fan hidden`).toBe("none");
+        for (const badge of frame.badges) expect(badge.visible, `${width} hidden fan badge`).toBe(false);
+      } else {
+        expect(frame.fanDisplay, `${width} fan shown`).not.toBe("none");
+        for (const badge of frame.badges) {
+          expect(badge.visible, `${width} fan badge visibility`).toBe(true);
+          expect(badge.width, `${width} fan badge width`).toBeGreaterThanOrEqual(24);
+          expect(badge.height, `${width} fan badge height`).toBeGreaterThanOrEqual(24);
+          expect(badge.insideFan, `${width} fan badge bounds`).toBe(true);
+        }
       }
       expect(Math.abs(frame.dialog.height - first.dialog.height), `${width} dialog height`).toBeLessThanOrEqual(1);
       expect(Math.abs(frame.active.left - first.active.left), `${width} card left`).toBeLessThanOrEqual(1);
@@ -1318,6 +1329,67 @@ test("portfolio folder keeps one frame, height and bottom nav across tabs at 120
         expect(Math.abs(sheet.width - frame.active.width), `${width} sheet width`).toBeLessThanOrEqual(1);
         expect(sheet.paddingLeft, `${width} sheet padding`).toBe(frame.active.paddingLeft);
       }
+    }
+    await page.keyboard.press("Escape");
+  }
+  await expectNoErrors(errors);
+});
+
+test("folder mobile fan, card-3 reading order and equal tab height at 1200 and 390", async ({ page }) => {
+  const errors = await open(page, { dim: "total" });
+  for (const [width, height] of [[1200, 700], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/#view=explorer&dim=total");
+    await page.waitForTimeout(450);
+    await page.locator("#total-folder-button").click();
+    await page.waitForTimeout(350);
+
+    const heights = [];
+    for (const index of [0, 1, 2]) {
+      await page.locator(`#folder-tab-${index}`).click();
+      await page.waitForTimeout(250);
+      heights.push(await page.locator("#folder-dialog").evaluate((el) => el.getBoundingClientRect().height));
+    }
+    expect(Math.max(...heights) - Math.min(...heights), `${width} equal folder height`).toBeLessThanOrEqual(1);
+
+    await page.locator("#folder-tab-2").click();
+    await page.waitForTimeout(250);
+    const layout = await page.evaluate(() => {
+      const dialog = document.querySelector("#folder-dialog");
+      const sheet = document.querySelector("#folder-sheet-2");
+      const copy = sheet.querySelector(".folder-sheet-copy");
+      const copies = [...sheet.querySelectorAll(".folder-copy")];
+      const bar = sheet.querySelector(".folder-visual-bar");
+      const top = (el) => el.getBoundingClientRect().top;
+      return {
+        overflow: document.documentElement.scrollWidth - innerWidth,
+        dialogOverflow: dialog.scrollWidth - dialog.clientWidth,
+        fanDisplay: getComputedStyle(document.querySelector(".folder-fan")).display,
+        headline: top(sheet.querySelector(".folder-headline")),
+        computation: top(copies[0]),
+        reading: top(copies[1]),
+        caveat: top(sheet.querySelector(".folder-caveat")),
+        table: top(sheet.querySelector(".folder-metrics")),
+        bar: top(bar),
+        barLeft: bar.getBoundingClientRect().left,
+        copyLeft: copy.getBoundingClientRect().left,
+        rows: sheet.querySelectorAll(".folder-metrics tbody tr").length,
+      };
+    });
+    expect(layout.overflow, `${width} page overflow`).toBeLessThanOrEqual(1);
+    expect(layout.dialogOverflow, `${width} folder overflow`).toBeLessThanOrEqual(1);
+    expect(layout.rows, `${width} card-3 table rows`).toBe(4);
+    if (width <= 600) {
+      expect(layout.fanDisplay, `${width} fan hidden`).toBe("none");
+      expect(layout.headline, `${width} headline above fold`).toBeLessThan(height);
+      expect(layout.headline).toBeLessThan(layout.computation);
+      expect(layout.computation).toBeLessThan(layout.reading);
+      expect(layout.reading).toBeLessThan(layout.caveat);
+      expect(layout.caveat).toBeLessThan(layout.table);
+      expect(layout.table).toBeLessThan(layout.bar);
+    } else {
+      expect(layout.fanDisplay, `${width} fan shown`).not.toBe("none");
+      expect(layout.barLeft, `${width} bar stays in right column`).toBeGreaterThan(layout.copyLeft + 100);
     }
     await page.keyboard.press("Escape");
   }

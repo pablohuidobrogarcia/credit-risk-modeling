@@ -477,15 +477,15 @@ body.folder-open { overflow: hidden; }
   animation: folder-fan-in 480ms var(--ease) both;
 }
 .folder-fan-badge {
-  position: absolute; top: 0.28rem; z-index: 10; width: 1.15rem; height: 1.15rem;
+  position: absolute; top: 0.45rem; z-index: 10; width: 24px; height: 24px;
   display: grid; place-items: center; border: 1px solid var(--border-strong); border-radius: 999px;
-  background: var(--card-solid); color: var(--ink); font-size: 0.68rem; font-weight: 800; line-height: 1;
+  background: var(--card-solid); color: var(--ink); font-size: 0.75rem; font-weight: 800; line-height: 1;
 }
-.folder-fan-badge-0 { left: 0.15rem; }
+.folder-fan-badge-0 { left: 0.7rem; }
 .folder-fan-badge-1 { left: 50%; transform: translateX(-50%); }
-.folder-fan-badge-2 { right: 0.15rem; }
-.folder-fan[data-active="0"] .folder-fan-badge-1 { left: auto; right: 2.6rem; transform: none; }
-.folder-fan[data-active="2"] .folder-fan-badge-1 { left: 1.35rem; transform: none; }
+.folder-fan-badge-2 { right: 0.7rem; }
+.folder-fan[data-active="0"] .folder-fan-badge-1 { left: auto; right: 3.15rem; transform: none; }
+.folder-fan[data-active="2"] .folder-fan-badge-1 { left: 1.9rem; transform: none; }
 .folder-fan-0 { background: var(--lilac-light); border-color: var(--lilac); translate: -18px 0; rotate: -5deg; z-index: 1; animation-delay: 80ms; }
 .folder-fan-1 { background: var(--teal-light); border-color: var(--teal); translate: 0 0; rotate: 0deg; z-index: 2; animation-delay: 40ms; }
 .folder-fan-2 { background: var(--sky-light); border-color: var(--sky); translate: 18px 0; rotate: 5deg; z-index: 3; }

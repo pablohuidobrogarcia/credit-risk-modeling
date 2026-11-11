@@ -1335,7 +1335,7 @@ test("portfolio folder keeps one frame, height and bottom nav across tabs at 120
   await expectNoErrors(errors);
 });
 
-test("folder mobile fan, card-3 reading order and equal tab height at 1200 and 390", async ({ page }) => {
+test("folder mobile fan, sheet reading order and equal tab height at 1200 and 390", async ({ page }) => {
   const errors = await open(page, { dim: "total" });
   for (const [width, height] of [[1200, 700], [390, 844]]) {
     await page.setViewportSize({ width, height });
@@ -1390,6 +1390,29 @@ test("folder mobile fan, card-3 reading order and equal tab height at 1200 and 3
     } else {
       expect(layout.fanDisplay, `${width} fan shown`).not.toBe("none");
       expect(layout.barLeft, `${width} bar stays in right column`).toBeGreaterThan(layout.copyLeft + 100);
+    }
+    if (width <= 600) {
+      for (const index of [0, 1]) {
+        await page.locator(`#folder-tab-${index}`).click();
+        await page.waitForTimeout(250);
+        const order = await page.evaluate((sheetIndex) => {
+          const sheet = document.querySelector(`#folder-sheet-${sheetIndex}`);
+          const copies = [...sheet.querySelectorAll(".folder-copy")];
+          const top = (el) => el.getBoundingClientRect().top;
+          return {
+            headline: top(sheet.querySelector(".folder-headline")),
+            computation: top(copies[0]),
+            reading: top(copies[1]),
+            caveat: top(sheet.querySelector(".folder-caveat")),
+            visual: top(sheet.querySelector(".folder-visual")),
+          };
+        }, index);
+        expect(order.headline, `${width} card ${index + 1} headline above fold`).toBeLessThan(height);
+        expect(order.headline).toBeLessThan(order.computation);
+        expect(order.computation).toBeLessThan(order.reading);
+        expect(order.reading).toBeLessThan(order.caveat);
+        expect(order.caveat).toBeLessThan(order.visual);
+      }
     }
     await page.keyboard.press("Escape");
   }

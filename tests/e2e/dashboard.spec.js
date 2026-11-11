@@ -2731,7 +2731,7 @@ test("explorer panels keep the State tab box geometry at 1360 and 1100", async (
   const selectors = [".how-built-panel", ".map-panel", ".selection-part-a", ".list-panel"];
   const readBoxes = () => page.evaluate((sels) => sels.map((selector) => {
     const rect = document.querySelector(selector).getBoundingClientRect();
-    return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    return { x: rect.x, y: rect.y + window.scrollY, width: rect.width, height: rect.height };
   }), selectors);
   for (const width of [1360, 1100]) {
     await page.setViewportSize({ width, height: 900 });

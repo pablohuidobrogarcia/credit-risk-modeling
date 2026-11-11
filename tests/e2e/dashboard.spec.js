@@ -1770,6 +1770,52 @@ test("cutoff slider updates approval, bad rate and hash", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
+test("KS caption names both scores and the curve tooltip uses one decimal", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await expect(page.locator("#cutoff-chart .plot-container")).toBeVisible({ timeout: 20_000 });
+  await page.locator('[data-cutoff-tab="ks"]').click();
+  await expect(page.locator('[data-cutoff-tab="ks"]')).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#cutoff-extra-chart .plot-container")).toBeVisible();
+
+  const cut = DATA.interactive.cutoff_explorer;
+  const bins = cut.histograms.bins;
+  const goods = cut.histograms.goods;
+  const bads = cut.histograms.bads;
+  const centers = bins.slice(0, -1).map((value, index) => (value + bins[index + 1]) / 2);
+  let maxGap = 0;
+  let maxAt = 0;
+  let goodSum = 0;
+  let badSum = 0;
+  goods.forEach((value, index) => {
+    goodSum += value;
+    badSum += bads[index];
+    const gap = Math.abs(badSum / cut.histograms.n_bads - goodSum / cut.histograms.n_goods);
+    if (gap > maxGap) { maxGap = gap; maxAt = centers[index]; }
+  });
+  const caption = page.locator("#cutoff-caption");
+  await expect(caption).toContainText(`Published KS ${Number(DATA.pd.champion_ks).toFixed(4)}`);
+  await expect(caption).toContainText(`${DATA.pd.champion} champion`);
+  await expect(caption).toContainText("continuous out-of-time predicted probabilities");
+  await expect(caption).toContainText(`points scorecard in ${goods.length} equal-width score bins`);
+  await expect(caption).toContainText(`max gap ${maxGap.toFixed(4)} at score ${Math.round(maxAt)}`);
+  await expect(caption).toContainText(`The ${Math.round(cut.cutoff_score)} cutoff`);
+  await expect(caption).toContainText("not this curve's maximum");
+
+  const templates = await page.locator("#cutoff-extra-chart").evaluate((el) => el.data.map((trace) => trace.hovertemplate));
+  expect(templates[0]).toContain("score %{x:.0f} · %{y:.1f}%");
+  expect(templates[1]).toContain("score %{x:.0f} · %{y:.1f}%");
+  expect(templates[2]).toContain(`KS ${Math.round(maxGap * 10000) / 10000}`);
+
+  await page.locator("#cutoff-extra-chart").scrollIntoViewIfNeeded();
+  await page.locator("#cutoff-extra-chart").evaluate((el) => window.Plotly.Fx.hover(el, [{ curveNumber: 0, pointNumber: 10 }]));
+  await page.waitForTimeout(300);
+  const hoverText = await page.locator("#cutoff-extra-chart .hoverlayer text").allTextContents();
+  expect(hoverText).toContain("Good cumulative");
+  expect(hoverText.some((text) => /^score \d+ · \d+\.\d%$/.test(text))).toBe(true);
+  await expectNoErrors(errors);
+});
+
 test("Risk Lab lower panels stretch to the simulator height", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();

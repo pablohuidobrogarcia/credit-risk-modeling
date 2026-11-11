@@ -8,7 +8,6 @@
 visual case study of this project (built from `reports/results/summary.json`, served from
 `docs/` on GitHub Pages).
 
-[![Credit-risk case study: champion AUC, expected loss, VaR 99.9% and the censoring gap](docs/assets/og-card.png)](https://pablohuidobrogarcia.github.io/credit-risk-modeling/)
 
 **Interactive dashboard:** the live site is one linked application. The portfolio
 explorer has a State map, a grade staircase, a purpose hexagon map, a home-ownership

@@ -101,11 +101,6 @@ const MAP_NOTES = {
     el_pct_ead: "Hover a category for its name; the fill is expected loss as a share of EAD. Select a card to see the PD and LGD behind it.",
   },
 };
-const SURFACE_METRICS = {
-  "var_0.999": "VaR 99.9%",
-  "es_0.999": "ES 99.9%",
-  el: "Expected loss",
-};
 const CUTOFF_STATISTICS = [
   { id: "cut-approval", label: "Approval rate", color: "sky", meaning: "Share accepted." },
   { id: "cut-bad", label: "Bad rate (approved)", color: "lilac", meaning: "Defaults among approved." },
@@ -146,7 +141,7 @@ const state = {
   sel: null,
   search: "",
   risk: { rho: null, pd: null, lgd: null },
-  surfaceMetric: "var_0.999",
+  tailMetric: "share",
   cutoff: null,
   cutoffTab: "tradeoff",
   sim: {},
@@ -180,7 +175,7 @@ function readHash() {
   state.metric = read("metric", "default_rate");
   state.sel = read("sel", null);
   state.search = read("q", "");
-  state.surfaceMetric = SURFACE_METRICS[read("sm", "var_0.999")] ? read("sm", "var_0.999") : "var_0.999";
+  state.tailMetric = read("tm", "share") === "ratio" ? "ratio" : "share";
   const rho = Number(read("rho", ""));
   const pd = Number(read("pd", ""));
   const lgd = Number(read("lgd", ""));
@@ -202,7 +197,7 @@ function writeHash(push) {
   if (state.risk.rho != null) params.set("rho", String(state.risk.rho));
   if (state.risk.pd != null) params.set("pd", String(state.risk.pd));
   if (state.risk.lgd != null) params.set("lgd", String(state.risk.lgd));
-  if (state.surfaceMetric !== "var_0.999") params.set("sm", state.surfaceMetric);
+  if (state.tailMetric !== "share") params.set("tm", state.tailMetric);
   if (state.cutoff != null) params.set("cut", String(state.cutoff));
   if (state.term) params.set("term", state.term);
   const url = `#${params.toString()}`;
@@ -488,7 +483,7 @@ const STATIC_INFO = [
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
   ["#gauge-title", "gauge", "VaR gauge", "after"],
   ["#loss-title", "loss-histogram", "Loss distribution", "after"],
-  ["#surface-title", "surface", "VaR surface", "after"],
+  ["#surface-title", "surface", "Tail loss by grade", "after"],
   ["#cutoff-tabs", "cutoff-tabs", "Cutoff diagnostics", "after"],
 ];
 
@@ -1851,8 +1846,8 @@ function setupRiskControls() {
   bind("risk-rho", "rho", opts.rhos, "Asset correlation");
   bind("risk-pd", "pd", opts.pds, "PD stress");
   bind("risk-lgd", "lgd", opts.lgds, "LGD stress");
-  $$("#surface-metrics button").forEach((btn) => {
-    btn.onclick = () => { state.surfaceMetric = btn.dataset.metric; commit({ push: true }); };
+  $$("#tail-metric button").forEach((btn) => {
+    btn.onclick = () => { state.tailMetric = btn.dataset.tailMetric === "ratio" ? "ratio" : "share"; commit({ push: true }); };
   });
   $("#play-rho").onclick = toggleSweep;
 }
@@ -1869,7 +1864,7 @@ function updateRiskControls() {
   set("risk-rho", "rho", opts.rhos, (v) => fmtNum(v, 3));
   set("risk-pd", "pd", opts.pds, fmtX);
   set("risk-lgd", "lgd", opts.lgds, fmtX);
-  $$("#surface-metrics button").forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.metric === state.surfaceMetric ? "true" : "false"));
+  $$("#tail-metric button").forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.tailMetric === state.tailMetric ? "true" : "false"));
 }
 
 function renderRisk() {
@@ -1879,7 +1874,7 @@ function renderRisk() {
   updateRiskControls();
   const scenario = scenarioForState();
   const hist = scenario && sc.histograms[scenario.key];
-  $("#scenario-sub").textContent = "The same state drives the histogram and the surface.";
+  $("#scenario-sub").textContent = "The same state drives the histogram and the tail-by-grade chart.";
   $("#scenario-badge").textContent = scenarioNotation(scenario);
   const kpis = $("#risk-kpis");
   if (hist && hist.exact) {
@@ -1897,7 +1892,7 @@ function renderRisk() {
   }
   if (state.view === "risk") {
     drawLossChart(hist, scenario);
-    drawSurface();
+    drawTailByGrade(scenario);
   }
 }
 
@@ -1999,95 +1994,215 @@ function drawLossChart(hist, scenario) {
   if (!ok) showFallback(host, "assets/loss_distribution.png", "The interactive histogram could not be drawn; a static figure is shown.");
 }
 
-function surfaceMatrix(metric) {
-  const surf = D.interactive && D.interactive.risk_surface;
-  if (!surf) return null;
-  const rhos = surf.rhos; const pds = surf.pd_multipliers;
-  const total = D.simulation.total_ead || 1;
-  const z = pds.map((pd) => rhos.map((rho) => {
-    let found = 0;
-    for (let i = 0; i < surf.grid.rho.length; i += 1) {
-      if (Math.abs(surf.grid.rho[i] - rho) < 1e-9 && Math.abs(surf.grid.pd_mult[i] - pd) < 1e-9) {
-        found = (surf.grid[metric] && surf.grid[metric][i]) || 0;
-        break;
-      }
-    }
-    return (found / total) * 100;
-  }));
-  return { rhos, pds, z };
+function tailData() {
+  return D && D.interactive && D.interactive.tail_by_grade ? D.interactive.tail_by_grade : null;
 }
-function surfaceHeight(host) {
+function tailZLabel() {
+  return state.tailMetric === "ratio" ? "Tail share / EL share (x)" : "Share of tail loss (%)";
+}
+function tailValue(cell) {
+  return state.tailMetric === "ratio" ? cell.ratio : cell.tail_share * 100;
+}
+function tailUncertainty(cell) {
+  return state.tailMetric === "ratio" ? cell.ratio_se : cell.tail_share_se * 100;
+}
+function tailChartHeight(host) {
   if (window.innerWidth < 700) return 340;
   if (window.matchMedia("(min-width: 1001px)").matches) {
     return Math.max(540, Math.round(host.clientHeight || 540));
   }
   return 540;
 }
-function drawSurface() {
+function tailBox(cx, cy, z, width, depth) {
+  const x0 = cx - width / 2;
+  const x1 = cx + width / 2;
+  const y0 = cy - depth / 2;
+  const y1 = cy + depth / 2;
+  const zz = Math.max(0, z);
+  const vertices = [
+    [x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0],
+    [x0, y0, zz], [x1, y0, zz], [x1, y1, zz], [x0, y1, zz],
+  ];
+  const faces = [
+    [0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6],
+    [0, 4, 5], [0, 5, 1], [1, 5, 6], [1, 6, 2],
+    [2, 6, 7], [2, 7, 3], [3, 7, 4], [3, 4, 0],
+  ];
+  return { vertices, faces };
+}
+function drawTailByGrade(scenario) {
   const host = $("#surface-chart");
-  const surf = D.interactive && D.interactive.risk_surface;
-  if (!host || !surf) return;
+  const tail = tailData();
+  if (!host || !tail) return;
   const p = palette();
-  const sc = D.interactive && D.interactive.scenario_explorer;
-  const base = surf.base_case;
-  const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
-  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText}`;
+  const grades = tail.grades;
+  const rhos = tail.rhos;
+  const cells = tail.cells;
+  const cellMap = new Map(cells.map((cell) => [`${cell.grade}|${cell.rho}`, cell]));
+  const selectedRho = nearestValue(rhos, state.risk.rho);
+  const selectedIndex = nearestIndex(rhos, state.risk.rho);
+  const selectedCells = grades.map((grade) => cellMap.get(`${grade}|${selectedRho}`)).filter(Boolean);
+  const top = selectedCells.slice().sort((a, b) => b.ratio - a.ratio)[0];
+  const tailPaths = selectedCells.length ? selectedCells[0].n_tail_paths : 0;
+  const metricLabel = tailZLabel();
+
+  $("#surface-sub").textContent = top
+    ? `Worst 1% of ${fmtInt(tail.n_simulations)} paths (${fmtInt(tailPaths)} tail paths). Grade ${top.grade}: ${fmtPct(top.el_share, 1)} of expected loss but ${fmtPct(top.tail_share, 1)} of tail loss (${fmtNum(top.ratio, 2)}x).`
+    : "Tail-loss shares by grade and asset correlation.";
   const zLabel = $("#surface-z-label");
-  if (zLabel) zLabel.textContent = `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)`;
+  if (zLabel) zLabel.textContent = metricLabel;
   const note = $("#surface-note");
-  if (note && sc) {
-    note.textContent = `Histogram scenarios use ${fmtInt(sc.n_paths_per_scenario)} paths; surface grid points use ${fmtInt(surf.n_paths_per_point)}. The difference is Monte Carlo noise, not a different portfolio.`;
+  if (note) {
+    note.textContent = `Tail = portfolio loss at or above VaR 99% in ${fmtInt(tail.n_simulations)} simulated years; ${fmtInt(tailPaths)} tail paths define it per rho. Whiskers show +/-1 bootstrap SE for the highlighted rho slice (${fmtInt(tail.n_bootstrap)} resamples). Bucket-level simulation; LGD is constant per bucket; base PD and LGD stress.`;
   }
-  if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
-  const matrix = surfaceMatrix(state.surfaceMetric);
-  if (!matrix) return;
-  const { rhos, pds, z } = matrix;
-  const markerRho = nearestValue(rhos, state.risk.rho);
-  const markerPd = nearestValue(pds, state.risk.pd);
-  const markerZ = z[pds.indexOf(markerPd)]?.[rhos.indexOf(markerRho)] || 0;
-  const baseRho = nearestValue(rhos, surf.base_case?.rho ?? rhos[0]);
-  const basePd = nearestValue(pds, surf.base_case?.pd_mult ?? pds[0]);
-  const baseZ = z[pds.indexOf(basePd)]?.[rhos.indexOf(baseRho)] || 0;
-  const height = surfaceHeight(host);
+  host.dataset.selectedRho = String(selectedRho);
+  host.dataset.metric = state.tailMetric;
+
+  if (!PLOTLY) {
+    showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static tail-by-grade heatmap is shown.");
+    return;
+  }
+
+  const height = tailChartHeight(host);
+  const zmax = Math.max(1, ...cells.map((cell) => tailValue(cell)));
+  const gradeX = (grade) => grades.indexOf(grade);
+  const rhoY = (rho) => rhos.indexOf(rho);
   let ok = false;
+
   if (!hasWebGL() || window.innerWidth < 700) {
+    const z = rhos.map((rho) => grades.map((grade) => tailValue(cellMap.get(`${grade}|${rho}`))));
+    const customdata = rhos.map((rho) => grades.map((grade) => {
+      const cell = cellMap.get(`${grade}|${rho}`);
+      return [grade, rho, cell.tail_share * 100, cell.el_share * 100, cell.ratio, cell.n_tail_paths, cell.tail_share_se * 100];
+    }));
     ok = plot(host, [
-      { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
-      { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
-      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { symbol: "circle", size: 24, color: p.surface, line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
+      {
+        z, x: grades.map((_, i) => i), y: rhos.map((_, i) => i), type: "heatmap",
+        colorscale: p.riskScale, customdata,
+        hovertemplate: "Grade %{customdata[0]}<br>rho=%{customdata[1]:.2f}<br>Tail share=%{customdata[2]:.2f}%<br>EL share=%{customdata[3]:.2f}%<br>Tail / EL=%{customdata[4]:.2f}x<br>Tail paths=%{customdata[5]:,}<br>+/-1 SE=%{customdata[6]:.2f} pp<extra></extra>",
+      },
+      {
+        x: [gradeX(grades[0]) - 0.5, gradeX(grades[grades.length - 1]) + 0.5],
+        y: [selectedIndex, selectedIndex], mode: "lines", type: "scatter",
+        line: { color: p.ink, width: 2, dash: "dash" }, hoverinfo: "skip", showlegend: false,
+      },
     ], {
       height,
-      title: { text: "2D heatmap fallback (no WebGL)", font: { size: 12 } },
-      xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, margin: { l: 58, r: 18, t: 40, b: 45 },
+      xaxis: { title: { text: "Loan grade" }, tickvals: grades.map((_, i) => i), ticktext: grades, range: [-0.5, grades.length - 0.5], zeroline: false },
+      yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhos.map((_, i) => i), ticktext: rhos.map((v) => fmtNum(v, 2)), range: [-0.5, rhos.length - 0.5], zeroline: false },
+      margin: { l: 58, r: 18, t: 24, b: 52 },
+      colorbar: { title: { text: metricLabel }, tickformat: state.tailMetric === "ratio" ? ".2f" : ".1f" },
     });
     host.dataset.mode = "heatmap";
   } else {
-    ok = plot(host, [
-      { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, colorbar: { tickformat: ".1f" }, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
-      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
-      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { size: 14, color: p.surface, symbol: "circle", line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
-    ], {
+    const traces = [];
+    const hoverTemplate = "Grade %{customdata[0]}<br>rho=%{customdata[1]:.2f}<br>Tail share=%{customdata[2]:.2f}%<br>EL share=%{customdata[3]:.2f}%<br>Tail / EL=%{customdata[4]:.2f}x<br>Tail paths=%{customdata[5]:,}<br>+/-1 SE=%{customdata[6]:.2f} pp<extra></extra>";
+    grades.forEach((grade, gi) => {
+      const bx = []; const by = []; const bz = []; const bi = []; const bj = []; const bk = []; const bcd = [];
+      let offset = 0;
+      rhos.forEach((rho) => {
+        const cell = cellMap.get(`${grade}|${rho}`);
+        const box = tailBox(gi, rhoY(rho), tailValue(cell), 0.72, 0.56);
+        const cd = [grade, rho, cell.tail_share * 100, cell.el_share * 100, cell.ratio, cell.n_tail_paths, cell.tail_share_se * 100];
+        box.vertices.forEach((v) => { bx.push(v[0]); by.push(v[1]); bz.push(v[2]); bcd.push(cd); });
+        box.faces.forEach((f) => { bi.push(f[0] + offset); bj.push(f[1] + offset); bk.push(f[2] + offset); });
+        offset += box.vertices.length;
+      });
+      traces.push({
+        type: "mesh3d", x: bx, y: by, z: bz, i: bi, j: bj, k: bk,
+        customdata: bcd, hovertemplate: hoverTemplate,
+        color: scaleColor(gi / Math.max(1, grades.length - 1)),
+        opacity: 0.96, flatshading: true, showscale: false, name: `Grade ${grade}`,
+        lighting: { ambient: 0.72, diffuse: 0.72, specular: 0.18, roughness: 0.72 },
+      });
+    });
+
+    if (state.tailMetric === "ratio") {
+      traces.push({
+        type: "surface", x: [0, grades.length - 1], y: [0, rhos.length - 1],
+        z: [[1, 1], [1, 1]], opacity: 0.16, showscale: false,
+        colorscale: [[0, p.ink], [1, p.ink]], hoverinfo: "skip", showlegend: false,
+      });
+      traces.push({
+        type: "scatter3d",
+        x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
+        y: [-0.45, -0.45, rhos.length - 0.55, rhos.length - 0.55, -0.45],
+        z: [1, 1, 1, 1, 1], mode: "lines",
+        line: { color: p.ink, width: 2 }, hoverinfo: "skip", showlegend: false,
+      });
+    }
+
+    const markerX = []; const markerY = []; const markerZ = []; const markerData = []; const markerColor = [];
+    rhos.forEach((rho) => {
+      grades.forEach((grade) => {
+        const cell = cellMap.get(`${grade}|${rho}`);
+        markerX.push(gradeX(grade)); markerY.push(rhoY(rho)); markerZ.push(tailValue(cell));
+        markerColor.push(scaleColor(gradeX(grade) / Math.max(1, grades.length - 1)));
+        markerData.push([grade, rho, cell.tail_share * 100, cell.el_share * 100, cell.ratio, cell.n_tail_paths, cell.tail_share_se * 100]);
+      });
+    });
+    traces.push({
+      type: "scatter3d", x: markerX, y: markerY, z: markerZ, mode: "markers",
+      marker: { size: 4, color: markerColor, opacity: 0.72 },
+      customdata: markerData,
+      hovertemplate: "Grade %{customdata[0]}<br>rho=%{customdata[1]:.2f}<br>Tail share=%{customdata[2]:.2f}%<br>EL share=%{customdata[3]:.2f}%<br>Tail / EL=%{customdata[4]:.2f}x<br>Tail paths=%{customdata[5]:,}<br>+/-1 SE=%{customdata[6]:.2f} pp<extra></extra>",
+      showlegend: false,
+    });
+
+    grades.forEach((grade, gi) => {
+      const cell = cellMap.get(`${grade}|${selectedRho}`);
+      const value = tailValue(cell);
+      const unc = tailUncertainty(cell);
+      traces.push({
+        type: "scatter3d", x: [gi, gi], y: [selectedIndex, selectedIndex],
+        z: [Math.max(0, value - unc), value + unc], mode: "lines",
+        line: { color: p.ink, width: 2 }, hoverinfo: "skip", showlegend: false,
+      });
+    });
+
+    traces.push({
+      type: "mesh3d",
+      x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55],
+      y: [selectedIndex, selectedIndex, selectedIndex, selectedIndex],
+      z: [0, 0, zmax, zmax], i: [0, 0], j: [1, 2], k: [2, 3],
+      color: p.accent, opacity: 0.09, hoverinfo: "skip", showlegend: false,
+    });
+    traces.push({
+      type: "scatter3d",
+      x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
+      y: [selectedIndex, selectedIndex, selectedIndex, selectedIndex, selectedIndex],
+      z: [0, 0, zmax, zmax, 0], mode: "lines",
+      line: { color: p.accent, width: 2 }, hoverinfo: "skip", showlegend: false,
+    });
+
+    ok = plot(host, traces, {
       height,
       scene: {
-        xaxis: { title: { text: "ρ" } },
-        yaxis: { title: { text: "PD stress" } },
-        zaxis: { title: { text: `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)` }, tickformat: ".1f" },
-        camera: { eye: { x: 1.45, y: 1.45, z: 1.35 } },
-        aspectratio: { x: 1.2, y: 1, z: 0.78 },
+        domain: { x: [0.08, 0.99], y: [0.0, 1.0] },
+        xaxis: { title: { text: "Loan grade" }, tickvals: grades.map((_, i) => i), ticktext: grades, range: [-0.6, grades.length - 0.4], color: p.muted },
+        yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhos.map((_, i) => i), ticktext: rhos.map((v) => fmtNum(v, 2)), range: [-0.6, rhos.length - 0.4], color: p.muted },
+        zaxis: { title: { text: metricLabel }, tickformat: state.tailMetric === "ratio" ? ".2f" : ".0f", color: p.muted },
+        camera: { eye: { x: 1.8, y: 1.75, z: 1.28 } },
+        aspectratio: { x: 1.2, y: 1, z: 0.62 },
       },
-      margin: { l: 48, r: 8, t: 8, b: 8 },
+      margin: { l: 12, r: 8, t: 8, b: 8 },
+      showlegend: false,
     });
     host.dataset.mode = "surface";
   }
-  if (!ok) { showFallback(host, "assets/risk_surface_static.png", "The surface could not be drawn; a static figure is shown."); return; }
-  if (!host.__surfaceResizeObserver && window.ResizeObserver) {
-    host.__surfaceResizeObserver = new ResizeObserver(() => {
+
+  if (!ok) {
+    showFallback(host, "assets/risk_surface_static.png", "The chart could not be drawn; a static tail-by-grade heatmap is shown.");
+    return;
+  }
+  if (!host.__tailResizeObserver && window.ResizeObserver) {
+    host.__tailResizeObserver = new ResizeObserver(() => {
       if (!PLOTLY || !host.__plotted) return;
-      const target = surfaceHeight(host);
+      const target = tailChartHeight(host);
       const current = Math.round(host._fullLayout?.height || 0);
       if (Math.abs(target - current) > 1) PLOTLY.relayout(host, { height: target });
     });
-    host.__surfaceResizeObserver.observe(host);
+    host.__tailResizeObserver.observe(host);
   }
 }
 function nearestValue(values, target) {

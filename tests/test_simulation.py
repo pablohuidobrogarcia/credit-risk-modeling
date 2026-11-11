@@ -270,3 +270,52 @@ def test_simulate_losses_records_the_sampling_scheme():
     assert out["stats"]["stratified"] is True
 
 
+def _multi_grade_portfolio():
+    return sim.BucketedPortfolio(
+        ead=np.array([300_000.0, 200_000.0, 120_000.0, 60_000.0]),
+        lgd=np.array([0.55, 0.60, 0.65, 0.70]),
+        pd=np.array([0.03, 0.08, 0.15, 0.25]),
+        n=np.array([3000.0, 2000.0, 1000.0, 500.0]),
+        labels=["A|low", "B|mid", "C|high", "D|top"],
+    )
+
+
+def test_tail_by_grade_shares_sum_to_one_and_are_non_negative():
+    out = sim.tail_by_grade(
+        _multi_grade_portfolio(),
+        rhos=(0.02, 0.12),
+        n_simulations=20_000,
+        seed=11,
+        n_bootstrap=40,
+    )
+    assert out["grades"] == ["A", "B", "C", "D"]
+    for rho in out["rhos"]:
+        cells = [cell for cell in out["cells"] if cell["rho"] == rho]
+        assert len(cells) == 4
+        assert abs(sum(cell["tail_share"] for cell in cells) - 1.0) < 1e-6
+        assert abs(sum(cell["el_share"] for cell in cells) - 1.0) < 1e-6
+        assert all(cell["tail_share"] >= 0 and cell["el_share"] >= 0 for cell in cells)
+        assert all(cell["n_tail_paths"] == 200 for cell in cells)
+
+
+def test_tail_by_grade_keeps_the_existing_loss_stream_and_es_99():
+    port = _multi_grade_portfolio()
+    out = sim.tail_by_grade(port, rhos=(0.12,), n_simulations=20_000, seed=12, n_bootstrap=20)
+    existing = sim.simulate_losses(
+        port, rho=0.12, n_simulations=20_000, seed=12, antithetic=False, stratified=True
+    )["stats"]
+    assert abs(out["by_rho"][0]["es_99"] - existing["es_0.99"]) < 0.01
+    assert abs(out["by_rho"][0]["var_99"] - existing["var_0.99"]) < 0.01
+
+
+def test_tail_by_grade_at_low_rho_tracks_expected_loss_shares():
+    out = sim.tail_by_grade(
+        _multi_grade_portfolio(),
+        rhos=(0.0,),
+        n_simulations=100_000,
+        seed=13,
+        n_bootstrap=20,
+    )
+    cells = out["cells"]
+    observed = max(abs(cell["tail_share"] - cell["el_share"]) for cell in cells)
+    assert observed < 0.02, observed

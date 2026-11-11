@@ -41,6 +41,8 @@ DOCS_ASSETS = DOCS / "assets"
 # Indirection so tests can point the generator at small fixtures instead of the
 # real reports/results directory. Not meant to be changed in production.
 RESULTS = _RESULTS_DIR
+TAIL_RHOS = (0.02, 0.05, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.22, 0.25, 0.30, 0.35)
+SCENARIO_PD_MULTIPLIERS = (1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.0)
 
 
 def _load_json(name: str) -> Dict[str, Any]:
@@ -528,34 +530,33 @@ def _load_csv_safe(name: str) -> List[Dict[str, str]]:
         return []
 
 
-def figure_static_risk_surface(summary: Dict[str, Any]) -> Path:
+def figure_static_tail_by_grade(summary: Dict[str, Any]) -> Path:
     vs.apply_style()
     try:
-        surf = _load_json("showcase_risk_surface.json")
+        tail = _load_json("showcase_tail_by_grade.json")
     except Exception:
         return vs.save_showcase(plt.figure(), "risk_surface_static.png")
-    rhos = surf["rhos"]
-    pds = surf["pd_multipliers"]
-    # Find values closest to base case
+    grades = tail["grades"]
+    rhos = tail["rhos"]
+    cells = {(cell["grade"], float(cell["rho"])): cell for cell in tail["cells"]}
+    share = np.array(
+        [[cells[(grade, float(rho))]["tail_share"] * 100 for rho in rhos] for grade in grades]
+    )
     fig, ax = plt.subplots(figsize=vs.FIGSIZE_WIDE)
-    # Plot heatmap of VaR 99.9%
-    var_mat = np.zeros((len(pds), len(rhos)))
-    grid = surf["grid"]
-    # Build map
-    for k in range(len(grid["rho"])):
-        ri = rhos.index(grid["rho"][k]) if grid["rho"][k] in rhos else 0
-        pj = pds.index(grid["pd_mult"][k]) if grid["pd_mult"][k] in pds else 0
-        var_mat[pj, ri] = grid["var_0.999"][k] / summary["simulation"]["total_ead"] * 100
-    im = ax.imshow(var_mat, aspect="auto", cmap=vs.risk_cmap())
+    im = ax.imshow(share, aspect="auto", cmap=vs.risk_cmap())
     ax.set_xticks(range(len(rhos)))
-    ax.set_xticklabels([f"{r:.2f}" for r in rhos], rotation=45)
-    ax.set_yticks(range(len(pds)))
-    ax.set_yticklabels([f"{p:.1f}x" for p in pds])
-    ax.set_xlabel("Asset correlation ρ")
-    ax.set_ylabel("PD stress multiplier")
-    ax.set_title("VaR 99.9% of EAD — simulation grid")
-    plt.colorbar(im, ax=ax, label="VaR 99.9% of EAD")
-    vs.annotate_source(ax, f"Source: showcase_risk_surface.json ({surf['n_paths_per_point']:,} paths/point)")
+    ax.set_xticklabels([f"{rho:.2f}" for rho in rhos], rotation=45)
+    ax.set_yticks(range(len(grades)))
+    ax.set_yticklabels(grades)
+    ax.set_xlabel("Asset correlation rho")
+    ax.set_ylabel("Loan grade")
+    ax.set_title("Share of the 99% tail loss by grade and correlation")
+    plt.colorbar(im, ax=ax, label="Share of tail loss (%)")
+    vs.annotate_source(
+        ax,
+        f"Source: showcase_tail_by_grade.json ({tail['n_simulations']:,} paths/rho; "
+        f"{tail['n_bootstrap']} bootstrap draws)",
+    )
     return vs.save_showcase(fig, "risk_surface_static.png")
 
 
@@ -963,9 +964,9 @@ def build_interactive_data(summary: Dict[str, Any]) -> Dict[str, Path]:
     
     import pandas as _pd
 
-    # The same 45-bucket portfolio that produced the headline simulation. No
-    # synthetic buckets: the surface and the scenario grid must move with the
-    # reported capital numbers.
+    # The same bucketed portfolio that produced the headline simulation. No
+    # synthetic buckets: the tail allocation and the scenario grid must move
+    # with the reported capital numbers.
     try:
         buckets = _pd.read_csv(results / "sim_portfolio_buckets.csv")
         port = sim.BucketedPortfolio(
@@ -975,23 +976,31 @@ def build_interactive_data(summary: Dict[str, Any]) -> Dict[str, Path]:
             n=buckets["n_loans"].to_numpy(dtype=float),
             labels=[str(x) for x in buckets["bucket"]],
         )
-        surf = sim.risk_surface_grid(port, n_paths=50000, seed=42)
-        p = results / "showcase_risk_surface.json"
+        tail = sim.tail_by_grade(
+            port,
+            rhos=TAIL_RHOS,
+            n_simulations=100_000,
+            seed=42,
+            level=0.99,
+            n_bootstrap=500,
+            antithetic=False,
+            stratified=True,
+        )
+        p = results / "showcase_tail_by_grade.json"
         with open(p, "w", encoding="utf-8") as f:
-            json.dump(surf, f)
-        out["risk_surface"] = p
+            json.dump(tail, f)
+        out["tail_by_grade"] = p
     except Exception as e:
-        print(f"Failed to build risk surface: {e}")
+        print(f"Failed to build tail-by-grade table: {e}")
 
-    # Scenario explorer: the slider grid must be the same grid as the surface,
-    # otherwise clicking a surface point would move the sliders to a state with
-    # no matching histogram. LGD stress is the cheap third dimension.
+    # Scenario explorer: the slider grid is the same grid used by the old
+    # surface and the tail view, so the histogram and the new chart share state.
+    # LGD stress is the cheap third dimension.
     try:
-        surf_data = json.load(open(results / "showcase_risk_surface.json"))
         scen = sim.scenario_histograms_grid(
             port,
-            rhos=surf_data["rhos"],
-            pd_multipliers=surf_data["pd_multipliers"],
+            rhos=TAIL_RHOS,
+            pd_multipliers=SCENARIO_PD_MULTIPLIERS,
             lgd_multipliers=(1.0, 1.1),
             n_paths=30000,
             n_bins=30,
@@ -1154,7 +1163,7 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
     
     # Try to load interactive data
     interactive = {}
-    for name in ["showcase_risk_surface.json", "showcase_scenario_explorer.json",
+    for name in ["showcase_tail_by_grade.json", "showcase_scenario_explorer.json",
                  "showcase_applicant_simulator.json", "showcase_cutoff_explorer.json",
                  "showcase_validation_timeline.json"]:
         try:
@@ -1661,7 +1670,7 @@ def run_all() -> Dict[str, Any]:
     out["og_card"] = str(og_card(summary))
     # Static fallbacks for new widgets
     try:
-        out["risk_surface_static"] = str(figure_static_risk_surface(summary))
+        out["tail_by_grade_static"] = str(figure_static_tail_by_grade(summary))
     except Exception:
         pass
     try:

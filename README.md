@@ -13,7 +13,7 @@ visual case study of this project (built from `reports/results/summary.json`, se
 explorer has a State map, a grade staircase, a purpose hexagon map, a home-ownership
 view, a monthly vintage timeline and ranked segment bars; the Total tab opens a folder
 overlay with the three headline sheets. The Monte Carlo Risk Lab has a loss histogram,
-a linked 3D VaR surface, an applicant simulator and a cutoff explorer. Every view shares
+a linked 3D tail-by-grade chart, an applicant simulator and a cutoff explorer. Every view shares
 one state store, the URL hash is shareable, and the back button restores the previous
 selection.
 
@@ -79,7 +79,7 @@ is reported separately as the censoring-exposed secondary analysis.
 | **Segmentation** | **k = 2** (silhouette 0.1840, bootstrap ARI 0.9566), **0** degenerate segments (DR spread 0.54 pp) |
 | **Monte Carlo** (100,000 paths, ρ = 0.12) | EL **10.3 %**, UL **5.9 %**, VaR 99 % **28.8 %**, VaR 99.9 % **37.7 %**, ES 99 % **32.7 %**, ES 99.9 % **41.0 %** of EAD |
 | **Monte Carlo — variance reduction** | SE reduction at 100,000 paths: stratified **0.5 %**, antithetic **0.2 %** (negative result, kept as reported) |
-| **Test suite** | **153** unit tests on synthetic data, `ruff check .` clean, run on Python 3.10 and 3.11 in CI |
+| **Test suite** | **157** unit tests on synthetic data, `ruff check .` clean, run on Python 3.10 and 3.11 in CI |
 
 **Primary vs secondary (censored) validation window:**
 

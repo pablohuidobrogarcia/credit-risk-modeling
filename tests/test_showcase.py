@@ -463,3 +463,14 @@ def test_shipped_rho_histograms_cover_the_grid():
         assert sum(h["counts"]) == rh["n_simulations"], label
     assert rh["base_label"] in rh["labels"]
 
+
+def test_shipped_tail_by_grade_shares_sum_to_one():
+    data = json.loads((DOCS / "data.json").read_text(encoding="utf-8"))
+    assert "risk_surface" not in data["interactive"]
+    tail = data["interactive"]["tail_by_grade"]
+    for rho in tail["rhos"]:
+        cells = [cell for cell in tail["cells"] if cell["rho"] == rho]
+        assert cells
+        assert abs(sum(cell["tail_share"] for cell in cells) - 1.0) < 1e-6
+        assert abs(sum(cell["el_share"] for cell in cells) - 1.0) < 1e-6
+        assert all(cell["tail_share"] >= 0 and cell["el_share"] >= 0 for cell in cells)

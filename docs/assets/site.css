@@ -913,7 +913,7 @@ body.folder-open { overflow: hidden; }
 .gauge .hub { fill: var(--fg); }
 .gauge text { fill: var(--fg); font-family: var(--serif); font-weight: 650; }
 .gauge .scale { fill: var(--fg-soft); font-family: var(--sans); font-size: 10px; font-weight: 650; }
-.risk-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; align-items: stretch; }
+.risk-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 0.8rem; margin-top: 0.8rem; min-width: 0; max-width: 100%; align-items: stretch; }
 .risk-grid > * { min-width: 0; }
 .risk-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
 .surface-host { flex: 1 1 auto; }

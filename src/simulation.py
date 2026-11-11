@@ -157,13 +157,25 @@ def _systematic_draws(
     return rng.standard_normal(n_simulations)
 
 
+def _bucket_loss_paths(
+    portfolio: BucketedPortfolio, rng: np.random.Generator, z: np.ndarray, rho: float
+) -> np.ndarray:
+    """Loss per path and bucket, before summing the portfolio.
+
+    This is additive: the existing :func:`_loss_paths` path is unchanged, so
+    reusing the same seed and systematic draws reproduces the existing loss
+    stream exactly while exposing the bucket-level allocation.
+    """
+    p = conditional_pd(portfolio.pd, z[:, None], rho)
+    defaults = rng.binomial(portfolio.n.astype(int)[None, :], np.clip(p, 0.0, 1.0))
+    return (defaults / np.maximum(portfolio.n, 1e-9)) * portfolio.ead * portfolio.lgd
+
+
 def _loss_paths(
     portfolio: BucketedPortfolio, rng: np.random.Generator, z: np.ndarray, rho: float
 ) -> np.ndarray:
     """One loss number per path, vectorised over (paths x buckets)."""
-    p = conditional_pd(portfolio.pd, z[:, None], rho)
-    defaults = rng.binomial(portfolio.n.astype(int)[None, :], np.clip(p, 0.0, 1.0))
-    return ((defaults / np.maximum(portfolio.n, 1e-9)) * portfolio.ead * portfolio.lgd).sum(axis=1)
+    return _bucket_loss_paths(portfolio, rng, z, rho).sum(axis=1)
 
 
 def simulate_losses(
@@ -587,67 +599,104 @@ def vasicek_var_closed_form(pd_value: float, rho: float, level: float) -> float:
 # ---------------------------------------------------------------------------
 # Interactive showcase grids (precomputed in Python, rendered in browser)
 # ---------------------------------------------------------------------------
-def risk_surface_grid(
+def tail_by_grade(
     portfolio: BucketedPortfolio,
     rhos: Sequence[float] = (0.02, 0.05, 0.08, 0.10, 0.12, 0.15, 0.18, 0.20, 0.22, 0.25, 0.30, 0.35),
-    pd_multipliers: Sequence[float] = (1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 2.0),
-    n_paths: int = 100_000,
+    n_simulations: int = 100_000,
     seed: int = 42,
-    antithetic: bool = True,
-    stratified: bool = False,
+    level: float = 0.99,
+    n_bootstrap: int = 500,
+    antithetic: bool = False,
+    stratified: bool = True,
 ) -> Dict[str, object]:
-    """Precompute VaR 99.9% (and related metrics) over a rho x PD-stress grid.
+    """Allocate the simulated 99% tail loss across loan grades.
 
-    Computed in Python with the same bucketed Vasicek simulation; the browser
-    only renders the surface. Uses a fixed seed for determinism.
+    All results are additive: each rho run uses the same seed, systematic
+    draws and bucket structure as :func:`simulate_losses`, but retains the
+    per-bucket losses before summing. Existing simulation streams and outputs
+    are not modified.
     """
-    rhos = list(rhos)
-    pds = list(pd_multipliers)
-    rng_base = np.random.default_rng(seed)
-    grid: Dict[str, List[float]] = {
-        "rho": [],
-        "pd_mult": [],
-        "el": [],
-        "ul": [],
-        "var_0.99": [],
-        "var_0.999": [],
-        "es_0.99": [],
-        "es_0.999": [],
+    grades = sorted({str(label).split("|")[0] for label in portfolio.labels})
+    grade_index = {
+        grade: [i for i, label in enumerate(portfolio.labels) if str(label).split("|")[0] == grade]
+        for grade in grades
     }
-    for _i, rho in enumerate(rhos):
-        for _j, pm in enumerate(pds):
-            stressed = BucketedPortfolio(
-                ead=portfolio.ead,
-                lgd=portfolio.lgd,
-                pd=np.clip(portfolio.pd * float(pm), 1e-9, 1 - 1e-9),
-                n=portfolio.n,
-                labels=portfolio.labels,
+    cells: List[Dict[str, object]] = []
+    by_rho: List[Dict[str, object]] = []
+    for rho in rhos:
+        rng = np.random.default_rng(seed)
+        z = _systematic_draws(rng, int(n_simulations), antithetic=antithetic, stratified=stratified)
+        bucket_losses = _bucket_loss_paths(portfolio, rng, z, float(rho))
+        grade_losses = np.column_stack(
+            [bucket_losses[:, grade_index[grade]].sum(axis=1) for grade in grades]
+        )
+        total_losses = grade_losses.sum(axis=1)
+        var_99 = float(np.quantile(total_losses, level))
+        tail_mask = total_losses >= var_99
+        tail_losses = grade_losses[tail_mask]
+        tail_means = tail_losses.mean(axis=0)
+        el_means = grade_losses.mean(axis=0)
+        tail_total = float(tail_means.sum())
+        el_total = float(el_means.sum())
+        tail_shares = tail_means / tail_total
+        el_shares = el_means / el_total
+        ratios = tail_shares / np.where(el_shares > 0, el_shares, np.nan)
+
+        n_tail = int(tail_mask.sum())
+        boot_rng = np.random.default_rng(seed + 1_000_000 + int(round(float(rho) * 10_000)))
+        boot = np.empty((int(n_bootstrap), len(grades)), dtype=float)
+        for b in range(int(n_bootstrap)):
+            idx = boot_rng.integers(0, n_tail, n_tail)
+            means = tail_losses[idx].mean(axis=0)
+            boot[b] = means / means.sum()
+        boot_ratio = boot / np.where(el_shares > 0, el_shares, np.nan)
+        share_se = boot.std(axis=0, ddof=1)
+        share_lo = np.percentile(boot, 2.5, axis=0)
+        share_hi = np.percentile(boot, 97.5, axis=0)
+        ratio_se = boot_ratio.std(axis=0, ddof=1)
+        ratio_lo = np.percentile(boot_ratio, 2.5, axis=0)
+        ratio_hi = np.percentile(boot_ratio, 97.5, axis=0)
+
+        for j, grade in enumerate(grades):
+            cells.append(
+                {
+                    "grade": grade,
+                    "rho": float(rho),
+                    "tail_share": round(float(tail_shares[j]), 8),
+                    "el_share": round(float(el_shares[j]), 8),
+                    "ratio": round(float(ratios[j]), 6),
+                    "tail_share_se": round(float(share_se[j]), 8),
+                    "tail_share_lo": round(float(share_lo[j]), 8),
+                    "tail_share_hi": round(float(share_hi[j]), 8),
+                    "ratio_se": round(float(ratio_se[j]), 6),
+                    "ratio_lo": round(float(ratio_lo[j]), 6),
+                    "ratio_hi": round(float(ratio_hi[j]), 6),
+                    "tail_loss": round(float(tail_means[j]), 2),
+                    "el_loss": round(float(el_means[j]), 2),
+                    "n_tail_paths": n_tail,
+                }
             )
-            # Use different seeds per grid point but derived from base seed
-            out = simulate_losses(
-                stressed,
-                rho=float(rho),
-                n_simulations=int(n_paths),
-                seed=int(rng_base.integers(0, 10_000_000)),
-                antithetic=antithetic,
-                stratified=stratified,
-            )
-            stats = out["stats"]
-            grid["rho"].append(float(rho))
-            grid["pd_mult"].append(float(pm))
-            grid["el"].append(float(stats["expected_loss"]))
-            grid["ul"].append(float(stats["unexpected_loss"]))
-            grid["var_0.99"].append(float(stats["var_0.99"]))
-            grid["var_0.999"].append(float(stats["var_0.999"]))
-            grid["es_0.99"].append(float(stats["es_0.99"]))
-            grid["es_0.999"].append(float(stats["es_0.999"]))
+        by_rho.append(
+            {
+                "rho": float(rho),
+                "var_99": round(var_99, 2),
+                "es_99": round(tail_total, 2),
+                "expected_loss": round(el_total, 2),
+                "n_tail_paths": n_tail,
+            }
+        )
     return {
-        "rhos": rhos,
-        "pd_multipliers": pds,
-        "n_paths_per_point": int(n_paths),
+        "tail_level": float(level),
+        "n_simulations": int(n_simulations),
+        "n_bootstrap": int(n_bootstrap),
         "seed": int(seed),
-        "grid": grid,
-        "base_case": {"rho": 0.12, "pd_mult": 1.0},
+        "pd_stress": 1.0,
+        "lgd_stress": 1.0,
+        "base_rho": 0.12,
+        "grades": grades,
+        "rhos": [float(r) for r in rhos],
+        "cells": cells,
+        "by_rho": by_rho,
     }
 
 

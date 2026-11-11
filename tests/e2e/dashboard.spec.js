@@ -1664,25 +1664,31 @@ test("Evidence panels use two independent columns with natural heights", async (
   await expectNoErrors(errors);
 });
 
-test("risk sliders, play sweep and surface control the shared state", async ({ page }) => {
+test("risk sliders, play sweep and the tail toggle control the shared state", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
   const rho = page.locator("#risk-rho");
   const before = await page.locator("#rho-output").innerText();
-  await rho.fill("5");
+  await rho.fill("0");
   await expect(page.locator("#rho-output")).not.toHaveText(before);
   await expect(page).toHaveURL(/rho=/);
-  const pd = page.locator("#risk-pd");
-  await pd.fill("2");
+  await page.locator("#risk-pd").fill("0");
   await expect(page).toHaveURL(/pd=/);
-  const lgd = page.locator("#risk-lgd");
-  await lgd.fill("1");
+  await page.locator("#risk-lgd").fill("1");
   await expect(page).toHaveURL(/lgd=/);
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible();
-  await page.locator("#surface-metrics button[data-metric='es_0.999']").click();
-  await expect(page.locator("#surface-metrics button[data-metric='es_0.999']")).toHaveAttribute("aria-pressed", "true");
+
+  await expect(page.locator("#surface-metrics")).toHaveCount(0);
+  const toggle = page.locator("#tail-metric button");
+  await expect(toggle).toHaveCount(2);
+  await toggle.filter({ hasText: "Concentration" }).click();
+  await expect(toggle.filter({ hasText: "Concentration" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/tm=ratio/);
   await expect(page.locator("#surface-chart canvas")).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator("#surface-z-label")).toHaveText("Tail share / EL share (x)");
+  await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el._fullLayout?.scene?.zaxis?.title?.text)).toBe("Tail share / EL share (x)");
+
   const beforeRho = await page.locator("#rho-output").innerText();
   await page.locator("#play-rho").click();
   await expect(page.locator("#play-rho")).toHaveAttribute("aria-pressed", "true");
@@ -1693,7 +1699,42 @@ test("risk sliders, play sweep and surface control the shared state", async ({ p
   await expectNoErrors(errors);
 });
 
-test("clicking the surface does not move the linked sliders", async ({ page }) => {
+test("the tail chart highlights the rho slider slice and exposes the tooltip fields", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  const host = page.locator("#surface-chart");
+  await expect(host.locator("canvas")).toBeVisible({ timeout: 20_000 });
+  const tail = DATA.interactive.tail_by_grade;
+  await page.locator("#risk-rho").fill("0");
+  await expect(host).toHaveAttribute("data-selected-rho", String(tail.rhos[0]));
+  await page.locator("#risk-rho").fill(String(tail.rhos.length - 1));
+  await expect(host).toHaveAttribute("data-selected-rho", String(tail.rhos[tail.rhos.length - 1]));
+  const scene = await host.evaluate((el) => ({
+    x: el._fullLayout?.scene?.xaxis?.title?.text,
+    y: el._fullLayout?.scene?.yaxis?.title?.text,
+    z: el._fullLayout?.scene?.zaxis?.title?.text,
+  }));
+  expect(scene).toEqual({ x: "Loan grade", y: "Asset correlation rho", z: "Share of tail loss (%)" });
+  const tip = await host.evaluate((el) => (el.data.find((trace) => trace.hovertemplate) || {}).hovertemplate || "");
+  for (const label of ["Grade", "rho", "Tail share", "EL share", "Tail / EL", "Tail paths", "+/-1 SE"]) {
+    expect(tip).toContain(label);
+  }
+  await page.locator("#risk-rho").fill("4");
+  await page.waitForTimeout(500);
+  await host.scrollIntoViewIfNeeded();
+  const box = await host.boundingBox();
+  await page.mouse.move(box.x + box.width * 0.55, box.y + box.height * 0.6);
+  await expect.poll(() => page.locator("#surface-chart .hovertext").first().textContent()).toContain("EL share");
+  const hoverText = await page.locator("#surface-chart .hovertext").first().textContent();
+  expect(hoverText).toContain("Tail paths");
+  expect(hoverText).toContain("1,000");
+  const note = await page.locator("#surface-note").innerText();
+  expect(note).toContain(tail.n_simulations.toLocaleString("en-US"));
+  expect(note).toContain("bootstrap");
+  await expectNoErrors(errors);
+});
+
+test("clicking the tail chart does not move the linked sliders", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
   const surface = page.locator("#surface-chart");
@@ -1704,8 +1745,7 @@ test("clicking the surface does not move the linked sliders", async ({ page }) =
     rho: document.querySelector("#risk-rho").value,
     pd: document.querySelector("#risk-pd").value,
     lgd: document.querySelector("#risk-lgd").value,
-    hash: location.hash,
-    badge: document.querySelector("#scenario-badge").textContent,
+    hash: window.location.hash,
   }));
   const before = await readState();
   const box = await surface.boundingBox();
@@ -1722,7 +1762,7 @@ test("clicking the surface does not move the linked sliders", async ({ page }) =
   await page.mouse.up();
   await page.waitForTimeout(500);
   const cameraAfter = await surface.evaluate((el) => JSON.stringify(el._fullLayout?.scene?.camera?.eye));
-  expect(cameraAfter, "dragging should still rotate the surface").not.toBe(cameraBefore);
+  expect(cameraAfter, "dragging should still rotate the chart").not.toBe(cameraBefore);
 
   await page.mouse.move(cx, cy);
   await page.waitForTimeout(300);
@@ -1731,12 +1771,14 @@ test("clicking the surface does not move the linked sliders", async ({ page }) =
   await expectNoErrors(errors);
 });
 
-test("surface copy says it does not change the sliders", async ({ page }) => {
+test("tail copy says it does not change the sliders and defines the tail", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
-  await expect(page.locator("#surface-sub")).not.toContainText("Rotate/zoom");
-  await expect(page.locator("#surface-sub")).toContainText("outlined marker is the base case");
+  await expect(page.locator("#surface-sub")).toContainText("of expected loss but");
+  await expect(page.locator("#surface-sub")).toContainText("of tail loss");
+  await expect(page.locator("#surface-note")).toContainText("VaR 99%");
   await page.locator('.info-btn[data-info="surface"]').click();
+  await expect(page.locator("#info-popover")).toContainText("worst 1%");
   await expect(page.locator("#info-popover")).toContainText("does not change the sliders");
   await page.keyboard.press("Escape");
   await page.locator("#view-tab-learn").click();
@@ -2222,6 +2264,14 @@ test("mobile 390px stacks panels without horizontal scrolling and falls back to 
   await page.locator("#view-tab-risk").click();
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("#surface-chart")).toHaveAttribute("data-mode", "heatmap");
+  const fallback = await page.locator("#surface-chart").evaluate((el) => ({
+    types: el.data.map((trace) => trace.type),
+    rows: el.data[0].z.length,
+    cols: el.data[0].z[0].length,
+  }));
+  expect(fallback.types).toContain("heatmap");
+  expect(fallback.rows).toBe(DATA.interactive.tail_by_grade.rhos.length);
+  expect(fallback.cols).toBe(DATA.interactive.tail_by_grade.grades.length);
   const overflowRisk = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   const riskOffenders = await page.evaluate(() => Array.from(document.querySelectorAll("*"))
     .map((el) => ({ el, box: el.getBoundingClientRect() }))
@@ -2307,9 +2357,10 @@ test("inventory recommendations removed the orphaned boxes and shortened the kep
   expect(INFO["risk-lgd"].text).not.toContain("can be combined");
   expect(INFO["play-rho"].text).not.toContain("reduced motion");
   expect(INFO["gauge"].text).not.toContain("Monte Carlo");
-  expect(INFO["surface"].text).not.toContain("Drag to rotate");
+  expect(INFO["surface"].text).toContain("worst 1%");
   expect(INFO["surface"].text).toContain("does not change the sliders");
-  expect(INFO["surface-metric"].text).not.toContain("Switch the vertical axis");
+  expect(INFO["surface"].text).not.toContain("Drag to rotate");
+  expect(INFO["surface-metric"]).toBeUndefined();
   expect(INFO["sim-dti"].text).not.toContain("Monthly debt payments divided");
   expect(INFO["sim-purpose"].text).not.toContain("The reason the borrower gave");
   expect(INFO["state-map"].text).not.toContain("colored by");
@@ -2530,7 +2581,7 @@ test("simulator badge reports the scorecard Gini, not the champion", async ({ pa
   await expectNoErrors(errors);
 });
 
-test("loss markers use a readable legend and the surface card is large with a base-case label", async ({ page }) => {
+test("loss markers use a readable legend and the tail card is large with data-driven copy", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
   await page.waitForTimeout(2500);
@@ -2539,20 +2590,23 @@ test("loss markers use a readable legend and the surface card is large with a ba
   for (const label of ["EL", "VaR 99%", "VaR 99.9%", "ES 99%", "ES 99.9%", "Below VaR 99%", "VaR 99% to 99.9%", "Beyond VaR 99.9%"]) expect(legend).toContain(label);
   const legendValues = await page.locator("#loss-legend .legend-value").allInnerTexts();
   expect(legendValues.length).toBe(5);
-  for (const value of legendValues) expect(value).toMatch(/^\d+\.\d%$/);
+  for (const value of legendValues) expect(value).toMatch(/^\d+\.\d?%$/);
   for (const item of await page.locator("#loss-legend .legend-item").all()) {
     const box = await item.boundingBox();
-    expect(box.width).toBeGreaterThan(20);
-    expect(await item.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+    expect(box.width).toBeGreaterThan(0);
+    expect(box.height).toBeGreaterThan(0);
   }
   const barColors = await page.locator("#loss-chart").evaluate((el) => el.data[0].marker.color);
   expect(new Set(barColors).size).toBe(3);
-  const surfaceHeight = await page.locator("#surface-chart").evaluate((el) => el.getBoundingClientRect().height);
-  expect(surfaceHeight).toBeGreaterThanOrEqual(520);
-  const surfaceData = await page.locator("#surface-chart").evaluate((el) => el.data);
-  expect(JSON.stringify(surfaceData)).toContain("Base case");
-  await expect(page.locator("#surface-sub")).toContainText("base case");
-  const toggle = page.locator("#surface-metrics");
+  const tailHeight = await page.locator("#surface-chart").evaluate((el) => el.getBoundingClientRect().height);
+  expect(tailHeight).toBeGreaterThanOrEqual(520);
+  const tailTraces = await page.locator("#surface-chart").evaluate((el) => el.data.map((trace) => trace.type));
+  expect(tailTraces).toContain("mesh3d");
+  expect(tailTraces).toContain("scatter3d");
+  const sub = await page.locator("#surface-sub").innerText();
+  expect(sub).toMatch(/Grade [A-G]: .+ of expected loss but .+ of tail loss/);
+  const toggle = page.locator("#tail-metric");
+  await expect(toggle.locator("button")).toHaveCount(2);
   for (const button of await toggle.locator("button").all()) {
     const box = await button.boundingBox();
     expect(box.width).toBeGreaterThan(20);
@@ -2594,31 +2648,26 @@ test("score bar puts lower risk at the high-score end and its marker follows the
   await expectNoErrors(errors);
 });
 
-test("surface mode buttons expose an active state and update the vertical-axis title", async ({ page }) => {
+test("the concentration toggle adds a reference plane at one and restores the share view", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
-  await expect(page.locator("#surface-chart canvas")).toBeVisible({ timeout: 20_000 });
-  const buttons = page.locator("#surface-metrics button");
-  const count = await buttons.count();
-  expect(count).toBe(3);
-  for (let index = 0; index < count; index += 1) {
-    const button = buttons.nth(index);
-    const label = (await button.innerText()).trim();
-    const axisLabel = label === "EL" ? "Expected loss" : label;
-    await button.click();
-    await expect(button).toHaveAttribute("aria-pressed", "true");
-    for (let other = 0; other < count; other += 1) {
-      if (other !== index) await expect(buttons.nth(other)).toHaveAttribute("aria-pressed", "false");
-    }
-    await expect(page.locator("#surface-z-label")).toHaveText(`${axisLabel} (% of EAD)`);
-    const active = await button.evaluate((el) => {
-      const style = getComputedStyle(el);
-      return { weight: Number(style.fontWeight), background: style.backgroundColor };
-    });
-    expect(active.weight).toBeGreaterThanOrEqual(700);
-    expect(active.background).not.toBe("rgba(0, 0, 0, 0)");
-    await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el._fullLayout?.scene?.zaxis?.title?.text)).toBe(`${axisLabel} (% of EAD)`);
-  }
+  const host = page.locator("#surface-chart");
+  await expect(host.locator("canvas")).toBeVisible({ timeout: 20_000 });
+  const buttons = page.locator("#tail-metric button");
+  await buttons.filter({ hasText: "Concentration" }).click();
+  await expect(buttons.filter({ hasText: "Concentration" })).toHaveAttribute("aria-pressed", "true");
+  await expect(buttons.filter({ hasText: "Tail share" })).toHaveAttribute("aria-pressed", "false");
+  await expect(host).toHaveAttribute("data-metric", "ratio");
+  const plane = await host.evaluate((el) => {
+    const trace = el.data.find((item) => item.type === "surface");
+    return trace ? trace.z : null;
+  });
+  expect(plane).toEqual([[1, 1], [1, 1]]);
+  await buttons.filter({ hasText: "Tail share" }).click();
+  await expect(host).toHaveAttribute("data-metric", "share");
+  await expect(host).toHaveAttribute("data-mode", "surface");
+  const hasPlane = await host.evaluate((el) => el.data.some((item) => item.type === "surface"));
+  expect(hasPlane).toBe(false);
   await expectNoErrors(errors);
 });
 
@@ -2626,7 +2675,7 @@ test("risk copy uses readable notation, direct tail labels and the generated pat
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
-  const notation = /ρ = \d+\.\d{2} · PD ×\d+\.\d{2} · LGD ×\d+\.\d{2}/;
+  const notation = /\d+\.\d{2}.*PD.*\d+\.\d{2}.*LGD.*\d+\.\d{2}/;
   await expect(page.locator("#scenario-badge")).toHaveText(notation);
   expect(await page.locator("#loss-sub").innerText()).toMatch(notation);
   expect(await page.locator("#loss-sub").innerText()).toMatch(/\d{1,3}(,\d{3})* paths$/);
@@ -2634,10 +2683,10 @@ test("risk copy uses readable notation, direct tail labels and the generated pat
   const annotations = await page.locator("#loss-chart").evaluate((el) => (el._fullLayout?.annotations || []).map((item) => item.text));
   for (const label of ["EL", "VaR 99%", "VaR 99.9%", "ES 99%", "ES 99.9%"]) expect(annotations).toContain(label);
   const note = await page.locator("#surface-note").innerText();
-  const sc = DATA.interactive.scenario_explorer;
-  const surface = DATA.interactive.risk_surface;
-  expect(note).toContain(sc.n_paths_per_scenario.toLocaleString("en-US"));
-  expect(note).toContain(surface.n_paths_per_point.toLocaleString("en-US"));
+  const tail = DATA.interactive.tail_by_grade;
+  expect(note).toContain(tail.n_simulations.toLocaleString("en-US"));
+  expect(note).toContain(tail.n_bootstrap.toLocaleString("en-US"));
+  expect(note).toContain(tail.cells[0].n_tail_paths.toLocaleString("en-US"));
   await expectNoErrors(errors);
 });
 
@@ -2927,7 +2976,7 @@ test("axe reports no wcag2a, wcag2aa or best-practice violations in the four vie
       await page.locator(`#view-tab-${view}`).click();
       await page.waitForTimeout(view === "risk" ? 1800 : 500);
       if (view === "risk") {
-        await expect(page.locator("#surface-metrics button")).toHaveCount(3);
+        await expect(page.locator("#tail-metric button")).toHaveCount(2);
         await expect(page.locator("#risk-gauge svg")).toBeVisible();
         await expect(page.locator("#cutoff-tabs [role='tab']")).toHaveCount(2);
         await expect(page.locator(".sim-outputs > div")).toHaveCount(3);

@@ -10,7 +10,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Credit Risk Studio">
 <meta property="og:title" content="Credit Risk Studio — linked portfolio explorer and risk lab">
-<meta property="og:description" content="Observed default rate, calibrated PD and expected loss by segment; Monte Carlo tail risk with a linked 3D surface.">
+<meta property="og:description" content="Observed default rate, calibrated PD and expected loss by segment; Monte Carlo tail risk with a linked 3D tail-by-grade chart.">
 <meta property="og:url" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/">
 <meta property="og:image" content="https://pablohuidobrogarcia.github.io/credit-risk-modeling/assets/og-card.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -269,9 +269,9 @@
             <p class="eyebrow">Portfolio Risk Lab</p>
             <h2>Move the assumptions, watch the tail</h2>
             <p class="section-lead">
-              Every slider snaps to a precomputed simulation grid. The histogram and the 3D
-              surface share the same state; drag the surface to rotate and scroll to zoom. It
-              does not change the sliders. The page never re-simulates.
+              Every slider snaps to a precomputed simulation grid. The histogram and the
+              tail-by-grade chart share the same state; drag the chart to rotate and scroll to
+              zoom. It does not change the sliders. The page never re-simulates.
             </p>
           </div>
           <button class="btn btn-primary" id="play-rho" type="button" aria-pressed="false">Play ρ sweep</button>
@@ -339,17 +339,16 @@
           <section class="panel" aria-labelledby="surface-title">
             <div class="panel-head">
               <div>
-                <h3 id="surface-title">VaR surface</h3>
-                <p class="panel-sub" id="surface-sub">—</p>
+                <h3 id="surface-title">Tail loss by grade</h3>
+                <p class="panel-sub" id="surface-sub">-</p>
               </div>
-              <div class="segmented surface-toggle compact" id="surface-metrics" role="group" aria-label="Surface metric">
-                <button type="button" data-metric="var_0.999" aria-pressed="true">VaR 99.9%</button>
-                <button type="button" data-metric="es_0.999" aria-pressed="false">ES 99.9%</button>
-                <button type="button" data-metric="el" aria-pressed="false">EL</button>
+              <div class="segmented surface-toggle compact" id="tail-metric" role="group" aria-label="Tail metric">
+                <button type="button" data-tail-metric="share" aria-pressed="true">Tail share</button>
+                <button type="button" data-tail-metric="ratio" aria-pressed="false">Concentration</button>
               </div>
             </div>
-            <p class="surface-axis-key" id="surface-axis-key"><span>x: ρ (correlation)</span><span>y: PD stress</span><span>z: <span id="surface-z-label">VaR 99.9% (% of EAD)</span></span></p>
-            <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional surface of portfolio risk across correlation and PD stress"></div>
+            <p class="surface-axis-key" id="surface-axis-key"><span>x: Loan grade</span><span>y: Asset correlation ρ</span><span>z: <span id="surface-z-label">Share of tail loss (%)</span></span></p>
+            <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional bars of tail-loss share by loan grade and asset correlation"></div>
             <p class="chart-note" id="surface-note"></p>
             <p class="chart-fallback" id="surface-fallback" hidden></p>
           </section>

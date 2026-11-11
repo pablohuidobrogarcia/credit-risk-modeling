@@ -595,7 +595,7 @@ body.folder-open { overflow: hidden; }
 }
 @media (max-width: 600px) {
   .folder-fan { display: none; }
-  .folder-sheet-2 .folder-visual { order: 1; }
+  .folder-visual { order: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
   #view-explorer.is-dim-switching .explorer-grid { animation: none; }

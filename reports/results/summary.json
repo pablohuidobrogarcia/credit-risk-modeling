@@ -1139,7 +1139,10 @@
       "predicted_change_pp": -0.32187272120693666,
       "slope_pp_per_month": 0.12413077136723166,
       "r_squared": 0.8067917365320185
-    }
+    },
+    "scorecard_auc": 0.6217,
+    "scorecard_gini": 0.2435,
+    "scorecard_ks": 0.1764
   },
   "lgd": {
     "pd_basis": "champion score, probability-calibrated on a held-out temporal slice",

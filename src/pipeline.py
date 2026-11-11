@@ -857,6 +857,11 @@ def _secondary_summary(res: Dict[str, Any]) -> Dict[str, Any]:
 
 def _summarise_pd(res: Dict[str, Any]) -> Dict[str, Any]:
     """Reduce the PD stage result to JSON-safe headline numbers."""
+    models = _records(res["comparison"])
+    scorecard = next(
+        (row for row in models if row.get("model") == "logit" and (row.get("sample") or "oot") == "oot"),
+        {},
+    )
     return {
         "n_train": res["n_train"],
         "n_oot": res["n_oot"],
@@ -870,11 +875,14 @@ def _summarise_pd(res: Dict[str, Any]) -> Dict[str, Any]:
         "challenger_uses_full_features": res.get("challenger_uses_full_features"),
         "lgbm_tuning": _records(res["lgbm_tuning"]) if res.get("lgbm_tuning") is not None else None,
         "selected_variables": res["selected"],
-        "models": _records(res["comparison"]),
+        "models": models,
         "champion": res["champion"],
         "champion_auc": res["champion_auc"],
         "champion_gini": res["champion_gini"],
         "champion_ks": res["champion_ks"],
+        "scorecard_auc": scorecard.get("auc"),
+        "scorecard_gini": scorecard.get("gini"),
+        "scorecard_ks": scorecard.get("ks"),
         "benchmark_auc_lender_grade": res["benchmark_auc_lender_grade"],
         "benchmark_gini_lender_grade": res["benchmark_gini_lender_grade"],
         "calibration_metrics": _jsonable(res["calibration_metrics"]),
@@ -1452,6 +1460,28 @@ def stage_figures() -> Dict[str, Any]:
     what lets the site figures be regenerated in seconds and tested on fixtures.
     """
     print("[figures] static showcase figures + docs/data.json ...")
+    # The points scorecard is the model behind the applicant simulator. Backfill
+    # its own OOT metrics from the already-persisted model comparison so the
+    # fast figures stage does not need to refit the PD models.
+    summary = load_json("summary.json")
+    pd_summary = summary.setdefault("pd", {})
+    scorecard = next(
+        (
+            row
+            for row in (pd_summary.get("models") or [])
+            if row.get("model") == "logit" and (row.get("sample") or "oot") == "oot"
+        ),
+        None,
+    )
+    if scorecard:
+        changed = False
+        for key in ("auc", "gini", "ks"):
+            value = scorecard.get(key)
+            if value is not None and pd_summary.get(f"scorecard_{key}") != value:
+                pd_summary[f"scorecard_{key}"] = value
+                changed = True
+        if changed:
+            save_json(summary, "summary.json")
     out = showcase.run_all()
     # The Explorer build already has the 24 monthly observed/predicted rows.
     # Copy its drift statistics into summary.json here, so the fast figures

@@ -2513,6 +2513,23 @@ test("simulator defaults to a typical applicant, uses readable bins and its brea
   await expectNoErrors(errors);
 });
 
+test("simulator badge reports the scorecard Gini, not the champion", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  await page.waitForTimeout(500);
+  const scorecard = DATA.pd.models.find((row) => row.model === "logit" && (row.sample || "oot") === "oot");
+  expect(scorecard).toBeTruthy();
+  expect(DATA.pd.scorecard_gini).toBe(scorecard.gini);
+  expect(DATA.pd.scorecard_auc).toBe(scorecard.auc);
+  expect(DATA.pd.scorecard_ks).toBe(scorecard.ks);
+  await expect(page.locator("#sim-gini")).toHaveText(`Scorecard Gini ${scorecard.gini.toFixed(4)}`);
+  await expect(page.locator("#sim-gini")).not.toContainText(DATA.pd.champion_gini.toFixed(4));
+  await expect(page.locator("#sim-sub")).toContainText(`scorecard (Gini ${scorecard.gini.toFixed(4)})`);
+  await expect(page.locator("#sim-sub")).toContainText(`${DATA.pd.champion} champion (Gini ${DATA.pd.champion_gini.toFixed(4)})`);
+  await expect(page.locator("#sim-sub")).toContainText("is not");
+  await expectNoErrors(errors);
+});
+
 test("loss markers use a readable legend and the surface card is large with a base-case label", async ({ page }) => {
   const errors = await open(page);
   await page.locator("#view-tab-risk").click();

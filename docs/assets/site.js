@@ -356,6 +356,10 @@ function infoContext() {
     data_years: (D && D.display && D.display.data_years) || "2007–2018",
     train_years: (D && D.display && D.display.train_years) || "2010–2013",
     champion_auc: fmtNum(D && D.pd ? D.pd.champion_auc : null, 4),
+    champion_gini: fmtNum(D && D.pd ? D.pd.champion_gini : null, 4),
+    scorecard_auc: fmtNum(D && D.pd ? D.pd.scorecard_auc : null, 4),
+    scorecard_gini: fmtNum(D && D.pd ? D.pd.scorecard_gini : null, 4),
+    scorecard_ks: fmtNum(D && D.pd ? D.pd.scorecard_ks : null, 4),
     window_immature_auc: (D && D.display && D.display.window_immature_auc) || "—",
     var999: fmtPct(stats["var_0.999_pct_ead"], 1),
     mean_pd: fmtPct(meta.mean_pd, 2),
@@ -2365,7 +2369,12 @@ function renderSimulator() {
   countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}%`);
   $("#sim-pd-note").textContent = `About ${Math.round(pd * 100)} out of 100 similar applicants default; the portfolio average is ${fmtPct(portfolioRate, 2)}.`;
   $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the ${testYears} test window.`;
-  $("#sim-gini").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)}`;
+  const scorecardGini = D.pd ? D.pd.scorecard_gini : null;
+  const championGini = D.pd ? D.pd.champion_gini : null;
+  const champion = D.pd ? D.pd.champion : "champion";
+  $("#sim-gini").textContent = `Scorecard Gini ${fmtNum(scorecardGini, 4)}`;
+  const simSub = $("#sim-sub");
+  if (simSub) simSub.textContent = `Educational illustration of the published points scorecard. Not a lending decision. Shares are from the ${testYears} test window. The interpretable scorecard (Gini ${fmtNum(scorecardGini, 4)}) is what this simulator uses; the more accurate ${champion} champion (Gini ${fmtNum(championGini, 4)}) is not.`;
   renderScoreHist($("#sim-hist"), hist, bins, "Test-window score distribution", score);
   const minScore = Number(bins[0] || typicalScore);
   const maxScore = Number(bins[bins.length - 1] || minScore + 1);

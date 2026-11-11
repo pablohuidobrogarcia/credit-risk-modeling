@@ -24,7 +24,7 @@
       "label": "Scorecard",
       "what": "Binned variables with WoE and ranked them by IV; screened correlation and VIF, leaving 7 predictors for a logit scorecard (base score 600, odds 1:50, 20 points to double the odds). Compared it with Lasso, Ridge, a tree, a random forest and LightGBM tuned by temporal cross-validation, and explained the champion with SHAP.",
       "why": "The scorecard is interpretable; the challengers show how much more a flexible model captures from the full 30-variable set.",
-      "learned": "LightGBM wins (AUC {champion_auc} vs 0.6217 for the scorecard), but discrimination remains moderate."
+      "learned": "LightGBM wins (AUC {champion_auc} vs {scorecard_auc} for the scorecard), but discrimination remains moderate."
     },
     {
       "id": 4,

@@ -356,6 +356,10 @@ function infoContext() {
     data_years: (D && D.display && D.display.data_years) || "2007–2018",
     train_years: (D && D.display && D.display.train_years) || "2010–2013",
     champion_auc: fmtNum(D && D.pd ? D.pd.champion_auc : null, 4),
+    champion_gini: fmtNum(D && D.pd ? D.pd.champion_gini : null, 4),
+    scorecard_auc: fmtNum(D && D.pd ? D.pd.scorecard_auc : null, 4),
+    scorecard_gini: fmtNum(D && D.pd ? D.pd.scorecard_gini : null, 4),
+    scorecard_ks: fmtNum(D && D.pd ? D.pd.scorecard_ks : null, 4),
     window_immature_auc: (D && D.display && D.display.window_immature_auc) || "—",
     var999: fmtPct(stats["var_0.999_pct_ead"], 1),
     mean_pd: fmtPct(meta.mean_pd, 2),
@@ -2365,7 +2369,12 @@ function renderSimulator() {
   countUp($("#sim-pct"), pct, (v) => `${v.toFixed(0)}%`);
   $("#sim-pd-note").textContent = `About ${Math.round(pd * 100)} out of 100 similar applicants default; the portfolio average is ${fmtPct(portfolioRate, 2)}.`;
   $("#sim-pct-note").textContent = `Scores higher than ${pct.toFixed(0)}% of loans in the ${testYears} test window.`;
-  $("#sim-gini").textContent = `Gini ${fmtNum(D.pd.champion_gini, 4)}`;
+  const scorecardGini = D.pd ? D.pd.scorecard_gini : null;
+  const championGini = D.pd ? D.pd.champion_gini : null;
+  const champion = D.pd ? D.pd.champion : "champion";
+  $("#sim-gini").textContent = `Scorecard Gini ${fmtNum(scorecardGini, 4)}`;
+  const simSub = $("#sim-sub");
+  if (simSub) simSub.textContent = `Educational illustration of the published points scorecard. Not a lending decision. Shares are from the ${testYears} test window. The interpretable scorecard (Gini ${fmtNum(scorecardGini, 4)}) is what this simulator uses; the more accurate ${champion} champion (Gini ${fmtNum(championGini, 4)}) is not.`;
   renderScoreHist($("#sim-hist"), hist, bins, "Test-window score distribution", score);
   const minScore = Number(bins[0] || typicalScore);
   const maxScore = Number(bins[bins.length - 1] || minScore + 1);
@@ -2417,7 +2426,9 @@ function cutoffExtraPlot(cut, bins, goods, bads, cutoff) {
   const centers = bins.slice(0, -1).map((v, i) => (v + bins[i + 1]) / 2);
   const caption = $("#cutoff-caption");
   const plotHeight = Math.max(250, Math.round(host.clientHeight || 250));
+  const narrow = host.clientWidth < 500;
   const total = goods.reduce((sum, value) => sum + value, 0) + bads.reduce((sum, value) => sum + value, 0);
+  const champion = (D.pd && D.pd.champion) || "champion";
   let ok = false;
   if (state.cutoffTab === "ks") {
     let totalGood = 0; let totalBad = 0;
@@ -2434,18 +2445,19 @@ function cutoffExtraPlot(cut, bins, goods, bads, cutoff) {
     });
     const published = Number(D.pd.champion_ks);
     const binned = Math.max(0, maxGap);
-    const mismatch = Math.abs(binned - published) > 0.005;
     ok = plot(host, [
-      { x: centers, y: goodShare, mode: "lines", name: "Good cumulative", line: { color: p.teal, width: 2 } },
-      { x: centers, y: badShare, mode: "lines", name: "Bad cumulative", line: { color: p.lilacDark, width: 2 } },
+      { x: centers, y: goodShare, mode: "lines", name: "Good cumulative", line: { color: p.teal, width: 2 }, hovertemplate: "score %{x:.0f} · %{y:.1f}%<extra>Good cumulative</extra>" },
+      { x: centers, y: badShare, mode: "lines", name: "Bad cumulative", line: { color: p.lilacDark, width: 2 }, hovertemplate: "score %{x:.0f} · %{y:.1f}%<extra>Bad cumulative</extra>" },
       { x: [maxAt], y: [Math.max(goodShare[centers.indexOf(maxAt)] || 0, badShare[centers.indexOf(maxAt)] || 0)], mode: "markers", name: "Max gap", marker: { size: 9, color: p.surface, line: { color: p.accent, width: 3 } }, hovertemplate: `KS ${Math.round(maxGap * 10000) / 10000}<extra></extra>` },
     ], {
-      margin: { l: 48, r: 14, t: 22, b: 38 }, height: plotHeight,
+      margin: { l: 48, r: 14, t: narrow ? 46 : 22, b: 38 }, height: plotHeight,
       xaxis: { title: "Scorecard score" }, yaxis: { title: "Cumulative share (%)", range: [0, 101] },
-      legend: { orientation: "h", y: -0.2 },
+      legend: { orientation: "h", y: narrow ? 1.16 : -0.2 },
       shapes: [{ type: "line", x0: maxAt, x1: maxAt, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 1.2, dash: "dot" } }],
     }, { small: true });
-    if (caption) caption.textContent = `${EXPLORER.cutoffKs || "Cumulative good and bad shares by score."} Published KS ${published.toFixed(4)}; binned KS ${binned.toFixed(4)} at score ${Math.round(maxAt)}.${mismatch ? " The curve is binned; the published value is authoritative." : ""}`;
+    if (caption) {
+      caption.textContent = `${EXPLORER.cutoffKs || "Cumulative good and bad shares for the points scorecard."} Published KS ${published.toFixed(4)}: ${champion} champion, continuous out-of-time predicted probabilities. Curve: points scorecard in ${goods.length} equal-width score bins, max gap ${binned.toFixed(4)} at score ${Math.round(maxAt)}. The ${Math.round(cutoff)} cutoff is the champion's train-selected approval cutoff mapped to scorecard points, not this curve's maximum.`;
+    }
   } else {
     const xs = []; const approvalLine = []; const badLine = [];
     centers.forEach((score) => {

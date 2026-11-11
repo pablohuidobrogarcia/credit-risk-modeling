@@ -6,5 +6,5 @@
   "narrowRange": "Narrow range: colors exaggerate small differences.",
   "riskBarNote": "Bar colors match the lines in the loss distribution.",
   "cutoffTradeoff": "Approval rate (left axis) and the bad rate among approved loans (right axis) as the cutoff moves.",
-  "cutoffKs": "Cumulative good and bad shares by score; the largest gap is the KS statistic."
+  "cutoffKs": "Cumulative good and bad shares for the points scorecard."
 }

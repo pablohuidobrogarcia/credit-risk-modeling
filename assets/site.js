@@ -482,15 +482,9 @@ function bindInfoDelegation() {
 const STATIC_INFO = [
   ["#segment-search", "filter", "Filter segments", "after"],
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
-  ["#scenario-title", "risk-rho", "Scenario controls", "after"],
-  ["#play-rho", "play-rho", "Play rho sweep", "after"],
-  ["#risk-gauge", "gauge", "VaR gauge", "after"],
-  ["#gauge-ratio", "gauge-ratio", "VaR / EL ratio", "after"],
+  ["#gauge-title", "gauge", "VaR gauge", "after"],
   ["#loss-title", "loss-histogram", "Loss distribution", "after"],
   ["#surface-title", "surface", "VaR surface", "after"],
-  ["#surface-metrics", "surface-metric", "Surface metric", "before"],
-  ["#sim-title", "sim-presets", "Applicant simulator", "after"],
-  ["#cutoff-title", "cutoff-slider", "Cutoff explorer", "after"],
   ["#cutoff-tabs", "cutoff-tabs", "Cutoff diagnostics", "after"],
 ];
 
@@ -515,7 +509,7 @@ function injectStaticInfo() {
   $$(".slider-field").forEach((field) => {
     const input = field.querySelector("input[type=range]");
     if (!input || field.dataset.infoInjected === "1") return;
-    const map = { "risk-rho": "risk-rho", "risk-pd": "risk-pd", "risk-lgd": "risk-lgd", "cutoff-slider": "cutoff-slider" };
+    const map = { "risk-rho": "risk-rho", "risk-pd": "risk-pd", "risk-lgd": "risk-lgd" };
     const id = map[input.id];
     if (!id) return;
     const wrapper = document.createElement("div");
@@ -647,11 +641,11 @@ function plotTheme() {
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
     plot_bgcolor: "rgba(0,0,0,0)",
-    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 11, color: p.fg },
+    font: { family: 'ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif', size: 12, color: p.fg },
     margin: { l: 58, r: 18, t: 26, b: 46 },
     xaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
     yaxis: { gridcolor: p.border, zerolinecolor: "rgba(0,0,0,0)", color: p.muted },
-    legend: { orientation: "h", y: 1.12, x: 0, font: { color: p.fg } },
+    legend: { orientation: "h", y: 1.12, x: 0, font: { color: p.fg, size: 12 } },
     colorway: [p.periwinkle, p.teal, p.sky, p.lilac, p.lilacDark],
   };
 }
@@ -1830,6 +1824,10 @@ function scenarioForState() {
   if (!sc) return null;
   return sc.scenarios.find((s) => Math.abs(s.rho - state.risk.rho) < 1e-9 && Math.abs(s.pd_mult - state.risk.pd) < 1e-9 && Math.abs(s.lgd_mult - state.risk.lgd) < 1e-9) || sc.scenarios[0];
 }
+function scenarioNotation(scenario) {
+  if (!scenario) return "-";
+  return `ρ = ${fmtNum(scenario.rho, 2)} · PD ×${fmtNum(scenario.pd_mult, 2)} · LGD ×${fmtNum(scenario.lgd_mult, 2)}`;
+}
 function setupRiskControls() {
   const opts = riskOptions();
   if (!opts.rhos.length) return;
@@ -1878,7 +1876,7 @@ function renderRisk() {
   const scenario = scenarioForState();
   const hist = scenario && sc.histograms[scenario.key];
   $("#scenario-sub").textContent = "The same state drives the histogram and the surface.";
-  $("#scenario-badge").textContent = scenario ? scenario.key.replace(/_/g, " · ") : "—";
+  $("#scenario-badge").textContent = scenarioNotation(scenario);
   const kpis = $("#risk-kpis");
   if (hist && hist.exact) {
     const ex = hist.exact;
@@ -1890,7 +1888,7 @@ function renderRisk() {
     }).join("");
     kpiStats.forEach((stat) => countUp(kpis.querySelector(`[data-testid="risk-${stat.id}"]`), ex[stat.key], (v) => fmtPct(v, 1)));
     $("#risk-bar-note").textContent = (EXPLORER && EXPLORER.riskBarNote) || "";
-    $("#loss-sub").textContent = `${scenario.key.replace(/_/g, " ")} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
+    $("#loss-sub").textContent = `${scenarioNotation(scenario)} · ${fmtInt(hist.n_paths || sc.n_paths_per_scenario)} paths`;
       renderGauge(ex["var_0.999_pct_ead"], ex.expected_loss_pct_ead);
   }
   if (state.view === "risk") {
@@ -1913,7 +1911,7 @@ function renderGauge(value, expectedLoss) {
   const p = palette();
   const tick = (pctValue) => {
     const theta = Math.PI * (1 - pctValue / 60);
-    return { x: cx + 92 * Math.cos(theta), y: cy - 92 * Math.sin(theta), pct: pctValue };
+    return { x: cx + 101 * Math.cos(theta), y: cy - 101 * Math.sin(theta), pct: pctValue };
   };
   const ticks = [0, 20, 40, 60].map(tick);
   const gradientStops = p.risk.map((entry, index) => `<stop offset="${(index / (p.risk.length - 1) * 100).toFixed(1)}%" stop-color="${entry}"></stop>`).join("");
@@ -1927,10 +1925,14 @@ function renderGauge(value, expectedLoss) {
     <text x="${cx}" y="140" text-anchor="middle" font-size="26">${fmtPct(v, 1)}</text>
     ${ticks.map((entry) => `<text class="scale" x="${entry.x.toFixed(1)}" y="${entry.y.toFixed(1)}" text-anchor="middle">${entry.pct}%</text>`).join("")}
   </svg>`;
+  const el = num(expectedLoss);
+  const multiple = el && el > 0 ? v / el : null;
+  $("#gauge-var").textContent = fmtPct(v, 1);
+  $("#gauge-el").textContent = fmtPct(el, 1);
+  $("#gauge-multiple").textContent = multiple == null ? "-" : `${multiple.toFixed(1)}x`;
   const ratio = $("#gauge-ratio");
   if (ratio) {
-    const el = num(expectedLoss);
-    ratio.textContent = el && el > 0 ? `VaR 99.9% is ${(v / el).toFixed(1)}x the expected loss.` : "";
+    ratio.textContent = multiple == null ? "" : `VaR 99.9% is ${multiple.toFixed(1)}x the expected loss.`;
   }
 }
 
@@ -1950,10 +1952,15 @@ function drawLossChart(hist, scenario) {
     dash: stat.dash,
   }));
   const shapes = [];
-  markers.forEach(({ value, color, dash }) => {
+  const annotations = [];
+  markers.forEach(({ label, value, color, dash }) => {
     if (num(value) == null) return;
     const x = value * 100;
     shapes.push({ type: "line", x0: x, x1: x, yref: "paper", y0: 0, y1: 1, line: { color, width: 1.6, dash } });
+    annotations.push({
+      x, yref: "paper", y: 0.97, text: label, showarrow: false,
+      font: { size: 10, color }, textangle: -90, xanchor: "left", yanchor: "top",
+    });
   });
   const var99Raw = num(ex["var_0.99_pct_ead"]);
   const var999Raw = num(ex["var_0.999_pct_ead"]);
@@ -1973,8 +1980,8 @@ function drawLossChart(hist, scenario) {
     bargap: 0.02,
     xaxis: { title: "Portfolio loss (% of EAD)", range: [0, Math.max(...centers) * 1.02], tickformat: ".1f" },
     yaxis: { title: "Simulated paths" },
-    showlegend: false, shapes,
-    margin: { l: 64, r: 20, t: 24, b: 52 },
+    showlegend: false, shapes, annotations,
+    margin: { l: 64, r: 20, t: 36, b: 52 },
   });
   const legend = $("#loss-legend");
   if (legend) {
@@ -2017,9 +2024,16 @@ function drawSurface() {
   const surf = D.interactive && D.interactive.risk_surface;
   if (!host || !surf) return;
   const p = palette();
+  const sc = D.interactive && D.interactive.scenario_explorer;
   const base = surf.base_case;
   const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
   $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText}`;
+  const zLabel = $("#surface-z-label");
+  if (zLabel) zLabel.textContent = `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)`;
+  const note = $("#surface-note");
+  if (note && sc) {
+    note.textContent = `Histogram scenarios use ${fmtInt(sc.n_paths_per_scenario)} paths; surface grid points use ${fmtInt(surf.n_paths_per_point)}. The difference is Monte Carlo noise, not a different portfolio.`;
+  }
   if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
   const matrix = surfaceMatrix(state.surfaceMetric);
   if (!matrix) return;
@@ -2036,22 +2050,28 @@ function drawSurface() {
     ok = plot(host, [
       { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
-      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["Base case"], textposition: "top center", marker: { symbol: "circle", size: 20, color: p.surface, line: { width: 4, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
+      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { symbol: "circle", size: 24, color: p.surface, line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
-      title: { text: "2D heatmap fallback (no WebGL)", font: { size: 11 } },
-      xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, margin: { l: 55, r: 15, t: 40, b: 45 },
+      title: { text: "2D heatmap fallback (no WebGL)", font: { size: 12 } },
+      xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, margin: { l: 58, r: 18, t: 40, b: 45 },
     });
     host.dataset.mode = "heatmap";
   } else {
     ok = plot(host, [
       { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, colorbar: { tickformat: ".1f" }, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
       { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
-      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["Base case"], textposition: "top center", textfont: { size: 11, color: p.ink }, marker: { size: 9, color: p.surface, symbol: "circle", line: { width: 3, color: p.accent } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
+      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { size: 14, color: p.surface, symbol: "circle", line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
     ], {
       height,
-      scene: { xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, zaxis: { title: "% of EAD", tickformat: ".1f" }, camera: { eye: { x: 1.55, y: 1.55, z: 1.15 } } },
-      margin: { l: 0, r: 0, t: 8, b: 0 },
+      scene: {
+        xaxis: { title: { text: "ρ" } },
+        yaxis: { title: { text: "PD stress" } },
+        zaxis: { title: { text: `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)` }, tickformat: ".1f" },
+        camera: { eye: { x: 1.45, y: 1.45, z: 1.35 } },
+        aspectratio: { x: 1.2, y: 1, z: 0.78 },
+      },
+      margin: { l: 48, r: 8, t: 8, b: 8 },
     });
     host.dataset.mode = "surface";
   }
@@ -2105,6 +2125,16 @@ const BIN_CATEGORY_LABELS = {
   house: "House", moving: "Moving", vacation: "Vacation", renewable_energy: "Renewable energy",
   educational: "Educational", wedding: "Wedding",
 };
+const SIM_LABELS = {
+  annual_inc: "Annual income ($)",
+  dti: "Debt-to-income (%)",
+  revol_util: "Credit utilization (%)",
+  inq_last_6mths: "Credit inquiries, last 6 months",
+  installment_to_income: "Payment-to-income (%)",
+  home_ownership: "Home ownership",
+  purpose: "Loan purpose",
+};
+const SIM_INFO_KEEP = new Set(["installment_to_income"]);
 function parseBinParts(binKey) {
   return String(binKey).split("&").map((raw) => {
     const text = raw.trim();
@@ -2204,7 +2234,7 @@ function simOptions(app, variable) {
   }));
 }
 function simLabel(app, variable) {
-  return (simMeta(app, variable) || {}).label || variable.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return SIM_LABELS[variable] || (simMeta(app, variable) || {}).label || variable.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function setupSimulator() {
@@ -2225,7 +2255,7 @@ function setupSimulator() {
     const optionHtml = options.map((opt) => `<option value="${esc(opt.key)}">${esc(opt.label)}${opt.share ? ` — ${(opt.share * 100).toFixed(1)}% of test window` : ""}</option>`).join("");
     wrap.innerHTML = `
       <div class="sim-ctrl-head">
-        <label for="${id}">${esc(label)} ${INFO[`sim-${variable}`] ? infoButton(`sim-${variable}`, label) : ""}</label>
+        <label for="${id}">${esc(label)} ${SIM_INFO_KEEP.has(variable) && INFO[`sim-${variable}`] ? infoButton(`sim-${variable}`, label) : ""}</label>
         <span class="sim-ctrl-value"><output class="sim-contrib" id="sim-contrib-${variable}">—</output><span class="sim-point-bar" aria-hidden="true"><span id="sim-bar-${variable}"></span></span></span>
       </div>
       ${numeric
@@ -2251,9 +2281,6 @@ function setupSimulator() {
   $$("#sim-presets [data-preset]").forEach((button) => {
     button.onclick = () => applySimPreset(button.dataset.preset);
   });
-  const presetInfo = document.createElement("span");
-  presetInfo.innerHTML = infoButton("sim-presets", "Applicant presets");
-  $("#sim-presets").appendChild(presetInfo.firstChild);
   renderSimulator();
 }
 
@@ -2343,7 +2370,7 @@ function renderSimulator() {
   const minScore = Number(bins[0] || typicalScore);
   const maxScore = Number(bins[bins.length - 1] || minScore + 1);
   const pos = clamp((score - minScore) / (maxScore - minScore || 1), 0, 1);
-  $("#sim-scale").innerHTML = `<div class="sim-scale-labels"><span>Lower risk / higher score</span><span>Higher risk / lower score</span></div><div class="sim-scale-track"><span class="sim-scale-fill" style="width:${(pos * 100).toFixed(1)}%"></span><span class="sim-scale-marker" style="left:${(pos * 100).toFixed(1)}%" aria-hidden="true"></span></div><div class="sim-scale-labels"><span>${Math.round(minScore)}</span><span>Score ${Math.round(score)}</span><span>${Math.round(maxScore)}</span></div>`;
+  $("#sim-scale").innerHTML = `<div class="sim-scale-labels"><span class="sim-scale-risk-high" data-testid="sim-scale-risk-left">Higher risk / lower score</span><span class="sim-scale-risk-low" data-testid="sim-scale-risk-right">Lower risk / higher score</span></div><div class="sim-scale-track"><span class="sim-scale-fill" style="width:${(pos * 100).toFixed(1)}%"></span><span class="sim-scale-marker" style="left:${(pos * 100).toFixed(1)}%" aria-hidden="true"></span></div><div class="sim-scale-labels"><span>${Math.round(minScore)}</span><span>Score ${Math.round(score)}</span><span>${Math.round(maxScore)}</span></div>`;
   const rows = simVariables(app).map((variable) => {
     const opt = simOption(app, variable, state.sim[variable]);
     return `<tr><td>${esc(simLabel(app, variable))}<span class="breakdown-choice">${esc(opt.label)}</span></td><td>${signedPoints(Number(opt.points) || 0)}</td></tr>`;
@@ -2437,14 +2464,17 @@ function cutoffExtraPlot(cut, bins, goods, bads, cutoff) {
     });
     const exactApproval = total ? exactApproved / total : 0;
     const exactBadRate = exactApproved ? exactBad / exactApproved : 0;
+    const badMax = Math.max(20, Math.ceil((Math.max(...badLine, exactBadRate * 100) * 1.3) / 5) * 5);
     ok = plot(host, [
-      { x: xs, y: approvalLine, mode: "lines", name: "Approval rate", line: { color: p.sky, width: 2 } },
-      { x: xs, y: badLine, mode: "lines", name: "Bad rate (approved)", line: { color: p.lilac, width: 2 } },
+      { x: xs, y: approvalLine, mode: "lines", name: "Approval rate (left axis)", line: { color: p.sky, width: 2 } },
+      { x: xs, y: badLine, mode: "lines", name: "Bad rate (approved, right axis)", yaxis: "y2", line: { color: p.lilac, width: 2 } },
       { x: [cutoff], y: [exactApproval * 100], mode: "markers", name: "Approval at cutoff", marker: { size: 8, color: p.surface, line: { color: p.sky, width: 3 } } },
-      { x: [cutoff], y: [exactBadRate * 100], mode: "markers", name: "Bad rate at cutoff", marker: { size: 8, color: p.surface, line: { color: p.lilac, width: 3 } } },
+      { x: [cutoff], y: [exactBadRate * 100], mode: "markers", yaxis: "y2", name: "Bad rate at cutoff", marker: { size: 8, color: p.surface, line: { color: p.lilac, width: 3 } } },
     ], {
-      margin: { l: 48, r: 14, t: 22, b: 38 }, height: plotHeight,
-      xaxis: { title: "Scorecard score" }, yaxis: { title: "Percent", range: [0, 101] },
+      margin: { l: 50, r: 48, t: 22, b: 38 }, height: plotHeight,
+      xaxis: { title: "Scorecard score" },
+      yaxis: { title: "Approval rate (%)", range: [0, 100] },
+      yaxis2: { title: "Bad rate (approved, %)", overlaying: "y", side: "right", range: [0, badMax], tickformat: ".0f", showgrid: false },
       legend: { orientation: "h", y: -0.2 },
       shapes: [{ type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 1.4, dash: "dash" } }],
     }, { small: true });
@@ -2502,7 +2532,7 @@ function renderCutoff() {
       { type: "line", x0: cutoff, x1: cutoff, yref: "paper", y0: 0, y1: 1, line: { color: p.ink, width: 2, dash: "dash" } },
       { type: "line", x0: cut.cutoff_score, x1: cut.cutoff_score, yref: "paper", y0: 0, y1: 1, line: { color: p.lilacDark, width: 1.6, dash: "dot" } },
     ],
-    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 1.02, text: "Published KS cutoff", showarrow: false, font: { size: 9, color: p.lilacDark }, xanchor: "right" }],
+    annotations: [{ x: cut.cutoff_score, yref: "paper", y: 0.02, text: "Published KS cutoff", showarrow: false, yanchor: "bottom", font: { size: 12, color: p.lilacDark }, xanchor: "right", bgcolor: p.surface, borderpad: 2 }],
     margin: { l: 52, r: 16, t: 36, b: 44 }, showlegend: true,
   }, { small: true });
   if (!ok) showFallback($("#cutoff-chart"), null, "The cutoff chart could not be drawn.");
@@ -2630,16 +2660,45 @@ function setWelcomeDismissed(dismissed) {
   }
 }
 
+function folderBarMarkup(sheet, expectedLoss) {
+  const remainder = Math.max(0, 100 - expectedLoss);
+  const aria = `$100 of EAD: $${expectedLoss.toFixed(2)} expected loss, $${remainder.toFixed(2)} not lost`;
+  return `<figure class="folder-visual folder-visual-bar">
+    <p class="folder-bar-kicker">Expected loss per $100 of EAD</p>
+    <p class="folder-bar-value">$${expectedLoss.toFixed(2)}</p>
+    <div class="folder-bar" role="img" aria-label="${esc(aria)}">
+      <span class="folder-bar-fill" style="width:${expectedLoss.toFixed(2)}%"></span>
+    </div>
+    <div class="folder-bar-legend" aria-hidden="true">
+      <span class="folder-bar-key"><span class="folder-bar-swatch"></span>$${expectedLoss.toFixed(2)} expected loss</span>
+      <span class="folder-bar-key"><span class="folder-bar-swatch is-rest"></span>$${remainder.toFixed(2)} not lost</span>
+    </div>
+    <figcaption>${esc(resolveInfoText(sheet.visual_label || ""))}</figcaption>
+  </figure>`;
+}
+
+function folderMetricsMarkup(sheet) {
+  const rows = Array.isArray(sheet.metrics) ? sheet.metrics : [];
+  if (!rows.length) return "";
+  return `<table class="folder-metrics">
+    <caption class="sr-only">Portfolio amounts behind the expected loss</caption>
+    <tbody>${rows.map((row) => `<tr>
+      <th scope="row">${esc(resolveInfoText(row.label))}</th>
+      <td>${esc(resolveInfoText(row.value))}${row.note ? `<span class="folder-metric-note">${esc(resolveInfoText(row.note))}</span>` : ""}</td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+}
+
 function folderVisualMarkup(sheet) {
   const meta = pe().meta;
   const observed = (meta.default_rate_total || 0) * 100;
   const predicted = (meta.mean_pd || 0) * 100;
   const expectedLoss = (meta.el_pct_ead || 0) * 100;
-  const primary = sheet.id === "expected-loss" ? expectedLoss : observed;
+  if (sheet.id === "expected-loss") return folderBarMarkup(sheet, expectedLoss);
+  const primary = sheet.id === "predicted" ? predicted : observed;
   const whole = Math.floor(primary + 1e-9);
   const fraction = primary - whole;
-  const predictedWhole = Math.floor(predicted + 1e-9);
-  const predictedFraction = predicted - predictedWhole;
+  const observedWhole = Math.min(99, Math.floor(observed + 1e-9));
   const dots = Array.from({ length: 100 }, (_, index) => {
     const classes = ["folder-dot"];
     let style = `--i:${index}`;
@@ -2648,36 +2707,39 @@ function folderVisualMarkup(sheet) {
       classes.push("is-partial");
       style += `;--fill:${fraction.toFixed(3)}`;
     }
-    if (sheet.id === "predicted" && index < predictedWhole) {
-      classes.push("is-outline");
-    } else if (sheet.id === "predicted" && index === predictedWhole && predictedFraction > 0.001) {
-      classes.push("is-outline", "is-outline-partial");
-      style += `;--outline-fill:${predictedFraction.toFixed(3)}`;
-    }
+    if (sheet.id === "predicted" && index === observedWhole) classes.push("is-observed");
     return `<span class="${classes.join(" ")}" style="${style}" aria-hidden="true"></span>`;
   }).join("");
-  const label = resolveInfoText(sheet.visual_label || "");
-  const note = resolveInfoText(sheet.visual_note || "");
-  return `<figure class="folder-visual">
-    <div class="folder-dots" role="img" aria-label="100 dots; ${primary.toFixed(2)} filled">${dots}</div>
-    <figcaption>${esc(label)}${note ? `<span class="folder-gap">${esc(note)}</span>` : ""}</figcaption>
+  const gap = Math.max(0, observed - predicted).toFixed(2);
+  const aria = sheet.id === "predicted"
+    ? `100 loans; ${predicted.toFixed(2)} predicted filled; ink ring marks observed ${observed.toFixed(2)}; observed minus predicted +${gap} pp`
+    : `100 loans; ${observed.toFixed(2)} filled`;
+  const compare = sheet.id === "predicted" ? `<div class="folder-compare" aria-hidden="true">
+    <span class="folder-compare-key"><span class="folder-compare-dot"></span>Predicted</span>
+    <span class="folder-compare-delta">+${gap} pp</span>
+    <span class="folder-compare-key"><span class="folder-compare-ring"></span>Observed</span>
+  </div>` : "";
+  return `<figure class="folder-visual folder-visual-dots">
+    <div class="folder-dots" role="img" aria-label="${esc(aria)}">${dots}</div>
+    ${compare}
+    <figcaption>${esc(resolveInfoText(sheet.visual_label || ""))}</figcaption>
   </figure>`;
 }
 
 function folderSheetMarkup(sheet, index) {
-  const hidden = index === 0 ? "" : " hidden";
-  return `<article class="folder-sheet-card folder-sheet-${index}" id="folder-sheet-${index}" data-folder-sheet="${index}" role="tabpanel" aria-labelledby="folder-tab-${index}"${hidden}>
-    <p class="folder-scope">${esc(resolveInfoText(FOLDER.scope || ""))}</p>
+  const active = index === 0;
+  return `<div class="folder-sheet-card folder-sheet-${index}" id="folder-sheet-${index}" data-folder-sheet="${index}" data-active="${active}" role="tabpanel" aria-labelledby="folder-tab-${index}" aria-hidden="${active ? "false" : "true"}"${active ? "" : " inert"}>
     <div class="folder-sheet-copy">
       <h3>${esc(resolveInfoText(sheet.title))}</h3>
       <p class="folder-headline">${esc(resolveInfoText(sheet.headline))}</p>
       <p class="folder-headline-label">${esc(resolveInfoText(sheet.headline_label))}</p>
       <p class="folder-copy"><strong>How it is computed here:</strong> ${esc(resolveInfoText(sheet.computation))}</p>
       <p class="folder-copy"><strong>How to read it:</strong> ${esc(resolveInfoText(sheet.reading))}</p>
-      <p class="folder-copy folder-caveat"><strong>Caveat:</strong> ${esc(resolveInfoText(sheet.caveat))}</p>
+      <p class="folder-copy folder-caveat"><span class="folder-caveat-label">Caveat</span>${esc(resolveInfoText(sheet.caveat))}</p>
+      ${folderMetricsMarkup(sheet)}
     </div>
     ${folderVisualMarkup(sheet)}
-  </article>`;
+  </div>`;
 }
 
 function folderOverlayMarkup() {
@@ -2693,11 +2755,15 @@ function folderOverlayMarkup() {
     <div class="folder-tabs" role="tablist" aria-label="Portfolio sheets">
       ${sheets.map((sheet, index) => `<button type="button" class="folder-tab folder-tab-${index}" id="folder-tab-${index}" data-folder-tab="${index}" role="tab" aria-selected="${index === 0}" aria-controls="folder-sheet-${index}" tabindex="${index === 0 ? 0 : -1}">${esc(sheet.tab)}</button>`).join("")}
     </div>
-    <div class="folder-main">
+    <p class="folder-scope" id="folder-scope">${esc(resolveInfoText(FOLDER.scope || ""))}</p>
+    <div class="folder-main" tabindex="0" aria-label="Portfolio sheet content">
       <div class="folder-fan" id="folder-fan" data-active="0" aria-hidden="true">
         <span class="folder-fan-sheet folder-fan-0"></span>
         <span class="folder-fan-sheet folder-fan-1"></span>
         <span class="folder-fan-sheet folder-fan-2"></span>
+        <span class="folder-fan-badge folder-fan-badge-0">1</span>
+        <span class="folder-fan-badge folder-fan-badge-1">2</span>
+        <span class="folder-fan-badge folder-fan-badge-2">3</span>
       </div>
       <div class="folder-sheet-stack">${sheets.map(folderSheetMarkup).join("")}</div>
     </div>
@@ -2753,7 +2819,12 @@ function setFolderSheet(index, { focusTab = false } = {}) {
     tab.setAttribute("aria-selected", active ? "true" : "false");
     tab.tabIndex = active ? 0 : -1;
   });
-  $$("[data-folder-sheet]", overlay).forEach((panel, panelIndex) => { panel.hidden = panelIndex !== folderActive; });
+  $$("[data-folder-sheet]", overlay).forEach((panel, panelIndex) => {
+    const active = panelIndex === folderActive;
+    panel.dataset.active = active ? "true" : "false";
+    panel.setAttribute("aria-hidden", active ? "false" : "true");
+    panel.toggleAttribute("inert", !active);
+  });
   const fan = $("#folder-fan", overlay);
   if (fan) fan.dataset.active = String(folderActive);
   const counter = $("#folder-counter", overlay);

@@ -115,7 +115,7 @@
   },
   "cutoff-tabs": {
     "title": "Cutoff diagnostics",
-    "text": "The Trade-off tab plots approval and approved bad rates against the cutoff. The KS curve plots cumulative good and bad shares; the largest gap is the binned KS statistic.",
+    "text": "The Trade-off tab plots approval and approved bad rates against the cutoff. The KS curve uses the points scorecard in score bins; its largest gap is the scorecard's binned KS. The published KS belongs to the champion model's continuous predicted probabilities, so the two values describe different scores. The marked cutoff is a separate approval threshold, not this curve's maximum.",
     "try": "Move the cutoff and compare the dots with the KPI cards.",
     "term": "ks"
   },

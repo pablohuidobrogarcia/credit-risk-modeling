@@ -342,13 +342,13 @@
                 <h3 id="surface-title">Tail loss by grade</h3>
                 <p class="panel-sub" id="surface-sub">-</p>
               </div>
-              <div class="segmented surface-toggle compact" id="tail-metric" role="group" aria-label="Tail metric">
-                <button type="button" data-tail-metric="share" aria-pressed="true">Tail share</button>
-                <button type="button" data-tail-metric="ratio" aria-pressed="false">Concentration</button>
+              <div class="segmented surface-toggle compact" id="tail-metric" role="group" aria-label="Tail representation view">
+                <button type="button" data-tail-metric="diff" aria-pressed="true">Over / under-represented (pp)</button>
+                <button type="button" data-tail-metric="share" aria-pressed="false">Share of tail loss (%)</button>
               </div>
             </div>
-            <p class="surface-axis-key" id="surface-axis-key"><span>x: Loan grade</span><span>y: Asset correlation ρ</span><span>z: <span id="surface-z-label">Share of tail loss (%)</span></span></p>
-            <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional bars of tail-loss share by loan grade and asset correlation"></div>
+            <p class="surface-axis-key" id="surface-axis-key"><span>x: Loan grade</span><span>y: Asset correlation rho</span><span>z: <span id="surface-z-label">Tail share minus EL share (pp)</span></span></p>
+            <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional bars of tail-loss over- or under-representation by loan grade and asset correlation"></div>
             <p class="chart-note" id="surface-note"></p>
             <p class="chart-fallback" id="surface-fallback" hidden></p>
           </section>

@@ -25,6 +25,7 @@ from typing import Any, Dict, List
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
 from matplotlib.ticker import FuncFormatter
 
 from . import bin_labels
@@ -539,19 +540,37 @@ def figure_static_tail_by_grade(summary: Dict[str, Any]) -> Path:
     grades = tail["grades"]
     rhos = tail["rhos"]
     cells = {(cell["grade"], float(cell["rho"])): cell for cell in tail["cells"]}
-    share = np.array(
-        [[cells[(grade, float(rho))]["tail_share"] * 100 for rho in rhos] for grade in grades]
+    diff = np.array(
+        [
+            [
+                (cells[(grade, float(rho))]["tail_share"] - cells[(grade, float(rho))]["el_share"]) * 100
+                for rho in rhos
+            ]
+            for grade in grades
+        ]
     )
+    max_abs = float(np.abs(diff).max())
+    step = 2.0 if max_abs > 3 else 1.0 if max_abs > 1 else 0.5
+    limit = max(step, np.ceil(max_abs / step) * step)
+    cmap = LinearSegmentedColormap.from_list(
+        "tail_over_under", [vs.OKABE_ITO["lilac_dark"], vs.OKABE_ITO["light_grey"], vs.OKABE_ITO["teal"]]
+    )
+    norm = TwoSlopeNorm(vmin=-limit, vcenter=0, vmax=limit)
     fig, ax = plt.subplots(figsize=vs.FIGSIZE_WIDE)
-    im = ax.imshow(share, aspect="auto", cmap=vs.risk_cmap())
-    ax.set_xticks(range(len(rhos)))
-    ax.set_xticklabels([f"{rho:.2f}" for rho in rhos], rotation=45)
+    im = ax.imshow(diff, aspect="auto", cmap=cmap, norm=norm)
+    tick_idx = list(range(0, len(rhos), 2))
+    base_idx = min(range(len(rhos)), key=lambda i: abs(rhos[i] - float(tail["base_rho"])))
+    if base_idx not in tick_idx:
+        tick_idx.append(base_idx)
+    tick_idx = sorted(set(tick_idx))
+    ax.set_xticks(tick_idx)
+    ax.set_xticklabels([f"{rhos[i]:.2f}" for i in tick_idx], rotation=45)
     ax.set_yticks(range(len(grades)))
     ax.set_yticklabels(grades)
     ax.set_xlabel("Asset correlation rho")
     ax.set_ylabel("Loan grade")
-    ax.set_title("Share of the 99% tail loss by grade and correlation")
-    plt.colorbar(im, ax=ax, label="Share of tail loss (%)")
+    ax.set_title("Tail share minus expected-loss share by grade and correlation")
+    plt.colorbar(im, ax=ax, label="Tail share minus EL share (pp)")
     vs.annotate_source(
         ax,
         f"Source: showcase_tail_by_grade.json ({tail['n_simulations']:,} paths/rho; "

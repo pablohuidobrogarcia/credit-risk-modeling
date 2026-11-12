@@ -310,7 +310,7 @@ button, input, select { font: inherit; color: inherit; }
 .segmented button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
 .segmented button:hover:not([aria-selected="true"]) { color: var(--fg); background: color-mix(in srgb, var(--fg) 7%, transparent); }
 .segmented.compact button { padding: 0.32rem 0.6rem; font-size: 0.75rem; }
-.surface-toggle { flex-wrap: nowrap; width: auto; max-width: 100%; border-color: var(--border-strong); background: color-mix(in srgb, var(--card-solid) 74%, transparent); }
+.surface-toggle { flex-wrap: wrap; width: auto; max-width: 100%; border-color: var(--border-strong); background: color-mix(in srgb, var(--card-solid) 74%, transparent); }
 .surface-toggle button { border-radius: 999px; }
 .surface-toggle button[aria-selected="true"],
 .surface-toggle button[aria-pressed="true"] { background: var(--lilac-light); color: var(--ink); font-weight: 800; box-shadow: inset 0 0 0 1px var(--lilac-dark); }
@@ -1146,6 +1146,9 @@ body.welcome-open { overflow: hidden; }
 @media (min-width: 861px) and (max-width: 1120px) {
   #loss-chart { height: 400px; min-height: 400px; }
 }
+@media (min-width: 1001px) and (max-width: 1200px) {
+  .risk-grid { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+}
 @media (max-width: 860px) {
   .explorer-grid { grid-template-columns: 1fr; }
   .risk-grid, .risk-grid.lower, .evidence-columns { grid-template-columns: 1fr; }
@@ -1185,7 +1188,7 @@ body.welcome-open { overflow: hidden; }
   .tile { border-radius: 5px; font-size: 0.42rem; }
   .tile.insufficient::after { width: 8px; height: 8px; font-size: 0.4rem; }
   .chart-host { height: 300px; min-height: 300px; }
-  .chart-host.surface-host { height: 340px; min-height: 340px; }
+  .chart-host.surface-host { height: 400px; min-height: 400px; }
   .rank-list { max-height: 440px; }
   .panel-head { flex-wrap: wrap; }
   .panel-head .control-with-info { min-width: 0; max-width: 100%; }

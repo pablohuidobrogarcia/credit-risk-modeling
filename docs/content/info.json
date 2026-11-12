@@ -67,8 +67,8 @@
   },
   "surface": {
     "title": "Tail loss by grade",
-    "text": "The 3D bars show each grade's share of the worst 1% of simulated portfolio losses at each asset correlation. The tooltip also shows the grade's expected-loss share and the concentration ratio; a ratio above 1 means the grade is over-represented in the tail. This is a bucket-level simulation with LGD constant per bucket and base PD/LGD stress, so treat small grade shares as noisy. The chart does not change the sliders.",
-    "try": "Move the rho slider to a high value and compare grade A's tail share with its expected-loss share.",
+    "text": "Over / under-represented (pp) is each grade's share of the worst 1% of simulated portfolio losses minus its share of expected loss, in percentage points. Bars above 0 are over-represented in the tail; bars below 0 are under-represented. The chart assumes one common asset correlation for all grades; under that assumption, low-PD grades gain relative weight in bad years, so the finding depends on the assumption. The result is a bucket-level simulation with LGD constant per bucket and base PD/LGD stress. Whiskers show the bootstrap standard error over 1,000 tail paths, not model uncertainty. The chart does not change the sliders.",
+    "try": "Move the rho slider and compare grade A's over-representation with the under-represented grades; switch to Share of tail loss (%) to see the level.",
     "term": "vasicek"
   },
   "sim-dti": {

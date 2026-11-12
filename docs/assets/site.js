@@ -124,6 +124,7 @@ const num = (value) => (typeof value === "number" && Number.isFinite(value) ? va
 const fmtInt = (value) => (num(value) == null ? "—" : Math.round(value).toLocaleString("en-US"));
 const fmtPct = (value, nd = 2) => (num(value) == null ? "—" : `${(value * 100).toFixed(nd)}%`);
 const fmtNum = (value, nd = 4) => (num(value) == null ? "—" : Number(value).toFixed(nd));
+const fmtSigned = (value, nd = 2) => (num(value) == null ? "?" : `${value > 0 ? "+" : ""}${Number(value).toFixed(nd)}`);
 const fmtX = (value) => (num(value) == null ? "—" : `${Number(value).toFixed(2)}×`);
 const fmtMoney = (value) => {
   if (num(value) == null) return "—";
@@ -141,7 +142,7 @@ const state = {
   sel: null,
   search: "",
   risk: { rho: null, pd: null, lgd: null },
-  tailMetric: "share",
+  tailMetric: "diff",
   cutoff: null,
   cutoffTab: "tradeoff",
   sim: {},
@@ -175,7 +176,7 @@ function readHash() {
   state.metric = read("metric", "default_rate");
   state.sel = read("sel", null);
   state.search = read("q", "");
-  state.tailMetric = read("tm", "share") === "ratio" ? "ratio" : "share";
+  state.tailMetric = read("tm", "diff") === "share" ? "share" : "diff";
   const rho = Number(read("rho", ""));
   const pd = Number(read("pd", ""));
   const lgd = Number(read("lgd", ""));
@@ -197,7 +198,7 @@ function writeHash(push) {
   if (state.risk.rho != null) params.set("rho", String(state.risk.rho));
   if (state.risk.pd != null) params.set("pd", String(state.risk.pd));
   if (state.risk.lgd != null) params.set("lgd", String(state.risk.lgd));
-  if (state.tailMetric !== "share") params.set("tm", state.tailMetric);
+  if (state.tailMetric !== "diff") params.set("tm", state.tailMetric);
   if (state.cutoff != null) params.set("cut", String(state.cutoff));
   if (state.term) params.set("term", state.term);
   const url = `#${params.toString()}`;
@@ -1847,7 +1848,7 @@ function setupRiskControls() {
   bind("risk-pd", "pd", opts.pds, "PD stress");
   bind("risk-lgd", "lgd", opts.lgds, "LGD stress");
   $$("#tail-metric button").forEach((btn) => {
-    btn.onclick = () => { state.tailMetric = btn.dataset.tailMetric === "ratio" ? "ratio" : "share"; commit({ push: true }); };
+    btn.onclick = () => { state.tailMetric = btn.dataset.tailMetric === "share" ? "share" : "diff"; commit({ push: true }); };
   });
   $("#play-rho").onclick = toggleSweep;
 }
@@ -1998,30 +1999,67 @@ function tailData() {
   return D && D.interactive && D.interactive.tail_by_grade ? D.interactive.tail_by_grade : null;
 }
 function tailZLabel() {
-  return state.tailMetric === "ratio" ? "Tail share / EL share (x)" : "Share of tail loss (%)";
+  return state.tailMetric === "share" ? "Share of tail loss (%)" : "Tail share minus EL share (pp)";
+}
+function tailDiff(cell) {
+  return (cell.tail_share - cell.el_share) * 100;
 }
 function tailValue(cell) {
-  return state.tailMetric === "ratio" ? cell.ratio : cell.tail_share * 100;
+  return state.tailMetric === "share" ? cell.tail_share * 100 : tailDiff(cell);
 }
 function tailUncertainty(cell) {
-  return state.tailMetric === "ratio" ? cell.ratio_se : cell.tail_share_se * 100;
+  return cell.tail_share_se * 100;
+}
+function tailHoverTemplate() {
+  return "Grade %{customdata[0]}<br>rho=%{customdata[1]}<br>Tail share=%{customdata[2]}%<br>EL share=%{customdata[3]}%<br>Difference=%{customdata[4]} pp<br>Tail / EL=%{customdata[5]}x<br>Tail paths=%{customdata[6]}<br>+/-1 SE=%{customdata[7]} pp<extra></extra>";
+}
+function tailRhoTicks(rhos, baseRho) {
+  const vals = [];
+  for (let i = 0; i < rhos.length; i += 2) vals.push(i);
+  const baseIndex = nearestIndex(rhos, baseRho);
+  if (!vals.includes(baseIndex)) vals.push(baseIndex);
+  vals.sort((a, b) => a - b);
+  return { vals, text: vals.map((i) => fmtNum(rhos[i], 2)) };
+}
+function tailGradeList(items, order) {
+  if (!items.length) return "none";
+  if (items.length >= 3) {
+    const positions = items.map((grade) => order.indexOf(grade));
+    const contiguous = positions.every((value, index) => index === 0 || value === positions[index - 1] + 1);
+    if (contiguous) return `${items[0]} to ${items[items.length - 1]}`;
+  }
+  return items.join(", ");
+}
+function tailSubtitle(tail, selectedRho, selectedCells) {
+  const deltas = selectedCells.map((cell) => ({ ...cell, diff: tailDiff(cell) }));
+  const top = deltas.slice().sort((a, b) => b.diff - a.diff)[0];
+  const requested = state.risk.rho == null ? tail.base_rho : state.risk.rho;
+  const nearestNote = Math.abs(Number(requested) - selectedRho) > 1e-9
+    ? ` (nearest grid point to rho = ${fmtNum(requested, 2)})`
+    : "";
+  if (!top) return "Tail-loss over- and under-representation by loan grade and asset correlation.";
+  const above = deltas.filter((cell) => cell.diff > 0).map((cell) => cell.grade);
+  const below = deltas.filter((cell) => cell.diff < 0).map((cell) => cell.grade);
+  return `At rho = ${fmtNum(selectedRho, 2)}${nearestNote}, grade ${top.grade} is ${fmtPct(top.el_share, 1)} of expected loss but ${fmtPct(top.tail_share, 1)} of tail loss (${fmtNum(top.ratio, 2)}x). Above EL share: ${tailGradeList(above, tail.grades)}. Below: ${tailGradeList(below, tail.grades)}.`;
+}
+function tailDiffScale(p) {
+  return [[0, p.lilacDark], [0.5, p.border], [1, p.teal]];
 }
 function tailChartHeight(host) {
-  if (window.innerWidth < 700) return 340;
+  if (window.innerWidth < 700) return 400;
   if (window.matchMedia("(min-width: 1001px)").matches) {
-    return Math.max(540, Math.round(host.clientHeight || 540));
+    return Math.max(560, Math.round(host.clientHeight || 560));
   }
-  return 540;
+  return 560;
 }
 function tailBox(cx, cy, z, width, depth) {
   const x0 = cx - width / 2;
   const x1 = cx + width / 2;
   const y0 = cy - depth / 2;
   const y1 = cy + depth / 2;
-  const zz = Math.max(0, z);
   const vertices = [
     [x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0],
-    [x0, y0, zz], [x1, y0, zz], [x1, y1, zz], [x0, y1, zz],
+    [x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z],
   ];
   const faces = [
     [0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6],
@@ -2039,114 +2077,129 @@ function drawTailByGrade(scenario) {
   const rhos = tail.rhos;
   const cells = tail.cells;
   const cellMap = new Map(cells.map((cell) => [`${cell.grade}|${cell.rho}`, cell]));
-  const selectedRho = nearestValue(rhos, state.risk.rho);
-  const selectedIndex = nearestIndex(rhos, state.risk.rho);
+  const requestedRho = state.risk.rho == null ? tail.base_rho : state.risk.rho;
+  const selectedRho = nearestValue(rhos, requestedRho);
+  const selectedIndex = nearestIndex(rhos, requestedRho);
   const selectedCells = grades.map((grade) => cellMap.get(`${grade}|${selectedRho}`)).filter(Boolean);
-  const top = selectedCells.slice().sort((a, b) => b.ratio - a.ratio)[0];
   const tailPaths = selectedCells.length ? selectedCells[0].n_tail_paths : 0;
   const metricLabel = tailZLabel();
+  const rhoTicks = tailRhoTicks(rhos, tail.base_rho);
+  const maxAbsDiff = Math.max(...cells.map((cell) => Math.abs(tailDiff(cell))));
+  const diffStep = maxAbsDiff > 3 ? 2 : maxAbsDiff > 1 ? 1 : 0.5;
+  const diffLimit = Math.max(diffStep, Math.ceil(maxAbsDiff / diffStep) * diffStep);
+  const diffTicks = [];
+  for (let value = -diffLimit; value <= diffLimit + 1e-9; value += diffStep) diffTicks.push(Number(value.toFixed(6)));
+  const diffTickText = diffTicks.map((value) => value > 0 ? `+${fmtNum(value, diffStep < 1 ? 1 : 0)}` : fmtNum(value, diffStep < 1 ? 1 : 0));
+  const shareMax = Math.max(...cells.map((cell) => cell.tail_share * 100));
+  const zRange = state.tailMetric === "share" ? [0, shareMax * 1.08] : [-diffLimit, diffLimit];
 
-  $("#surface-sub").textContent = top
-    ? `Worst 1% of ${fmtInt(tail.n_simulations)} paths (${fmtInt(tailPaths)} tail paths). Grade ${top.grade}: ${fmtPct(top.el_share, 1)} of expected loss but ${fmtPct(top.tail_share, 1)} of tail loss (${fmtNum(top.ratio, 2)}x).`
-    : "Tail-loss shares by grade and asset correlation.";
+  $("#surface-sub").textContent = tailSubtitle(tail, selectedRho, selectedCells);
   const zLabel = $("#surface-z-label");
   if (zLabel) zLabel.textContent = metricLabel;
   const note = $("#surface-note");
   if (note) {
-    note.textContent = `Tail = portfolio loss at or above VaR 99% in ${fmtInt(tail.n_simulations)} simulated years; ${fmtInt(tailPaths)} tail paths define it per rho. Whiskers show +/-1 bootstrap SE for the highlighted rho slice (${fmtInt(tail.n_bootstrap)} resamples). Bucket-level simulation; LGD is constant per bucket; base PD and LGD stress.`;
+    note.textContent = `Tail = portfolio loss at or above VaR 99% in ${fmtInt(tail.n_simulations)} simulated years; ${fmtInt(tailPaths)} tail paths define it per rho. Whiskers show +/-1 bootstrap SE over those paths (${fmtInt(tail.n_bootstrap)} resamples), not model uncertainty. One common asset correlation is assumed for all grades; low-PD grades gain relative weight in bad years under that assumption. Bucket-level simulation; LGD is constant per bucket; base PD and LGD stress.`;
   }
   host.dataset.selectedRho = String(selectedRho);
   host.dataset.metric = state.tailMetric;
 
   if (!PLOTLY) {
-    showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static tail-by-grade heatmap is shown.");
+    showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static over/under-representation heatmap is shown.");
     return;
   }
 
   const height = tailChartHeight(host);
-  const zmax = Math.max(1, ...cells.map((cell) => tailValue(cell)));
   const gradeX = (grade) => grades.indexOf(grade);
   const rhoY = (rho) => rhos.indexOf(rho);
   let ok = false;
+  const hoverTemplate = tailHoverTemplate();
 
   if (!hasWebGL() || window.innerWidth < 700) {
+    const isDiff = state.tailMetric === "diff";
     const z = rhos.map((rho) => grades.map((grade) => tailValue(cellMap.get(`${grade}|${rho}`))));
     const customdata = rhos.map((rho) => grades.map((grade) => {
       const cell = cellMap.get(`${grade}|${rho}`);
-      return [grade, rho, cell.tail_share * 100, cell.el_share * 100, cell.ratio, cell.n_tail_paths, cell.tail_share_se * 100];
+      return [grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)];
     }));
+    const colorbar = {
+      title: { text: isDiff ? "pp" : "%", side: "top", font: { size: 10 } },
+      thickness: 10, len: 0.86, tickfont: { size: 10 },
+    };
+    if (isDiff) {
+      colorbar.tickvals = diffTicks;
+      colorbar.ticktext = diffTickText;
+    } else {
+      colorbar.tickformat = ".0f";
+    }
     ok = plot(host, [
       {
         z, x: grades.map((_, i) => i), y: rhos.map((_, i) => i), type: "heatmap",
-        colorscale: p.riskScale, customdata,
-        hovertemplate: "Grade %{customdata[0]}<br>rho=%{customdata[1]:.2f}<br>Tail share=%{customdata[2]:.2f}%<br>EL share=%{customdata[3]:.2f}%<br>Tail / EL=%{customdata[4]:.2f}x<br>Tail paths=%{customdata[5]:,}<br>+/-1 SE=%{customdata[6]:.2f} pp<extra></extra>",
+        colorscale: isDiff ? tailDiffScale(p) : p.riskScale,
+        zmin: isDiff ? -diffLimit : 0, zmax: isDiff ? diffLimit : shareMax, zmid: isDiff ? 0 : undefined,
+        customdata, colorbar, hovertemplate: hoverTemplate,
       },
       {
         x: [gradeX(grades[0]) - 0.5, gradeX(grades[grades.length - 1]) + 0.5],
         y: [selectedIndex, selectedIndex], mode: "lines", type: "scatter",
-        line: { color: p.ink, width: 2, dash: "dash" }, hoverinfo: "skip", showlegend: false,
+        line: { color: p.ink, width: 3, dash: "dash" }, hoverinfo: "skip", showlegend: false,
       },
     ], {
       height,
-      xaxis: { title: { text: "Loan grade" }, tickvals: grades.map((_, i) => i), ticktext: grades, range: [-0.5, grades.length - 0.5], zeroline: false },
-      yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhos.map((_, i) => i), ticktext: rhos.map((v) => fmtNum(v, 2)), range: [-0.5, rhos.length - 0.5], zeroline: false },
-      margin: { l: 58, r: 18, t: 24, b: 52 },
-      colorbar: { title: { text: metricLabel }, tickformat: state.tailMetric === "ratio" ? ".2f" : ".1f" },
+      xaxis: { title: { text: "Loan grade" }, tickvals: grades.map((_, i) => i), ticktext: grades, tickangle: 0, tickfont: { size: 10 }, automargin: true, range: [-0.5, grades.length - 0.5], zeroline: false },
+      yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, tickfont: { size: 10 }, range: [-0.5, rhos.length - 0.5], zeroline: false },
+      margin: { l: 58, r: 12, t: 24, b: 64 },
     });
     host.dataset.mode = "heatmap";
   } else {
     const traces = [];
-    const hoverTemplate = "Grade %{customdata[0]}<br>rho=%{customdata[1]:.2f}<br>Tail share=%{customdata[2]:.2f}%<br>EL share=%{customdata[3]:.2f}%<br>Tail / EL=%{customdata[4]:.2f}x<br>Tail paths=%{customdata[5]:,}<br>+/-1 SE=%{customdata[6]:.2f} pp<extra></extra>";
     grades.forEach((grade, gi) => {
-      const bx = []; const by = []; const bz = []; const bi = []; const bj = []; const bk = []; const bcd = [];
-      let offset = 0;
-      rhos.forEach((rho) => {
+      const color = scaleColor(gi / Math.max(1, grades.length - 1));
+      rhos.forEach((rho, ri) => {
         const cell = cellMap.get(`${grade}|${rho}`);
-        const box = tailBox(gi, rhoY(rho), tailValue(cell), 0.72, 0.56);
-        const cd = [grade, rho, cell.tail_share * 100, cell.el_share * 100, cell.ratio, cell.n_tail_paths, cell.tail_share_se * 100];
-        box.vertices.forEach((v) => { bx.push(v[0]); by.push(v[1]); bz.push(v[2]); bcd.push(cd); });
-        box.faces.forEach((f) => { bi.push(f[0] + offset); bj.push(f[1] + offset); bk.push(f[2] + offset); });
-        offset += box.vertices.length;
-      });
-      traces.push({
-        type: "mesh3d", x: bx, y: by, z: bz, i: bi, j: bj, k: bk,
-        customdata: bcd, hovertemplate: hoverTemplate,
-        color: scaleColor(gi / Math.max(1, grades.length - 1)),
-        opacity: 0.96, flatshading: true, showscale: false, name: `Grade ${grade}`,
-        lighting: { ambient: 0.72, diffuse: 0.72, specular: 0.18, roughness: 0.72 },
+        const isSelected = ri === selectedIndex;
+        const box = tailBox(gi, ri, tailValue(cell), 0.68, 0.46);
+        const cd = [grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)];
+        const trace = {
+          type: "mesh3d", x: box.vertices.map((v) => v[0]), y: box.vertices.map((v) => v[1]), z: box.vertices.map((v) => v[2]),
+          i: box.faces.map((f) => f[0]), j: box.faces.map((f) => f[1]), k: box.faces.map((f) => f[2]),
+          customdata: box.vertices.map(() => cd), hovertemplate: hoverTemplate,
+          color, opacity: isSelected ? 0.98 : 0.52, flatshading: true, showscale: false,
+          name: `Grade ${grade}`, lighting: { ambient: 0.72, diffuse: 0.72, specular: 0.18, roughness: 0.72 },
+        };
+        if (isSelected) trace.line = { color: p.ink, width: 3 };
+        traces.push(trace);
       });
     });
 
-    if (state.tailMetric === "ratio") {
+    if (state.tailMetric === "diff") {
       traces.push({
         type: "surface", x: [0, grades.length - 1], y: [0, rhos.length - 1],
-        z: [[1, 1], [1, 1]], opacity: 0.16, showscale: false,
+        z: [[0, 0], [0, 0]], opacity: 0.18, showscale: false,
         colorscale: [[0, p.ink], [1, p.ink]], hoverinfo: "skip", showlegend: false,
       });
       traces.push({
         type: "scatter3d",
         x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
         y: [-0.45, -0.45, rhos.length - 0.55, rhos.length - 0.55, -0.45],
-        z: [1, 1, 1, 1, 1], mode: "lines",
+        z: [0, 0, 0, 0, 0], mode: "lines",
         line: { color: p.ink, width: 2 }, hoverinfo: "skip", showlegend: false,
       });
     }
 
-    const markerX = []; const markerY = []; const markerZ = []; const markerData = []; const markerColor = [];
-    rhos.forEach((rho) => {
-      grades.forEach((grade) => {
+    const markerX = []; const markerY = []; const markerZ = []; const markerData = []; const markerColor = []; const markerSize = [];
+    rhos.forEach((rho, ri) => {
+      grades.forEach((grade, gi) => {
         const cell = cellMap.get(`${grade}|${rho}`);
         markerX.push(gradeX(grade)); markerY.push(rhoY(rho)); markerZ.push(tailValue(cell));
-        markerColor.push(scaleColor(gradeX(grade) / Math.max(1, grades.length - 1)));
-        markerData.push([grade, rho, cell.tail_share * 100, cell.el_share * 100, cell.ratio, cell.n_tail_paths, cell.tail_share_se * 100]);
+        markerColor.push(scaleColor(gi / Math.max(1, grades.length - 1)));
+        markerSize.push(ri === selectedIndex ? 7 : 4);
+        markerData.push([grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)]);
       });
     });
     traces.push({
       type: "scatter3d", x: markerX, y: markerY, z: markerZ, mode: "markers",
-      marker: { size: 4, color: markerColor, opacity: 0.72 },
-      customdata: markerData,
-      hovertemplate: "Grade %{customdata[0]}<br>rho=%{customdata[1]:.2f}<br>Tail share=%{customdata[2]:.2f}%<br>EL share=%{customdata[3]:.2f}%<br>Tail / EL=%{customdata[4]:.2f}x<br>Tail paths=%{customdata[5]:,}<br>+/-1 SE=%{customdata[6]:.2f} pp<extra></extra>",
-      showlegend: false,
+      marker: { size: markerSize, color: markerColor, opacity: 0.72 },
+      customdata: markerData, hovertemplate: hoverTemplate, showlegend: false,
     });
 
     grades.forEach((grade, gi) => {
@@ -2155,44 +2208,59 @@ function drawTailByGrade(scenario) {
       const unc = tailUncertainty(cell);
       traces.push({
         type: "scatter3d", x: [gi, gi], y: [selectedIndex, selectedIndex],
-        z: [Math.max(0, value - unc), value + unc], mode: "lines",
+        z: [value - unc, value + unc], mode: "lines",
         line: { color: p.ink, width: 2 }, hoverinfo: "skip", showlegend: false,
       });
     });
 
     traces.push({
+      type: "scatter3d",
+      x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
+      y: [selectedIndex - 0.38, selectedIndex - 0.38, selectedIndex + 0.38, selectedIndex + 0.38, selectedIndex - 0.38],
+      z: [0, 0, 0, 0, 0], mode: "lines",
+      line: { color: p.ink, width: 4 }, hoverinfo: "skip", showlegend: false,
+    });
+    traces.push({
       type: "mesh3d",
       x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55],
       y: [selectedIndex, selectedIndex, selectedIndex, selectedIndex],
-      z: [0, 0, zmax, zmax], i: [0, 0], j: [1, 2], k: [2, 3],
-      color: p.accent, opacity: 0.09, hoverinfo: "skip", showlegend: false,
+      z: [zRange[0], zRange[0], zRange[1], zRange[1]], i: [0, 0], j: [1, 2], k: [2, 3],
+      color: p.accent, opacity: 0.06, hoverinfo: "skip", showlegend: false,
     });
     traces.push({
       type: "scatter3d",
       x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
       y: [selectedIndex, selectedIndex, selectedIndex, selectedIndex, selectedIndex],
-      z: [0, 0, zmax, zmax, 0], mode: "lines",
-      line: { color: p.accent, width: 2 }, hoverinfo: "skip", showlegend: false,
+      z: [zRange[0], zRange[0], zRange[1], zRange[1], zRange[0]], mode: "lines",
+      line: { color: p.ink, width: 4 }, hoverinfo: "skip", showlegend: false,
     });
 
+    const zaxis = { title: { text: metricLabel }, color: p.muted, range: zRange };
+    if (state.tailMetric === "diff") {
+      zaxis.tickvals = diffTicks;
+      zaxis.ticktext = diffTickText;
+    } else {
+      zaxis.tickformat = ".0f";
+    }
+    const narrowChart = host.clientWidth < 650;
     ok = plot(host, traces, {
       height,
       scene: {
-        domain: { x: [0.08, 0.99], y: [0.0, 1.0] },
+        domain: { x: [0.10, 0.99], y: [0.0, 1.0] },
         xaxis: { title: { text: "Loan grade" }, tickvals: grades.map((_, i) => i), ticktext: grades, range: [-0.6, grades.length - 0.4], color: p.muted },
-        yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhos.map((_, i) => i), ticktext: rhos.map((v) => fmtNum(v, 2)), range: [-0.6, rhos.length - 0.4], color: p.muted },
-        zaxis: { title: { text: metricLabel }, tickformat: state.tailMetric === "ratio" ? ".2f" : ".0f", color: p.muted },
-        camera: { eye: { x: 1.8, y: 1.75, z: 1.28 } },
-        aspectratio: { x: 1.2, y: 1, z: 0.62 },
+        yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, range: [-0.6, rhos.length - 0.4], color: p.muted },
+        zaxis,
+        camera: { eye: narrowChart ? { x: 1.95, y: 1.9, z: 1.4 } : { x: 1.8, y: 1.75, z: 1.28 } },
+        aspectratio: { x: 1.15, y: 1, z: narrowChart ? 0.86 : 1.0 },
       },
-      margin: { l: 12, r: 8, t: 8, b: 8 },
+      margin: { l: 12, r: 8, t: 4, b: 4 },
       showlegend: false,
     });
     host.dataset.mode = "surface";
   }
 
   if (!ok) {
-    showFallback(host, "assets/risk_surface_static.png", "The chart could not be drawn; a static tail-by-grade heatmap is shown.");
+    showFallback(host, "assets/risk_surface_static.png", "The chart could not be drawn; a static over/under-representation heatmap is shown.");
     return;
   }
   if (!host.__tailResizeObserver && window.ResizeObserver) {

@@ -343,12 +343,12 @@
                 <p class="panel-sub" id="surface-sub">-</p>
               </div>
               <div class="segmented surface-toggle compact" id="tail-metric" role="group" aria-label="Tail representation view">
-                <button type="button" data-tail-metric="diff" aria-pressed="true">Over / under-represented (pp)</button>
-                <button type="button" data-tail-metric="share" aria-pressed="false">Share of tail loss (%)</button>
+                <button type="button" data-tail-metric="diff" aria-pressed="true">Difference (pp)</button>
+                <button type="button" data-tail-metric="share" aria-pressed="false">Share (%)</button>
               </div>
             </div>
-            <p class="surface-axis-key" id="surface-axis-key"><span>x: Loan grade</span><span>y: Asset correlation rho</span><span>z: <span id="surface-z-label">Tail share minus EL share (pp)</span></span></p>
             <div class="chart-host surface-host" id="surface-chart" role="img" aria-label="Three-dimensional bars of tail-loss over- or under-representation by loan grade and asset correlation"></div>
+            <div class="tail-legend" id="tail-legend" aria-label="Chart color legend"></div>
             <p class="chart-note" id="surface-note"></p>
             <p class="chart-fallback" id="surface-fallback" hidden></p>
           </section>

@@ -1681,20 +1681,20 @@ test("risk sliders, play sweep and the tail toggle control the shared state", as
 
   await expect(page.locator("#surface-metrics")).toHaveCount(0);
   const toggle = page.locator("#tail-metric button");
-  const diffButton = toggle.filter({ hasText: "Over / under-represented (pp)" });
-  const shareButton = toggle.filter({ hasText: "Share of tail loss (%)" });
+  const diffButton = toggle.filter({ hasText: "Difference (pp)" });
+  const shareButton = toggle.filter({ hasText: "Share (%)" });
   await expect(toggle).toHaveCount(2);
   await expect(diffButton).toHaveAttribute("aria-pressed", "true");
   await expect(shareButton).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator("#surface-chart canvas")).toBeVisible({ timeout: 20_000 });
-  await expect(page.locator("#surface-z-label")).toHaveText("Tail share minus EL share (pp)");
+  await expect(page.locator("#surface-chart")).toHaveAttribute("aria-label", /x axis: loan grade.*z axis: tail share minus expected-loss share/);
   await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el._fullLayout?.scene?.zaxis?.title?.text)).toBe("Tail share minus EL share (pp)");
 
   await shareButton.click();
   await expect(shareButton).toHaveAttribute("aria-pressed", "true");
   await expect(diffButton).toHaveAttribute("aria-pressed", "false");
   await expect(page).toHaveURL(/tm=share/);
-  await expect(page.locator("#surface-z-label")).toHaveText("Share of tail loss (%)");
+  await expect(page.locator("#surface-chart")).toHaveAttribute("aria-label", /z axis: share of tail loss/);
   await expect.poll(() => page.locator("#surface-chart").evaluate((el) => el._fullLayout?.scene?.zaxis?.title?.text)).toBe("Share of tail loss (%)");
   await diffButton.click();
   await expect(page.locator("#surface-chart")).toHaveAttribute("data-metric", "diff");
@@ -1758,10 +1758,13 @@ test("the tail chart highlights the rho slice, tracks the subtitle and exposes t
   await host.scrollIntoViewIfNeeded();
   const box = await host.boundingBox();
   let hoverText = "";
-  for (const [fx, fy] of [[0.3, 0.5], [0.4, 0.5], [0.5, 0.5], [0.3, 0.6], [0.4, 0.6], [0.5, 0.6]]) {
-    await page.mouse.move(box.x + box.width * fx, box.y + box.height * fy);
-    await page.waitForTimeout(120);
-    hoverText = await page.evaluate(() => document.querySelector("#surface-chart .hovertext")?.textContent || "");
+  for (const fx of [0.7, 0.6, 0.5, 0.4, 0.3]) {
+    for (const fy of [0.4, 0.5, 0.6, 0.7]) {
+      await page.mouse.move(box.x + box.width * fx, box.y + box.height * fy);
+      await page.waitForTimeout(100);
+      hoverText = await page.evaluate(() => document.querySelector("#surface-chart .hovertext")?.textContent || "");
+      if (hoverText.includes("EL share")) break;
+    }
     if (hoverText.includes("EL share")) break;
   }
   expect(hoverText).toContain("EL share");
@@ -1823,7 +1826,7 @@ test("tail copy names the rho and explains representation, assumption and uncert
   await expect(page.locator("#surface-note")).toContainText("One common asset correlation");
   await page.locator('.info-btn[data-info="surface"]').click();
   await expect(page.locator("#info-popover")).toContainText("worst 1%");
-  await expect(page.locator("#info-popover")).toContainText("Over / under-represented (pp)");
+  await expect(page.locator("#info-popover")).toContainText("The difference view");
   await expect(page.locator("#info-popover")).toContainText("one common asset correlation");
   await expect(page.locator("#info-popover")).toContainText("not model uncertainty");
   await expect(page.locator("#info-popover")).toContainText("does not change the sliders");
@@ -1833,6 +1836,74 @@ test("tail copy names the rho and explains representation, assumption and uncert
   expect(learnText).not.toMatch(/click the surface|surface.{0,80}(move|moves|set|sets|change|changes) the sliders/i);
   const pageText = await page.locator("body").innerText();
   expect(pageText).not.toMatch(/click the surface|click a point to move the sliders/i);
+  await expectNoErrors(errors);
+});
+
+test("tail toggle stays horizontal and the axes are exposed only accessibly", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  const host = page.locator("#surface-chart");
+  await expect(host.locator("canvas")).toBeVisible({ timeout: 20_000 });
+  const toggle = page.locator("#tail-metric");
+  for (const [width, height] of [[1360, 800], [1100, 800], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(700);
+    const layout = await toggle.evaluate((el) => ({
+      width: el.clientWidth,
+      scrollWidth: el.scrollWidth,
+      buttons: Array.from(el.querySelectorAll("button")).map((button) => {
+        const box = button.getBoundingClientRect();
+        return { top: box.top, height: box.height, text: button.textContent.trim() };
+      }),
+    }));
+    expect(layout.buttons.map((button) => button.text)).toEqual(["Difference (pp)", "Share (%)"]);
+    expect(Math.max(...layout.buttons.map((button) => button.top)) - Math.min(...layout.buttons.map((button) => button.top))).toBeLessThanOrEqual(1);
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.width + 1);
+    expect(Math.max(...layout.buttons.map((button) => button.height))).toBeLessThan(50);
+  }
+  await expect(page.locator("#surface-axis-key")).toHaveCount(0);
+  await expect(page.locator("#surface-z-label")).toHaveCount(0);
+  const aria = await host.getAttribute("aria-label");
+  expect(aria).toContain("x axis: loan grade");
+  expect(aria).toContain("y axis: asset correlation rho");
+  expect(aria).toContain("z axis: tail share minus expected-loss share");
+  await page.locator('#tail-metric button[data-tail-metric="share"]').click();
+  await expect(host).toHaveAttribute("aria-label", /z axis: share of tail loss/);
+  await expectNoErrors(errors);
+});
+
+test("tail chart has no slice panel, legend in both views and an unclipped footnote", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  const host = page.locator("#surface-chart");
+  const legend = page.locator("#tail-legend");
+  const panel = page.locator('section[aria-labelledby="surface-title"]');
+  await expect(host.locator("canvas")).toBeVisible({ timeout: 20_000 });
+  const hasSlicePanel = await host.evaluate((el) => el.data.some((trace) => trace.type === "mesh3d" && (trace.opacity == null ? 1 : trace.opacity) < 0.2));
+  expect(hasSlicePanel, "the old translucent slice panel should be gone").toBe(false);
+  await expect(legend).toContainText("Over-represented in the tail");
+  await expect(legend).toContainText("Under-represented");
+  await expect(legend.locator(".swatch")).toHaveCount(3);
+  await page.locator('#tail-metric button[data-tail-metric="share"]').click();
+  await page.waitForTimeout(500);
+  await expect(legend).toContainText("Color: loan grade (A low risk to G high risk)");
+  await expect(legend.locator(".grade-item")).toHaveCount(7);
+  await expect(legend.locator(".grade-letter")).toHaveText(["A", "B", "C", "D", "E", "F", "G"]);
+  await page.locator('#tail-metric button[data-tail-metric="diff"]').click();
+  await page.waitForTimeout(500);
+  for (const [width, height] of [[1360, 800], [1100, 800], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(700);
+    const note = page.locator("#surface-note");
+    await expect(note).toContainText("0.01");
+    await expect(note).toContainText("not model uncertainty");
+    const noteBox = await note.boundingBox();
+    const panelBox = await panel.boundingBox();
+    expect(noteBox.x).toBeGreaterThanOrEqual(panelBox.x - 1);
+    expect(noteBox.y).toBeGreaterThanOrEqual(panelBox.y - 1);
+    expect(noteBox.x + noteBox.width, `${width}px note right`).toBeLessThanOrEqual(panelBox.x + panelBox.width + 1);
+    expect(noteBox.y + noteBox.height, `${width}px note bottom`).toBeLessThanOrEqual(panelBox.y + panelBox.height + 1);
+  }
   await expectNoErrors(errors);
 });
 
@@ -2312,6 +2383,7 @@ test("mobile 390px stacks panels without horizontal scrolling and falls back to 
   await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
   await expect(page.locator("#surface-chart")).toHaveAttribute("data-mode", "heatmap");
   await expect(page.locator("#surface-chart")).toHaveAttribute("data-metric", "diff");
+  await expect(page.locator("#tail-legend")).toContainText("Color: difference from EL share");
   const fallback = await page.locator("#surface-chart").evaluate((el) => ({
     types: el.data.map((trace) => trace.type),
     rows: el.data[0].z.length,
@@ -2414,7 +2486,7 @@ test("inventory recommendations removed the orphaned boxes and shortened the kep
   expect(INFO["play-rho"].text).not.toContain("reduced motion");
   expect(INFO["gauge"].text).not.toContain("Monte Carlo");
   expect(INFO["surface"].text).toContain("worst 1%");
-  expect(INFO["surface"].text).toContain("Over / under-represented (pp)");
+  expect(INFO["surface"].text).toContain("The difference view");
   expect(INFO["surface"].text).toContain("one common asset correlation");
   expect(INFO["surface"].text).toContain("not model uncertainty");
   expect(INFO["surface"].text).toContain("does not change the sliders");
@@ -2667,8 +2739,8 @@ test("loss markers use a readable legend and the tail card is large with data-dr
   expect(sub).toMatch(/At rho = .+, grade [A-G] is .+ of expected loss but .+ of tail loss/);
   const toggle = page.locator("#tail-metric");
   await expect(toggle.locator("button")).toHaveCount(2);
-  await expect(toggle).toContainText("Over / under-represented (pp)");
-  await expect(toggle).toContainText("Share of tail loss (%)");
+  await expect(toggle).toContainText("Difference (pp)");
+  await expect(toggle).toContainText("Share (%)");
   for (const button of await toggle.locator("button").all()) {
     const box = await button.boundingBox();
     expect(box.width).toBeGreaterThan(20);
@@ -2724,10 +2796,10 @@ test("the default difference view has a zero plane and the share toggle removes 
   const tickText = await host.evaluate((el) => el._fullLayout?.scene?.zaxis?.ticktext);
   expect(tickText).toEqual(expect.arrayContaining(["+2", "-2", "0"]));
   const buttons = page.locator("#tail-metric button");
-  await buttons.filter({ hasText: "Share of tail loss (%)" }).click();
+  await buttons.filter({ hasText: "Share (%)" }).click();
   await expect(host).toHaveAttribute("data-metric", "share");
   await expect(host).toHaveAttribute("data-mode", "surface");
-  await expect(page.locator("#surface-z-label")).toHaveText("Share of tail loss (%)");
+  await expect(host).toHaveAttribute("aria-label", /z axis: share of tail loss/);
   const hasPlane = await host.evaluate((el) => el.data.some((item) => item.type === "surface"));
   expect(hasPlane).toBe(false);
   await expectNoErrors(errors);

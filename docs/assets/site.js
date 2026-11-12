@@ -2007,9 +2007,6 @@ function tailDiff(cell) {
 function tailValue(cell) {
   return state.tailMetric === "share" ? cell.tail_share * 100 : tailDiff(cell);
 }
-function tailUncertainty(cell) {
-  return cell.tail_share_se * 100;
-}
 function tailHoverTemplate() {
   return "Grade %{customdata[0]}<br>rho=%{customdata[1]}<br>Tail share=%{customdata[2]}%<br>EL share=%{customdata[3]}%<br>Difference=%{customdata[4]} pp<br>Tail / EL=%{customdata[5]}x<br>Tail paths=%{customdata[6]}<br>+/-1 SE=%{customdata[7]} pp<extra></extra>";
 }
@@ -2044,6 +2041,20 @@ function tailSubtitle(tail, selectedRho, selectedCells) {
 }
 function tailDiffScale(p) {
   return [[0, p.lilacDark], [0.5, p.border], [1, p.teal]];
+}
+function renderTailLegend(tail) {
+  const host = $("#tail-legend");
+  if (!host) return;
+  if (state.tailMetric === "share") {
+    const swatches = tail.grades.map((grade, index) => {
+      const color = scaleColor(index / Math.max(1, tail.grades.length - 1));
+      return `<span class="legend-item grade-item"><span class="grade-swatch" style="background:${color}"></span><span class="grade-letter">${grade}</span></span>`;
+    }).join("");
+    host.innerHTML = `<span class="legend-title">Color: loan grade (A low risk to G high risk)</span>${swatches}`;
+  } else {
+    const p = palette();
+    host.innerHTML = `<span class="legend-title">Color: difference from EL share</span><span class="legend-item"><span class="swatch" style="background:${p.teal}"></span>Over-represented in the tail</span><span class="legend-item"><span class="swatch" style="background:${p.border}"></span>Near zero</span><span class="legend-item"><span class="swatch" style="background:${p.lilacDark}"></span>Under-represented</span>`;
+  }
 }
 function tailChartHeight(host) {
   if (window.innerWidth < 700) return 400;
@@ -2084,21 +2095,26 @@ function drawTailByGrade(scenario) {
   const tailPaths = selectedCells.length ? selectedCells[0].n_tail_paths : 0;
   const metricLabel = tailZLabel();
   const rhoTicks = tailRhoTicks(rhos, tail.base_rho);
-  const maxAbsDiff = Math.max(...cells.map((cell) => Math.abs(tailDiff(cell))));
+  const diffs = cells.map((cell) => tailDiff(cell));
+  const maxAbsDiff = Math.max(...diffs.map((value) => Math.abs(value)));
   const diffStep = maxAbsDiff > 3 ? 2 : maxAbsDiff > 1 ? 1 : 0.5;
-  const diffLimit = Math.max(diffStep, Math.ceil(maxAbsDiff / diffStep) * diffStep);
+  const diffLow = Math.min(0, Math.floor(Math.min(...diffs) / diffStep) * diffStep);
+  const diffHigh = Math.max(0, Math.ceil(Math.max(...diffs) / diffStep) * diffStep);
   const diffTicks = [];
-  for (let value = -diffLimit; value <= diffLimit + 1e-9; value += diffStep) diffTicks.push(Number(value.toFixed(6)));
+  for (let value = diffLow; value <= diffHigh + 1e-9; value += diffStep) diffTicks.push(Number(value.toFixed(6)));
   const diffTickText = diffTicks.map((value) => value > 0 ? `+${fmtNum(value, diffStep < 1 ? 1 : 0)}` : fmtNum(value, diffStep < 1 ? 1 : 0));
   const shareMax = Math.max(...cells.map((cell) => cell.tail_share * 100));
-  const zRange = state.tailMetric === "share" ? [0, shareMax * 1.08] : [-diffLimit, diffLimit];
+  const zRange = state.tailMetric === "share" ? [0, shareMax * 1.08] : [diffLow, diffHigh];
 
   $("#surface-sub").textContent = tailSubtitle(tail, selectedRho, selectedCells);
-  const zLabel = $("#surface-z-label");
-  if (zLabel) zLabel.textContent = metricLabel;
+  const axisText = state.tailMetric === "share"
+    ? "z axis: share of tail loss in percent."
+    : "z axis: tail share minus expected-loss share in percentage points. Bars above zero are over-represented in the tail; bars below zero are under-represented.";
+  host.setAttribute("aria-label", `Chart of tail over- and under-representation. x axis: loan grade. y axis: asset correlation rho. ${axisText}`);
+  renderTailLegend(tail);
   const note = $("#surface-note");
   if (note) {
-    note.textContent = `Tail = portfolio loss at or above VaR 99% in ${fmtInt(tail.n_simulations)} simulated years; ${fmtInt(tailPaths)} tail paths define it per rho. Whiskers show +/-1 bootstrap SE over those paths (${fmtInt(tail.n_bootstrap)} resamples), not model uncertainty. One common asset correlation is assumed for all grades; low-PD grades gain relative weight in bad years under that assumption. Bucket-level simulation; LGD is constant per bucket; base PD and LGD stress.`;
+    note.textContent = `Tail = portfolio loss at or above VaR 99% in ${fmtInt(tail.n_simulations)} simulated years; ${fmtInt(tailPaths)} tail paths define it per rho. The bootstrap SE is about 0.01-0.03 pp, below the chart's visual resolution, so no whiskers are drawn; the tooltip still reports the SE (${fmtInt(tail.n_bootstrap)} resamples). This is simulation noise, not model uncertainty. One common asset correlation is assumed for all grades; low-PD grades gain relative weight in bad years under that assumption. Bucket-level simulation; LGD is constant per bucket; base PD and LGD stress.`;
   }
   host.dataset.selectedRho = String(selectedRho);
   host.dataset.metric = state.tailMetric;
@@ -2135,7 +2151,7 @@ function drawTailByGrade(scenario) {
       {
         z, x: grades.map((_, i) => i), y: rhos.map((_, i) => i), type: "heatmap",
         colorscale: isDiff ? tailDiffScale(p) : p.riskScale,
-        zmin: isDiff ? -diffLimit : 0, zmax: isDiff ? diffLimit : shareMax, zmid: isDiff ? 0 : undefined,
+        zmin: isDiff ? diffLow : 0, zmax: isDiff ? diffHigh : shareMax, zmid: isDiff ? 0 : undefined,
         customdata, colorbar, hovertemplate: hoverTemplate,
       },
       {
@@ -2186,69 +2202,60 @@ function drawTailByGrade(scenario) {
       });
     }
 
-    const markerX = []; const markerY = []; const markerZ = []; const markerData = []; const markerColor = []; const markerSize = [];
+    grades.forEach((grade, gi) => {
+      const cell = cellMap.get(`${grade}|${selectedRho}`);
+      const box = tailBox(gi, selectedIndex, tailValue(cell), 0.68, 0.46);
+      const [x0, y0, z0] = box.vertices[0];
+      const [x1, , ] = box.vertices[1];
+      const [, y1, ] = box.vertices[2];
+      const zTop = box.vertices[4][2];
+      traces.push({
+        type: "scatter3d",
+        x: [x0, x1, x1, x0, x0], y: [y0, y0, y1, y1, y0], z: [zTop, zTop, zTop, zTop, zTop],
+        mode: "lines", line: { color: p.ink, width: 4 }, hoverinfo: "skip", showlegend: false,
+      });
+      for (const [edgeX, edgeY] of [[x0, y0], [x1, y0]]) {
+        traces.push({
+          type: "scatter3d", x: [edgeX, edgeX], y: [edgeY, edgeY], z: [0, zTop],
+          mode: "lines", line: { color: p.ink, width: 3 }, hoverinfo: "skip", showlegend: false,
+        });
+      }
+    });
+    const hoverX = []; const hoverY = []; const hoverZ = []; const hoverData = [];
     rhos.forEach((rho, ri) => {
       grades.forEach((grade, gi) => {
         const cell = cellMap.get(`${grade}|${rho}`);
-        markerX.push(gradeX(grade)); markerY.push(rhoY(rho)); markerZ.push(tailValue(cell));
-        markerColor.push(scaleColor(gi / Math.max(1, grades.length - 1)));
-        markerSize.push(ri === selectedIndex ? 7 : 4);
-        markerData.push([grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)]);
+        hoverX.push(gi); hoverY.push(ri); hoverZ.push(tailValue(cell));
+        hoverData.push([grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)]);
       });
     });
     traces.push({
-      type: "scatter3d", x: markerX, y: markerY, z: markerZ, mode: "markers",
-      marker: { size: markerSize, color: markerColor, opacity: 0.72 },
-      customdata: markerData, hovertemplate: hoverTemplate, showlegend: false,
+      type: "scatter3d", x: hoverX, y: hoverY, z: hoverZ, mode: "markers",
+      marker: { size: 10, color: p.ink, opacity: 0.001 },
+      customdata: hoverData, hovertemplate: hoverTemplate, showlegend: false,
+    });
+    const axisMarkZ = zRange[0];
+    traces.push({
+      type: "scatter3d", x: [-0.62, -0.62], y: [selectedIndex - 0.26, selectedIndex + 0.26],
+      z: [axisMarkZ, axisMarkZ], mode: "lines", line: { color: p.ink, width: 4 },
+      hoverinfo: "skip", showlegend: false,
     });
 
-    grades.forEach((grade, gi) => {
-      const cell = cellMap.get(`${grade}|${selectedRho}`);
-      const value = tailValue(cell);
-      const unc = tailUncertainty(cell);
-      traces.push({
-        type: "scatter3d", x: [gi, gi], y: [selectedIndex, selectedIndex],
-        z: [value - unc, value + unc], mode: "lines",
-        line: { color: p.ink, width: 2 }, hoverinfo: "skip", showlegend: false,
-      });
-    });
-
-    traces.push({
-      type: "scatter3d",
-      x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
-      y: [selectedIndex - 0.38, selectedIndex - 0.38, selectedIndex + 0.38, selectedIndex + 0.38, selectedIndex - 0.38],
-      z: [0, 0, 0, 0, 0], mode: "lines",
-      line: { color: p.ink, width: 4 }, hoverinfo: "skip", showlegend: false,
-    });
-    traces.push({
-      type: "mesh3d",
-      x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55],
-      y: [selectedIndex, selectedIndex, selectedIndex, selectedIndex],
-      z: [zRange[0], zRange[0], zRange[1], zRange[1]], i: [0, 0], j: [1, 2], k: [2, 3],
-      color: p.accent, opacity: 0.06, hoverinfo: "skip", showlegend: false,
-    });
-    traces.push({
-      type: "scatter3d",
-      x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
-      y: [selectedIndex, selectedIndex, selectedIndex, selectedIndex, selectedIndex],
-      z: [zRange[0], zRange[0], zRange[1], zRange[1], zRange[0]], mode: "lines",
-      line: { color: p.ink, width: 4 }, hoverinfo: "skip", showlegend: false,
-    });
-
-    const zaxis = { title: { text: metricLabel }, color: p.muted, range: zRange };
+    const narrowChart = host.clientWidth < 650;
+    const zaxis = { title: { text: metricLabel, font: { size: 11 } }, tickfont: { size: 10 }, color: p.muted, range: zRange };
     if (state.tailMetric === "diff") {
-      zaxis.tickvals = diffTicks;
-      zaxis.ticktext = diffTickText;
+      const showLowTick = !narrowChart || diffLow === 0;
+      zaxis.tickvals = showLowTick ? diffTicks : diffTicks.filter((value) => value !== diffLow);
+      zaxis.ticktext = showLowTick ? diffTickText : diffTickText.filter((_, index) => diffTicks[index] !== diffLow);
     } else {
       zaxis.tickformat = ".0f";
     }
-    const narrowChart = host.clientWidth < 650;
     ok = plot(host, traces, {
       height,
       scene: {
         domain: { x: [0.10, 0.99], y: [0.0, 1.0] },
-        xaxis: { title: { text: "Loan grade" }, tickvals: grades.map((_, i) => i), ticktext: grades, range: [-0.6, grades.length - 0.4], color: p.muted },
-        yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, range: [-0.6, rhos.length - 0.4], color: p.muted },
+        xaxis: { title: { text: "Loan grade", font: { size: 11 } }, tickvals: grades.map((_, i) => i), ticktext: grades, tickfont: { size: 10 }, range: [-0.6, grades.length - 0.4], color: p.muted },
+        yaxis: { title: { text: "Asset correlation rho", font: { size: 11 } }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, tickfont: { size: 10 }, range: [-0.6, rhos.length - 0.4], color: p.muted },
         zaxis,
         camera: { eye: narrowChart ? { x: 1.95, y: 1.9, z: 1.4 } : { x: 1.8, y: 1.75, z: 1.28 } },
         aspectratio: { x: 1.15, y: 1, z: narrowChart ? 0.86 : 1.0 },

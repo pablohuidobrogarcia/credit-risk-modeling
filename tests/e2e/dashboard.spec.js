@@ -1718,12 +1718,15 @@ test("the tail chart highlights the rho slice, tracks the subtitle and exposes t
   await page.locator("#risk-rho").fill("4");
   await expect(host).toHaveAttribute("data-selected-rho", String(tail.rhos[4]));
   await expect(page.locator("#surface-sub")).toContainText("At rho = 0.12");
+  await expect.poll(() => host.evaluate((el) => el._fullLayout?.scene?.yaxis?.ticktext?.join("|"))).toContain("rho = 0.12");
   await page.locator("#risk-rho").fill("0");
   await expect(host).toHaveAttribute("data-selected-rho", String(tail.rhos[0]));
   await expect(page.locator("#surface-sub")).toContainText("At rho = 0.02");
+  await expect.poll(() => host.evaluate((el) => el._fullLayout?.scene?.yaxis?.ticktext?.join("|"))).toContain("rho = 0.02");
   await page.locator("#risk-rho").fill(String(tail.rhos.length - 1));
   await expect(host).toHaveAttribute("data-selected-rho", String(tail.rhos[tail.rhos.length - 1]));
   await expect(page.locator("#surface-sub")).toContainText("At rho = 0.35");
+  await expect.poll(() => host.evaluate((el) => el._fullLayout?.scene?.yaxis?.ticktext?.join("|"))).toContain("rho = 0.35");
 
   const scene = await host.evaluate((el) => ({
     x: el._fullLayout?.scene?.xaxis?.title?.text,
@@ -1736,7 +1739,7 @@ test("the tail chart highlights the rho slice, tracks the subtitle and exposes t
     text: el._fullLayout?.scene?.yaxis?.ticktext,
   }));
   expect(ticks.vals).toHaveLength(6);
-  expect(ticks.text).toEqual(["0.02", "0.08", "0.12", "0.18", "0.22", "0.30"]);
+  expect(ticks.text).toEqual(["0.02", "0.08", "0.12", "0.18", "0.22", "rho = 0.35"]);
 
   await page.setViewportSize({ width: 1100, height: 800 });
   await page.waitForTimeout(900);
@@ -1745,7 +1748,7 @@ test("the tail chart highlights the rho slice, tracks the subtitle and exposes t
     text: el._fullLayout?.scene?.yaxis?.ticktext,
   }));
   expect(ticks1100.vals).toHaveLength(6);
-  expect(ticks1100.text).toEqual(["0.02", "0.08", "0.12", "0.18", "0.22", "0.30"]);
+  expect(ticks1100.text).toEqual(["0.02", "0.08", "0.12", "0.18", "0.22", "rho = 0.35"]);
 
   const tip = await host.evaluate((el) => (el.data.find((trace) => trace.hovertemplate) || {}).hovertemplate || "");
   for (const label of ["Grade", "rho", "Tail share", "EL share", "Difference", "Tail / EL", "Tail paths", "+/-1 SE"]) {
@@ -1869,6 +1872,49 @@ test("tail toggle stays horizontal and the axes are exposed only accessibly", as
   expect(aria).toContain("z axis: tail share minus expected-loss share");
   await page.locator('#tail-metric button[data-tail-metric="share"]').click();
   await expect(host).toHaveAttribute("aria-label", /z axis: share of tail loss/);
+  await expectNoErrors(errors);
+});
+
+test("tail plot fills the card, uses readable fonts and keeps the bottom aligned", async ({ page }) => {
+  const errors = await open(page);
+  await page.locator("#view-tab-risk").click();
+  const host = page.locator("#surface-chart");
+  await expect(host.locator("canvas")).toBeVisible({ timeout: 20_000 });
+  for (const [width, height] of [[1360, 800], [1100, 800]]) {
+    await page.setViewportSize({ width, height });
+    await page.waitForTimeout(1000);
+    const metrics = await host.evaluate((el) => {
+      const scene = el._fullLayout?.scene;
+      const gl = scene?._scene?.glplot;
+      return {
+        hostWidth: el.clientWidth,
+        hostHeight: el.clientHeight,
+        canvasWidth: gl?.canvas?.clientWidth || 0,
+        canvasHeight: gl?.canvas?.clientHeight || 0,
+        distance: scene?._scene?.camera?.distance,
+        aspectX: scene?.aspectratio?.x,
+        xTick: scene?.xaxis?.tickfont?.size,
+        yTick: scene?.yaxis?.tickfont?.size,
+        zTick: scene?.zaxis?.tickfont?.size,
+        xTitle: scene?.xaxis?.title?.font?.size,
+        yTitle: scene?.yaxis?.title?.font?.size,
+        zTitle: scene?.zaxis?.title?.font?.size,
+        rhoText: scene?.yaxis?.ticktext?.join("|"),
+      };
+    });
+    const ratio = (metrics.canvasWidth * metrics.canvasHeight) / (metrics.hostWidth * metrics.hostHeight);
+    expect(ratio, `${width}px plot area`).toBeGreaterThanOrEqual(0.7);
+    expect(metrics.distance, `${width}px camera`).toBeLessThan(2.8);
+    expect(metrics.aspectX, `${width}px aspect`).toBeLessThanOrEqual(width === 1360 ? 0.95 : 0.85);
+    expect(Math.min(metrics.xTick, metrics.yTick, metrics.zTick), `${width}px tick font`).toBeGreaterThanOrEqual(12);
+    expect(Math.min(metrics.xTitle, metrics.yTitle, metrics.zTitle), `${width}px title font`).toBeGreaterThanOrEqual(13);
+    expect(metrics.rhoText).toContain("rho =");
+    const [panelBox, lossBox] = await Promise.all([
+      page.locator('section[aria-labelledby="surface-title"]').boundingBox(),
+      page.locator(".risk-stack > .panel:nth-child(2)").boundingBox(),
+    ]);
+    expect(Math.abs((panelBox.y + panelBox.height) - (lossBox.y + lossBox.height)), `${width}px bottom alignment`).toBeLessThanOrEqual(1);
+  }
   await expectNoErrors(errors);
 });
 
@@ -2392,6 +2438,10 @@ test("mobile 390px stacks panels without horizontal scrolling and falls back to 
     zmin: el.data[0].zmin,
     zmax: el.data[0].zmax,
     tickvals: el._fullLayout?.yaxis?.tickvals,
+    shapes: el._fullLayout?.shapes?.length,
+    xTick: el._fullLayout?.xaxis?.tickfont?.size,
+    yTick: el._fullLayout?.yaxis?.tickfont?.size,
+    colorTick: el.data[0]?.colorbar?.tickfont?.size,
   }));
   expect(fallback.types).toContain("heatmap");
   expect(fallback.rows).toBe(DATA.interactive.tail_by_grade.rhos.length);
@@ -2400,6 +2450,10 @@ test("mobile 390px stacks panels without horizontal scrolling and falls back to 
   expect(fallback.zmin).toBeLessThan(0);
   expect(fallback.zmax).toBeGreaterThan(0);
   expect(fallback.tickvals).toHaveLength(6);
+  expect(fallback.shapes).toBe(1);
+  expect(fallback.xTick).toBeGreaterThanOrEqual(11);
+  expect(fallback.yTick).toBeGreaterThanOrEqual(11);
+  expect(fallback.colorTick).toBeGreaterThanOrEqual(11);
   const overflowRisk = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   const riskOffenders = await page.evaluate(() => Array.from(document.querySelectorAll("*"))
     .map((el) => ({ el, box: el.getBoundingClientRect() }))

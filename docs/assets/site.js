@@ -2010,13 +2010,26 @@ function tailValue(cell) {
 function tailHoverTemplate() {
   return "Grade %{customdata[0]}<br>rho=%{customdata[1]}<br>Tail share=%{customdata[2]}%<br>EL share=%{customdata[3]}%<br>Difference=%{customdata[4]} pp<br>Tail / EL=%{customdata[5]}x<br>Tail paths=%{customdata[6]}<br>+/-1 SE=%{customdata[7]} pp<extra></extra>";
 }
-function tailRhoTicks(rhos, baseRho) {
+function tailRhoTicks(rhos, baseRho, selectedIndex = null) {
   const vals = [];
   for (let i = 0; i < rhos.length; i += 2) vals.push(i);
   const baseIndex = nearestIndex(rhos, baseRho);
   if (!vals.includes(baseIndex)) vals.push(baseIndex);
+  if (selectedIndex != null && !vals.includes(selectedIndex)) {
+    let nearest = vals[0];
+    for (const value of vals) {
+      if (Math.abs(value - selectedIndex) < Math.abs(nearest - selectedIndex)) nearest = value;
+    }
+    if (nearest !== baseIndex && Math.abs(nearest - selectedIndex) <= 1) {
+      vals.splice(vals.indexOf(nearest), 1);
+    }
+    vals.push(selectedIndex);
+  }
   vals.sort((a, b) => a - b);
-  return { vals, text: vals.map((i) => fmtNum(rhos[i], 2)) };
+  return {
+    vals,
+    text: vals.map((i) => i === selectedIndex ? `rho = ${fmtNum(rhos[i], 2)}` : fmtNum(rhos[i], 2)),
+  };
 }
 function tailGradeList(items, order) {
   if (!items.length) return "none";
@@ -2095,6 +2108,7 @@ function drawTailByGrade(scenario) {
   const tailPaths = selectedCells.length ? selectedCells[0].n_tail_paths : 0;
   const metricLabel = tailZLabel();
   const rhoTicks = tailRhoTicks(rhos, tail.base_rho);
+  const rhoTicks3d = tailRhoTicks(rhos, tail.base_rho, selectedIndex);
   const diffs = cells.map((cell) => tailDiff(cell));
   const maxAbsDiff = Math.max(...diffs.map((value) => Math.abs(value)));
   const diffStep = maxAbsDiff > 3 ? 2 : maxAbsDiff > 1 ? 1 : 0.5;
@@ -2130,6 +2144,7 @@ function drawTailByGrade(scenario) {
   let ok = false;
   const hoverTemplate = tailHoverTemplate();
 
+  const narrowChart = host.clientWidth < 650;
   if (!hasWebGL() || window.innerWidth < 700) {
     const isDiff = state.tailMetric === "diff";
     const z = rhos.map((rho) => grades.map((grade) => tailValue(cellMap.get(`${grade}|${rho}`))));
@@ -2139,7 +2154,7 @@ function drawTailByGrade(scenario) {
     }));
     const colorbar = {
       title: { text: isDiff ? "pp" : "%", side: "top", font: { size: 10 } },
-      thickness: 10, len: 0.86, tickfont: { size: 10 },
+      thickness: 9, len: 0.88, tickfont: { size: 11 },
     };
     if (isDiff) {
       colorbar.tickvals = diffTicks;
@@ -2161,9 +2176,10 @@ function drawTailByGrade(scenario) {
       },
     ], {
       height,
-      xaxis: { title: { text: "Loan grade" }, tickvals: grades.map((_, i) => i), ticktext: grades, tickangle: 0, tickfont: { size: 10 }, automargin: true, range: [-0.5, grades.length - 0.5], zeroline: false },
-      yaxis: { title: { text: "Asset correlation rho" }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, tickfont: { size: 10 }, range: [-0.5, rhos.length - 0.5], zeroline: false },
-      margin: { l: 58, r: 12, t: 24, b: 64 },
+      xaxis: { title: { text: "Loan grade", font: { size: 12 } }, tickvals: grades.map((_, i) => i), ticktext: grades, tickangle: 0, tickfont: { size: 11 }, automargin: true, range: [-0.5, grades.length - 0.5], zeroline: false },
+      yaxis: { title: { text: "Asset correlation rho", font: { size: 12 } }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, tickfont: { size: 11 }, range: [-0.5, rhos.length - 0.5], zeroline: false },
+      margin: { l: 52, r: 8, t: 24, b: 64 },
+      shapes: [{ type: "rect", xref: "x", yref: "y", x0: -0.5, x1: grades.length - 0.5, y0: selectedIndex - 0.5, y1: selectedIndex + 0.5, line: { color: p.ink, width: 2 }, fillcolor: "rgba(0,0,0,0)" }],
     });
     host.dataset.mode = "heatmap";
   } else {
@@ -2236,35 +2252,35 @@ function drawTailByGrade(scenario) {
     });
     const axisMarkZ = zRange[0];
     traces.push({
-      type: "scatter3d", x: [-0.62, -0.62], y: [selectedIndex - 0.26, selectedIndex + 0.26],
-      z: [axisMarkZ, axisMarkZ], mode: "lines", line: { color: p.ink, width: 4 },
+      type: "scatter3d", x: [-0.62, grades.length - 0.38], y: [selectedIndex, selectedIndex],
+      z: [axisMarkZ, axisMarkZ], mode: "lines", line: { color: p.ink, width: 2 },
       hoverinfo: "skip", showlegend: false,
     });
 
-    const narrowChart = host.clientWidth < 650;
-    const zaxis = { title: { text: metricLabel, font: { size: 11 } }, tickfont: { size: 10 }, color: p.muted, range: zRange };
+    const zaxis = { title: { text: metricLabel, font: { size: 13 } }, tickfont: { size: 12 }, color: p.muted, range: zRange };
     if (state.tailMetric === "diff") {
-      const showLowTick = !narrowChart || diffLow === 0;
-      zaxis.tickvals = showLowTick ? diffTicks : diffTicks.filter((value) => value !== diffLow);
-      zaxis.ticktext = showLowTick ? diffTickText : diffTickText.filter((_, index) => diffTicks[index] !== diffLow);
+      const hideLowTick = diffLow < 0;
+      zaxis.tickvals = hideLowTick ? diffTicks.filter((value) => value !== diffLow) : diffTicks;
+      zaxis.ticktext = hideLowTick ? diffTickText.filter((_, index) => diffTicks[index] !== diffLow) : diffTickText;
     } else {
       zaxis.tickformat = ".0f";
     }
     ok = plot(host, traces, {
       height,
       scene: {
-        domain: { x: [0.10, 0.99], y: [0.0, 1.0] },
-        xaxis: { title: { text: "Loan grade", font: { size: 11 } }, tickvals: grades.map((_, i) => i), ticktext: grades, tickfont: { size: 10 }, range: [-0.6, grades.length - 0.4], color: p.muted },
-        yaxis: { title: { text: "Asset correlation rho", font: { size: 11 } }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, tickfont: { size: 10 }, range: [-0.6, rhos.length - 0.4], color: p.muted },
+        domain: { x: [0.08, 0.995], y: [0.02, 1.0] },
+        xaxis: { title: { text: "Loan grade", font: { size: 13 } }, tickvals: grades.map((_, i) => i), ticktext: grades, tickfont: { size: 12 }, range: [-0.6, grades.length - 0.4], color: p.muted },
+        yaxis: { title: { text: "Asset correlation rho", font: { size: 13 } }, tickvals: rhoTicks3d.vals, ticktext: rhoTicks3d.text, tickfont: { size: 12 }, range: [-0.6, rhos.length - 0.4], color: p.muted },
         zaxis,
-        camera: { eye: narrowChart ? { x: 1.95, y: 1.9, z: 1.4 } : { x: 1.8, y: 1.75, z: 1.28 } },
-        aspectratio: { x: 1.15, y: 1, z: narrowChart ? 0.86 : 1.0 },
+        camera: { eye: narrowChart ? { x: 1.7, y: 1.65, z: 1.2 } : { x: 1.55, y: 1.5, z: 1.08 } },
+        aspectratio: { x: narrowChart ? 0.85 : 0.95, y: 1, z: 0.9 },
       },
-      margin: { l: 12, r: 8, t: 4, b: 4 },
+      margin: { l: 8, r: 4, t: 0, b: 12 },
       showlegend: false,
     });
     host.dataset.mode = "surface";
   }
+  host.__tailNarrow = narrowChart;
 
   if (!ok) {
     showFallback(host, "assets/risk_surface_static.png", "The chart could not be drawn; a static over/under-representation heatmap is shown.");
@@ -2273,6 +2289,11 @@ function drawTailByGrade(scenario) {
   if (!host.__tailResizeObserver && window.ResizeObserver) {
     host.__tailResizeObserver = new ResizeObserver(() => {
       if (!PLOTLY || !host.__plotted) return;
+      const narrowNow = host.clientWidth < 650;
+      if (host.__tailNarrow !== narrowNow) {
+        drawTailByGrade();
+        return;
+      }
       const target = tailChartHeight(host);
       const current = Math.round(host._fullLayout?.height || 0);
       if (Math.abs(target - current) > 1) PLOTLY.relayout(host, { height: target });

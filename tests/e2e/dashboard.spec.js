@@ -2151,6 +2151,74 @@ test("Scenario KPI row has five cards with no empty cell at 1360, 1000 and 390",
 });
 
 test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", async ({ page }) => {
+  await page.addInitScript(() => {
+    const D = window.__surfaceDiag = { events: [], roCallbacks: 0, surfaceCallbacks: 0 };
+    const now = () => performance.now();
+    D.log = (type, data) => D.events.push({ t: Number(now().toFixed(1)), type, ...data });
+    window.addEventListener("resize", () => D.log("window-resize", { w: innerWidth, h: innerHeight }), true);
+    let real;
+    Object.defineProperty(window, "Plotly", {
+      configurable: true,
+      get() { return real; },
+      set(P) {
+        if (!P || P.__surfaceDiagWrapped) { real = P; return; }
+        const wrap = (name, targetOf, requestedOf) => {
+          const original = P[name];
+          if (typeof original !== "function") return;
+          P[name] = function (...args) {
+            const target = targetOf(args);
+            const id = target?.id || null;
+            const requested = requestedOf ? requestedOf(args) : null;
+            D.log(`${name}-call`, { id, requested, mode: target?.dataset?.mode || null });
+            const promise = original.apply(this, args);
+            if (promise && typeof promise.then === "function") {
+              return promise.then((value) => {
+                D.log(`${name}-resolve`, { id, requested, height: target?._fullLayout?.height ?? null });
+                return value;
+              }, (error) => {
+                D.log(`${name}-reject`, { id, requested, error: String(error) });
+                throw error;
+              });
+            }
+            D.log(`${name}-return`, { id, requested, height: target?._fullLayout?.height ?? null });
+            return promise;
+          };
+        };
+        wrap("newPlot", (args) => args[0], (args) => args[2]?.height ?? null);
+        wrap("react", (args) => args[0], (args) => args[2]?.height ?? null);
+        wrap("relayout", (args) => args[0], (args) => args[1]?.height ?? null);
+        if (P.Plots && P.Plots.resize) {
+          const resize = P.Plots.resize;
+          P.Plots.resize = function (target, ...rest) {
+            D.log("Plots.resize-call", { id: target?.id || null, w: target?.clientWidth, h: target?.clientHeight, plot: target?._fullLayout?.height ?? null });
+            const result = resize.call(this, target, ...rest);
+            D.log("Plots.resize-return", { id: target?.id || null, plot: target?._fullLayout?.height ?? null });
+            return result;
+          };
+        }
+        P.__surfaceDiagWrapped = true;
+        real = P;
+      }
+    });
+    const NativeRO = window.ResizeObserver;
+    window.ResizeObserver = class extends NativeRO {
+      constructor(callback) {
+        super((entries, observer) => {
+          D.roCallbacks += 1;
+          entries.forEach((entry) => {
+            const id = entry.target?.id || "";
+            if (id === "surface-chart") D.surfaceCallbacks += 1;
+            D.log("resize-observer", { id, w: entry.contentRect.width, h: entry.contentRect.height, client: entry.target?.clientHeight, plot: entry.target?._fullLayout?.height ?? null });
+          });
+          return callback(entries, observer);
+        });
+      }
+      observe(target, ...args) {
+        D.log("RO-observe", { id: target?.id || "" });
+        return super.observe(target, ...args);
+      }
+    };
+  });
   const errors = await open(page);
   for (const [width, height] of [[1360, 900], [1215, 900], [1000, 900], [390, 844]]) {
     for (const scheme of ["light", "dark"]) {
@@ -2161,13 +2229,72 @@ test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", 
       await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
       await expect(page.locator("#risk-gauge")).toBeVisible();
       if (width > 1000) {
-        await expect.poll(
-          () => page.evaluate(() => {
+        try {
+          await expect.poll(
+            () => page.evaluate(() => {
+              const host = document.querySelector("#surface-chart");
+              return Math.abs(host.getBoundingClientRect().height - (host._fullLayout?.height || 0));
+            }),
+            { timeout: 5_000, message: `${width}px ${scheme} surface plot height` }
+          ).toBeLessThanOrEqual(1);
+        } catch (error) {
+          const diagnostics = await page.evaluate(() => {
             const host = document.querySelector("#surface-chart");
-            return Math.abs(host.getBoundingClientRect().height - (host._fullLayout?.height || 0));
-          }),
-          { timeout: 5_000, message: `${width}px ${scheme} surface plot height` }
-        ).toBeLessThanOrEqual(1);
+            const parent = host?.closest(".panel");
+            const stack = host?.closest(".risk-stack");
+            const rect = (el) => el ? {
+              height: el.getBoundingClientRect().height,
+              top: el.getBoundingClientRect().top + window.scrollY,
+              offsetHeight: el.offsetHeight,
+              clientHeight: el.clientHeight,
+            } : null;
+            const computed = (el) => {
+              if (!el) return null;
+              const style = getComputedStyle(el);
+              return {
+                height: style.height, minHeight: style.minHeight, maxHeight: style.maxHeight,
+                paddingTop: style.paddingTop, paddingBottom: style.paddingBottom,
+                borderTopWidth: style.borderTopWidth, borderBottomWidth: style.borderBottomWidth,
+                boxSizing: style.boxSizing, transform: style.transform, zoom: style.zoom,
+              };
+            };
+            const inner = (selector) => {
+              const el = host?.querySelector(selector);
+              return el ? { rect: rect(el), clientHeight: el.clientHeight, offsetHeight: el.offsetHeight } : null;
+            };
+            const tailHeight = (el) => {
+              if (window.innerWidth < 700) return 400;
+              if (window.matchMedia("(min-width: 1001px)").matches) return Math.max(560, Math.round(el.clientHeight || 560));
+              return 560;
+            };
+            const webgl = (() => {
+              try {
+                const canvas = document.createElement("canvas");
+                return !!(window.WebGLRenderingContext && (canvas.getContext("webgl") || canvas.getContext("experimental-webgl")));
+              } catch (err) { return false; }
+            })();
+            return {
+              viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
+              surface: {
+                rect: rect(host), computed: computed(host),
+                scrollHeight: host?.scrollHeight, _fullLayout: host?._fullLayout ? { height: host._fullLayout.height, width: host._fullLayout.width } : null,
+                tailChartHeight: host ? tailHeight(host) : null,
+                tailHeightPending: host?.__tailHeightPending ?? null,
+                tailNarrow: host?.__tailNarrow ?? null,
+                mode: host?.dataset.mode ?? null,
+                plotContainer: inner(".plot-container"),
+                svgContainer: inner(".svg-container"),
+                glContainer: inner(".gl-container"),
+              },
+              parentPanel: { rect: rect(parent), clientHeight: parent?.clientHeight, offsetHeight: parent?.offsetHeight },
+              riskStack: { rect: rect(stack), clientHeight: stack?.clientHeight, offsetHeight: stack?.offsetHeight },
+              fonts: { status: document.fonts?.status ?? null, bodyFamily: getComputedStyle(document.body).fontFamily },
+              webgl,
+              diagnostics: window.__surfaceDiag || null,
+            };
+          });
+          throw new Error(`SURFACE_DIAGNOSTICS ${width}px ${scheme} ` + JSON.stringify(diagnostics));
+        }
       }
       const layout = await page.evaluate(() => {
         const box = (selector) => document.querySelector(selector).getBoundingClientRect();

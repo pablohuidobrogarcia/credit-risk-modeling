@@ -2160,6 +2160,15 @@ test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", 
       await expect(page.locator("#app-content")).toBeVisible();
       await expect(page.locator("#loss-chart .plot-container")).toBeVisible({ timeout: 20_000 });
       await expect(page.locator("#risk-gauge")).toBeVisible();
+      if (width > 1000) {
+        await expect.poll(
+          () => page.evaluate(() => {
+            const host = document.querySelector("#surface-chart");
+            return Math.abs(host.getBoundingClientRect().height - (host._fullLayout?.height || 0));
+          }),
+          { timeout: 5_000, message: `${width}px ${scheme} surface plot height` }
+        ).toBeLessThanOrEqual(1);
+      }
       const layout = await page.evaluate(() => {
         const box = (selector) => document.querySelector(selector).getBoundingClientRect();
         const gauge = box(".gauge-panel");
@@ -2174,7 +2183,6 @@ test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", 
           stack: { top: stack.top + window.scrollY, height: stack.height },
           surface: { top: surface.top + window.scrollY, height: surface.height },
           surfaceHost: { top: surfaceHost.top + window.scrollY, height: surfaceHost.height },
-          surfacePlotHeight: document.querySelector("#surface-chart")._fullLayout?.height,
           scenario: { top: scenario.top + window.scrollY },
           overflow: document.documentElement.scrollWidth - window.innerWidth,
         };
@@ -2195,7 +2203,6 @@ test("Risk Lab gauge row balances at 1360 and 1000 and stacks in order at 390", 
         expect(Math.abs((layout.surface.top + layout.surface.height) - (layout.loss.top + layout.loss.height)), `${width}px ${scheme} surface/loss bottom`).toBeLessThanOrEqual(0.5);
         expect(Math.abs(layout.surface.height - layout.stack.height), `${width}px ${scheme} surface/stack height`).toBeLessThanOrEqual(0.5);
         expect(layout.surfaceHost.height, `${width}px ${scheme} surface host height`).toBeGreaterThan(540);
-        expect(Math.abs(layout.surfaceHost.height - layout.surfacePlotHeight), `${width}px ${scheme} surface plot height`).toBeLessThanOrEqual(1);
       }
     }
   }

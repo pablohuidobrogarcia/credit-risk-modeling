@@ -672,8 +672,10 @@ function plot(el, traces, layout, { small = false } = {}) {
   if (!merged.width && hostWidth > 0) merged.width = hostWidth;
   if (small) merged.margin = Object.assign({ l: 50, r: 14, t: 18, b: 40 }, merged.margin || {});
   try {
-    if (el.__plotted) PLOTLY.react(el, traces, merged, plotlyConfig());
-    else { PLOTLY.newPlot(el, traces, merged, plotlyConfig()); el.__plotted = true; }
+    el.__plotPromise = el.__plotted
+      ? PLOTLY.react(el, traces, merged, plotlyConfig())
+      : PLOTLY.newPlot(el, traces, merged, plotlyConfig());
+    if (!el.__plotted) el.__plotted = true;
     return true;
   } catch (err) {
     console.error("Chart failed", err);
@@ -2076,6 +2078,16 @@ function tailChartHeight(host) {
   }
   return 560;
 }
+function syncTailHeight(host) {
+  if (!PLOTLY || !host || !host.__plotted || !host._fullLayout) return;
+  const target = tailChartHeight(host);
+  const current = Math.round(host._fullLayout?.height || 0);
+  if (Math.abs(target - current) <= 1 || host.__tailHeightPending) return;
+  host.__tailHeightPending = true;
+  Promise.resolve(PLOTLY.relayout(host, { height: target }))
+    .catch((err) => console.error("Tail chart height sync failed", err))
+    .finally(() => { host.__tailHeightPending = false; });
+}
 function tailBox(cx, cy, z, width, depth) {
   const x0 = cx - width / 2;
   const x1 = cx + width / 2;
@@ -2294,12 +2306,13 @@ function drawTailByGrade(scenario) {
         drawTailByGrade();
         return;
       }
-      const target = tailChartHeight(host);
-      const current = Math.round(host._fullLayout?.height || 0);
-      if (Math.abs(target - current) > 1) PLOTLY.relayout(host, { height: target });
+      syncTailHeight(host);
     });
     host.__tailResizeObserver.observe(host);
   }
+  const syncSoon = () => requestAnimationFrame(() => syncTailHeight(host));
+  if (host.__plotPromise) Promise.resolve(host.__plotPromise).then(syncSoon, syncSoon);
+  syncSoon();
 }
 function nearestValue(values, target) {
   return values[nearestIndex(values, target)];

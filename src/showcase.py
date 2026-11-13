@@ -1172,6 +1172,7 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
     pd_ = summary["pd"]
     lgd = summary["lgd"]
     sim = summary["simulation"]
+    is_vr = sim.get("importance_sampling_variance_reduction", {}) or {}
     clu = summary["clustering"]
     eda = summary["eda"]
     data = summary["data"]
@@ -1305,6 +1306,10 @@ def build_data_json(summary: Dict[str, Any]) -> Path:
         "sim_es999_usd": usdm(stats.get("es_0.999")),
         "se_stratified": f"{sim.get('se_reduction_stratified_pct', 0):.2f}%",
         "se_antithetic": f"{sim.get('se_reduction_antithetic_pct', 0):.2f}%",
+        "is_rmse_factor": (
+            f"{is_vr['rmse_reduction_factor']:.2f}"
+            if is_vr.get("rmse_reduction_factor") is not None else "n/a"
+        ),
         "cluster_k": str(clu.get("k", "n/a")),
         "cluster_silhouette": f4(clu.get("silhouette")),
         "cluster_stability_ari": f4(clu.get("stability_ari")),

@@ -364,6 +364,7 @@ function infoContext() {
     lgd: lgdRangeLabel(),
     auc_gap: (D && D.display && D.display.auc_gap_vs_benchmark) || "—",
     rho_basel: (D && D.display && D.display.rho_basel) || "—",
+    is_rmse_factor: (D && D.display && D.display.is_rmse_factor) || "-",
     el_amount: fmtMoney(meta.el_amount),
     metric: metricColorLabel(),
   };

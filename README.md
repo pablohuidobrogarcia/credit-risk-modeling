@@ -8,6 +8,7 @@
 visual case study of this project (built from `reports/results/summary.json`, served from
 `docs/` on GitHub Pages).
 
+**Deploying the site:** run `python scripts/check_site.py` against `docs/`, never against a checked-out `gh-pages` tree; `assets/dashboard.gif` is referenced only by this README.
 
 **Interactive dashboard:** the live site is one linked application. The portfolio
 explorer has a State map, a grade staircase, a purpose hexagon map, a home-ownership

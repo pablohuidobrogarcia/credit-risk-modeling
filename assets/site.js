@@ -101,11 +101,6 @@ const MAP_NOTES = {
     el_pct_ead: "Hover a category for its name; the fill is expected loss as a share of EAD. Select a card to see the PD and LGD behind it.",
   },
 };
-const SURFACE_METRICS = {
-  "var_0.999": "VaR 99.9%",
-  "es_0.999": "ES 99.9%",
-  el: "Expected loss",
-};
 const CUTOFF_STATISTICS = [
   { id: "cut-approval", label: "Approval rate", color: "sky", meaning: "Share accepted." },
   { id: "cut-bad", label: "Bad rate (approved)", color: "lilac", meaning: "Defaults among approved." },
@@ -129,6 +124,7 @@ const num = (value) => (typeof value === "number" && Number.isFinite(value) ? va
 const fmtInt = (value) => (num(value) == null ? "—" : Math.round(value).toLocaleString("en-US"));
 const fmtPct = (value, nd = 2) => (num(value) == null ? "—" : `${(value * 100).toFixed(nd)}%`);
 const fmtNum = (value, nd = 4) => (num(value) == null ? "—" : Number(value).toFixed(nd));
+const fmtSigned = (value, nd = 2) => (num(value) == null ? "?" : `${value > 0 ? "+" : ""}${Number(value).toFixed(nd)}`);
 const fmtX = (value) => (num(value) == null ? "—" : `${Number(value).toFixed(2)}×`);
 const fmtMoney = (value) => {
   if (num(value) == null) return "—";
@@ -146,7 +142,7 @@ const state = {
   sel: null,
   search: "",
   risk: { rho: null, pd: null, lgd: null },
-  surfaceMetric: "var_0.999",
+  tailMetric: "diff",
   cutoff: null,
   cutoffTab: "tradeoff",
   sim: {},
@@ -180,7 +176,7 @@ function readHash() {
   state.metric = read("metric", "default_rate");
   state.sel = read("sel", null);
   state.search = read("q", "");
-  state.surfaceMetric = SURFACE_METRICS[read("sm", "var_0.999")] ? read("sm", "var_0.999") : "var_0.999";
+  state.tailMetric = read("tm", "diff") === "share" ? "share" : "diff";
   const rho = Number(read("rho", ""));
   const pd = Number(read("pd", ""));
   const lgd = Number(read("lgd", ""));
@@ -202,7 +198,7 @@ function writeHash(push) {
   if (state.risk.rho != null) params.set("rho", String(state.risk.rho));
   if (state.risk.pd != null) params.set("pd", String(state.risk.pd));
   if (state.risk.lgd != null) params.set("lgd", String(state.risk.lgd));
-  if (state.surfaceMetric !== "var_0.999") params.set("sm", state.surfaceMetric);
+  if (state.tailMetric !== "diff") params.set("tm", state.tailMetric);
   if (state.cutoff != null) params.set("cut", String(state.cutoff));
   if (state.term) params.set("term", state.term);
   const url = `#${params.toString()}`;
@@ -488,7 +484,7 @@ const STATIC_INFO = [
   ["#rank-title", "ranked-list", "Ranked segments", "after"],
   ["#gauge-title", "gauge", "VaR gauge", "after"],
   ["#loss-title", "loss-histogram", "Loss distribution", "after"],
-  ["#surface-title", "surface", "VaR surface", "after"],
+  ["#surface-title", "surface", "Tail loss by grade", "after"],
   ["#cutoff-tabs", "cutoff-tabs", "Cutoff diagnostics", "after"],
 ];
 
@@ -676,8 +672,10 @@ function plot(el, traces, layout, { small = false } = {}) {
   if (!merged.width && hostWidth > 0) merged.width = hostWidth;
   if (small) merged.margin = Object.assign({ l: 50, r: 14, t: 18, b: 40 }, merged.margin || {});
   try {
-    if (el.__plotted) PLOTLY.react(el, traces, merged, plotlyConfig());
-    else { PLOTLY.newPlot(el, traces, merged, plotlyConfig()); el.__plotted = true; }
+    el.__plotPromise = el.__plotted
+      ? PLOTLY.react(el, traces, merged, plotlyConfig())
+      : PLOTLY.newPlot(el, traces, merged, plotlyConfig());
+    if (!el.__plotted) el.__plotted = true;
     return true;
   } catch (err) {
     console.error("Chart failed", err);
@@ -1851,8 +1849,8 @@ function setupRiskControls() {
   bind("risk-rho", "rho", opts.rhos, "Asset correlation");
   bind("risk-pd", "pd", opts.pds, "PD stress");
   bind("risk-lgd", "lgd", opts.lgds, "LGD stress");
-  $$("#surface-metrics button").forEach((btn) => {
-    btn.onclick = () => { state.surfaceMetric = btn.dataset.metric; commit({ push: true }); };
+  $$("#tail-metric button").forEach((btn) => {
+    btn.onclick = () => { state.tailMetric = btn.dataset.tailMetric === "share" ? "share" : "diff"; commit({ push: true }); };
   });
   $("#play-rho").onclick = toggleSweep;
 }
@@ -1869,7 +1867,7 @@ function updateRiskControls() {
   set("risk-rho", "rho", opts.rhos, (v) => fmtNum(v, 3));
   set("risk-pd", "pd", opts.pds, fmtX);
   set("risk-lgd", "lgd", opts.lgds, fmtX);
-  $$("#surface-metrics button").forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.metric === state.surfaceMetric ? "true" : "false"));
+  $$("#tail-metric button").forEach((btn) => btn.setAttribute("aria-pressed", btn.dataset.tailMetric === state.tailMetric ? "true" : "false"));
 }
 
 function renderRisk() {
@@ -1879,7 +1877,7 @@ function renderRisk() {
   updateRiskControls();
   const scenario = scenarioForState();
   const hist = scenario && sc.histograms[scenario.key];
-  $("#scenario-sub").textContent = "The same state drives the histogram and the surface.";
+  $("#scenario-sub").textContent = "The same state drives the histogram and the tail-by-grade chart.";
   $("#scenario-badge").textContent = scenarioNotation(scenario);
   const kpis = $("#risk-kpis");
   if (hist && hist.exact) {
@@ -1897,7 +1895,7 @@ function renderRisk() {
   }
   if (state.view === "risk") {
     drawLossChart(hist, scenario);
-    drawSurface();
+    drawTailByGrade(scenario);
   }
 }
 
@@ -1999,96 +1997,322 @@ function drawLossChart(hist, scenario) {
   if (!ok) showFallback(host, "assets/loss_distribution.png", "The interactive histogram could not be drawn; a static figure is shown.");
 }
 
-function surfaceMatrix(metric) {
-  const surf = D.interactive && D.interactive.risk_surface;
-  if (!surf) return null;
-  const rhos = surf.rhos; const pds = surf.pd_multipliers;
-  const total = D.simulation.total_ead || 1;
-  const z = pds.map((pd) => rhos.map((rho) => {
-    let found = 0;
-    for (let i = 0; i < surf.grid.rho.length; i += 1) {
-      if (Math.abs(surf.grid.rho[i] - rho) < 1e-9 && Math.abs(surf.grid.pd_mult[i] - pd) < 1e-9) {
-        found = (surf.grid[metric] && surf.grid[metric][i]) || 0;
-        break;
-      }
-    }
-    return (found / total) * 100;
-  }));
-  return { rhos, pds, z };
+function tailData() {
+  return D && D.interactive && D.interactive.tail_by_grade ? D.interactive.tail_by_grade : null;
 }
-function surfaceHeight(host) {
-  if (window.innerWidth < 700) return 340;
+function tailZLabel() {
+  return state.tailMetric === "share" ? "Share of tail loss (%)" : "Tail share minus EL share (pp)";
+}
+function tailDiff(cell) {
+  return (cell.tail_share - cell.el_share) * 100;
+}
+function tailValue(cell) {
+  return state.tailMetric === "share" ? cell.tail_share * 100 : tailDiff(cell);
+}
+function tailHoverTemplate() {
+  return "Grade %{customdata[0]}<br>rho=%{customdata[1]}<br>Tail share=%{customdata[2]}%<br>EL share=%{customdata[3]}%<br>Difference=%{customdata[4]} pp<br>Tail / EL=%{customdata[5]}x<br>Tail paths=%{customdata[6]}<br>+/-1 SE=%{customdata[7]} pp<extra></extra>";
+}
+function tailRhoTicks(rhos, baseRho, selectedIndex = null) {
+  const vals = [];
+  for (let i = 0; i < rhos.length; i += 2) vals.push(i);
+  const baseIndex = nearestIndex(rhos, baseRho);
+  if (!vals.includes(baseIndex)) vals.push(baseIndex);
+  if (selectedIndex != null && !vals.includes(selectedIndex)) {
+    let nearest = vals[0];
+    for (const value of vals) {
+      if (Math.abs(value - selectedIndex) < Math.abs(nearest - selectedIndex)) nearest = value;
+    }
+    if (nearest !== baseIndex && Math.abs(nearest - selectedIndex) <= 1) {
+      vals.splice(vals.indexOf(nearest), 1);
+    }
+    vals.push(selectedIndex);
+  }
+  vals.sort((a, b) => a - b);
+  return {
+    vals,
+    text: vals.map((i) => i === selectedIndex ? `rho = ${fmtNum(rhos[i], 2)}` : fmtNum(rhos[i], 2)),
+  };
+}
+function tailGradeList(items, order) {
+  if (!items.length) return "none";
+  if (items.length >= 3) {
+    const positions = items.map((grade) => order.indexOf(grade));
+    const contiguous = positions.every((value, index) => index === 0 || value === positions[index - 1] + 1);
+    if (contiguous) return `${items[0]} to ${items[items.length - 1]}`;
+  }
+  return items.join(", ");
+}
+function tailSubtitle(tail, selectedRho, selectedCells) {
+  const deltas = selectedCells.map((cell) => ({ ...cell, diff: tailDiff(cell) }));
+  const top = deltas.slice().sort((a, b) => b.diff - a.diff)[0];
+  const requested = state.risk.rho == null ? tail.base_rho : state.risk.rho;
+  const nearestNote = Math.abs(Number(requested) - selectedRho) > 1e-9
+    ? ` (nearest grid point to rho = ${fmtNum(requested, 2)})`
+    : "";
+  if (!top) return "Tail-loss over- and under-representation by loan grade and asset correlation.";
+  const above = deltas.filter((cell) => cell.diff > 0).map((cell) => cell.grade);
+  const below = deltas.filter((cell) => cell.diff < 0).map((cell) => cell.grade);
+  return `At rho = ${fmtNum(selectedRho, 2)}${nearestNote}, grade ${top.grade} is ${fmtPct(top.el_share, 1)} of expected loss but ${fmtPct(top.tail_share, 1)} of tail loss (${fmtNum(top.ratio, 2)}x). Above EL share: ${tailGradeList(above, tail.grades)}. Below: ${tailGradeList(below, tail.grades)}.`;
+}
+function tailDiffScale(p) {
+  return [[0, p.lilacDark], [0.5, p.border], [1, p.teal]];
+}
+function renderTailLegend(tail) {
+  const host = $("#tail-legend");
+  if (!host) return;
+  if (state.tailMetric === "share") {
+    const swatches = tail.grades.map((grade, index) => {
+      const color = scaleColor(index / Math.max(1, tail.grades.length - 1));
+      return `<span class="legend-item grade-item"><span class="grade-swatch" style="background:${color}"></span><span class="grade-letter">${grade}</span></span>`;
+    }).join("");
+    host.innerHTML = `<span class="legend-title">Color: loan grade (A low risk to G high risk)</span>${swatches}`;
+  } else {
+    const p = palette();
+    host.innerHTML = `<span class="legend-title">Color: difference from EL share</span><span class="legend-item"><span class="swatch" style="background:${p.teal}"></span>Over-represented in the tail</span><span class="legend-item"><span class="swatch" style="background:${p.border}"></span>Near zero</span><span class="legend-item"><span class="swatch" style="background:${p.lilacDark}"></span>Under-represented</span>`;
+  }
+}
+function tailChartHeight(host) {
+  if (window.innerWidth < 700) return 400;
   if (window.matchMedia("(min-width: 1001px)").matches) {
     return Math.max(540, Math.round(host.clientHeight || 540));
   }
   return 540;
 }
-function drawSurface() {
+function syncTailHeight(host) {
+  if (!PLOTLY || !host || !host.__plotted || !host._fullLayout) return;
+  const target = tailChartHeight(host);
+  const current = Math.round(host._fullLayout?.height || 0);
+  if (Math.abs(target - current) <= 1 || host.__tailHeightPending) return;
+  host.__tailHeightPending = true;
+  Promise.resolve(PLOTLY.relayout(host, { height: target }))
+    .catch((err) => console.error("Tail chart height sync failed", err))
+    .finally(() => { host.__tailHeightPending = false; });
+}
+function tailBox(cx, cy, z, width, depth) {
+  const x0 = cx - width / 2;
+  const x1 = cx + width / 2;
+  const y0 = cy - depth / 2;
+  const y1 = cy + depth / 2;
+  const vertices = [
+    [x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0],
+    [x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z],
+  ];
+  const faces = [
+    [0, 1, 2], [0, 2, 3], [4, 6, 5], [4, 7, 6],
+    [0, 4, 5], [0, 5, 1], [1, 5, 6], [1, 6, 2],
+    [2, 6, 7], [2, 7, 3], [3, 7, 4], [3, 4, 0],
+  ];
+  return { vertices, faces };
+}
+function drawTailByGrade(scenario) {
   const host = $("#surface-chart");
-  const surf = D.interactive && D.interactive.risk_surface;
-  if (!host || !surf) return;
+  const tail = tailData();
+  if (!host || !tail) return;
   const p = palette();
-  const sc = D.interactive && D.interactive.scenario_explorer;
-  const base = surf.base_case;
-  const baseText = base ? ` The outlined marker is the base case (ρ=${fmtNum(base.rho, 2)}, PD stress=${fmtX(base.pd_mult)}).` : "";
-  $("#surface-sub").textContent = `${SURFACE_METRICS[state.surfaceMetric]} as % of EAD · ${fmtInt(surf.n_paths_per_point)} paths per grid point.${baseText}`;
-  const zLabel = $("#surface-z-label");
-  if (zLabel) zLabel.textContent = `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)`;
+  const grades = tail.grades;
+  const rhos = tail.rhos;
+  const cells = tail.cells;
+  const cellMap = new Map(cells.map((cell) => [`${cell.grade}|${cell.rho}`, cell]));
+  const requestedRho = state.risk.rho == null ? tail.base_rho : state.risk.rho;
+  const selectedRho = nearestValue(rhos, requestedRho);
+  const selectedIndex = nearestIndex(rhos, requestedRho);
+  const selectedCells = grades.map((grade) => cellMap.get(`${grade}|${selectedRho}`)).filter(Boolean);
+  const tailPaths = selectedCells.length ? selectedCells[0].n_tail_paths : 0;
+  const metricLabel = tailZLabel();
+  const rhoTicks = tailRhoTicks(rhos, tail.base_rho);
+  const rhoTicks3d = tailRhoTicks(rhos, tail.base_rho, selectedIndex);
+  const diffs = cells.map((cell) => tailDiff(cell));
+  const maxAbsDiff = Math.max(...diffs.map((value) => Math.abs(value)));
+  const diffStep = maxAbsDiff > 3 ? 2 : maxAbsDiff > 1 ? 1 : 0.5;
+  const diffLow = Math.min(0, Math.floor(Math.min(...diffs) / diffStep) * diffStep);
+  const diffHigh = Math.max(0, Math.ceil(Math.max(...diffs) / diffStep) * diffStep);
+  const diffTicks = [];
+  for (let value = diffLow; value <= diffHigh + 1e-9; value += diffStep) diffTicks.push(Number(value.toFixed(6)));
+  const diffTickText = diffTicks.map((value) => value > 0 ? `+${fmtNum(value, diffStep < 1 ? 1 : 0)}` : fmtNum(value, diffStep < 1 ? 1 : 0));
+  const shareMax = Math.max(...cells.map((cell) => cell.tail_share * 100));
+  const zRange = state.tailMetric === "share" ? [0, shareMax * 1.08] : [diffLow, diffHigh];
+
+  $("#surface-sub").textContent = tailSubtitle(tail, selectedRho, selectedCells);
+  const axisText = state.tailMetric === "share"
+    ? "z axis: share of tail loss in percent."
+    : "z axis: tail share minus expected-loss share in percentage points. Bars above zero are over-represented in the tail; bars below zero are under-represented.";
+  host.setAttribute("aria-label", `Chart of tail over- and under-representation. x axis: loan grade. y axis: asset correlation rho. ${axisText}`);
+  renderTailLegend(tail);
   const note = $("#surface-note");
-  if (note && sc) {
-    note.textContent = `Histogram scenarios use ${fmtInt(sc.n_paths_per_scenario)} paths; surface grid points use ${fmtInt(surf.n_paths_per_point)}. The difference is Monte Carlo noise, not a different portfolio.`;
+  if (note) {
+    note.textContent = `Tail = portfolio loss at or above VaR 99% in ${fmtInt(tail.n_simulations)} simulated years; ${fmtInt(tailPaths)} tail paths define it per rho. The bootstrap SE is about 0.01-0.03 pp, below the chart's visual resolution, so no whiskers are drawn; the tooltip still reports the SE (${fmtInt(tail.n_bootstrap)} resamples). This is simulation noise, not model uncertainty. One common asset correlation is assumed for all grades; low-PD grades gain relative weight in bad years under that assumption. Bucket-level simulation; LGD is constant per bucket; base PD and LGD stress.`;
   }
-  if (!PLOTLY) { showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static risk surface is shown."); return; }
-  const matrix = surfaceMatrix(state.surfaceMetric);
-  if (!matrix) return;
-  const { rhos, pds, z } = matrix;
-  const markerRho = nearestValue(rhos, state.risk.rho);
-  const markerPd = nearestValue(pds, state.risk.pd);
-  const markerZ = z[pds.indexOf(markerPd)]?.[rhos.indexOf(markerRho)] || 0;
-  const baseRho = nearestValue(rhos, surf.base_case?.rho ?? rhos[0]);
-  const basePd = nearestValue(pds, surf.base_case?.pd_mult ?? pds[0]);
-  const baseZ = z[pds.indexOf(basePd)]?.[rhos.indexOf(baseRho)] || 0;
-  const height = surfaceHeight(host);
+  host.dataset.selectedRho = String(selectedRho);
+  host.dataset.metric = state.tailMetric;
+
+  if (!PLOTLY) {
+    showFallback(host, "assets/risk_surface_static.png", "Plotly is blocked; the static over/under-representation heatmap is shown.");
+    return;
+  }
+
+  const height = tailChartHeight(host);
+  const gradeX = (grade) => grades.indexOf(grade);
+  const rhoY = (rho) => rhos.indexOf(rho);
   let ok = false;
+  const hoverTemplate = tailHoverTemplate();
+
+  const narrowChart = host.clientWidth < 650;
   if (!hasWebGL() || window.innerWidth < 700) {
+    const isDiff = state.tailMetric === "diff";
+    const z = rhos.map((rho) => grades.map((grade) => tailValue(cellMap.get(`${grade}|${rho}`))));
+    const customdata = rhos.map((rho) => grades.map((grade) => {
+      const cell = cellMap.get(`${grade}|${rho}`);
+      return [grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)];
+    }));
+    const colorbar = {
+      title: { text: isDiff ? "pp" : "%", side: "top", font: { size: 10 } },
+      thickness: 9, len: 0.88, tickfont: { size: 11 },
+    };
+    if (isDiff) {
+      colorbar.tickvals = diffTicks;
+      colorbar.ticktext = diffTickText;
+    } else {
+      colorbar.tickformat = ".0f";
+    }
     ok = plot(host, [
-      { z, x: rhos, y: pds, type: "heatmap", colorscale: p.riskScale, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
-      { x: [markerRho], y: [markerPd], mode: "markers", type: "scatter", marker: { symbol: "x", size: 12, color: p.ink, line: { width: 2, color: p.surface } }, hoverinfo: "skip", showlegend: false },
-      { x: [baseRho], y: [basePd], mode: "markers+text", type: "scatter", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { symbol: "circle", size: 24, color: p.surface, line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
+      {
+        z, x: grades.map((_, i) => i), y: rhos.map((_, i) => i), type: "heatmap",
+        colorscale: isDiff ? tailDiffScale(p) : p.riskScale,
+        zmin: isDiff ? diffLow : 0, zmax: isDiff ? diffHigh : shareMax, zmid: isDiff ? 0 : undefined,
+        customdata, colorbar, hovertemplate: hoverTemplate,
+      },
+      {
+        x: [gradeX(grades[0]) - 0.5, gradeX(grades[grades.length - 1]) + 0.5],
+        y: [selectedIndex, selectedIndex], mode: "lines", type: "scatter",
+        line: { color: p.ink, width: 3, dash: "dash" }, hoverinfo: "skip", showlegend: false,
+      },
     ], {
       height,
-      title: { text: "2D heatmap fallback (no WebGL)", font: { size: 12 } },
-      xaxis: { title: "ρ" }, yaxis: { title: "PD stress" }, margin: { l: 58, r: 18, t: 40, b: 45 },
+      xaxis: { title: { text: "Loan grade", font: { size: 12 } }, tickvals: grades.map((_, i) => i), ticktext: grades, tickangle: 0, tickfont: { size: 11 }, automargin: true, range: [-0.5, grades.length - 0.5], zeroline: false },
+      yaxis: { title: { text: "Asset correlation rho", font: { size: 12 } }, tickvals: rhoTicks.vals, ticktext: rhoTicks.text, tickfont: { size: 11 }, range: [-0.5, rhos.length - 0.5], zeroline: false },
+      margin: { l: 52, r: 8, t: 24, b: 64 },
+      shapes: [{ type: "rect", xref: "x", yref: "y", x0: -0.5, x1: grades.length - 0.5, y0: selectedIndex - 0.5, y1: selectedIndex + 0.5, line: { color: p.ink, width: 2 }, fillcolor: "rgba(0,0,0,0)" }],
     });
     host.dataset.mode = "heatmap";
   } else {
-    ok = plot(host, [
-      { type: "surface", z, x: rhos, y: pds, colorscale: p.riskScale, showscale: true, colorbar: { tickformat: ".1f" }, hovertemplate: "ρ=%{x}<br>PD stress=%{y}<br>%{z:.1f}% of EAD<extra></extra>" },
-      { type: "scatter3d", x: [markerRho], y: [markerPd], z: [markerZ], mode: "markers", marker: { size: 4, color: p.ink, symbol: "x" }, hoverinfo: "skip", showlegend: false },
-      { type: "scatter3d", x: [baseRho], y: [basePd], z: [baseZ], mode: "markers+text", text: ["base case"], textposition: "top center", textfont: { size: 12, color: p.ink }, marker: { size: 14, color: p.surface, symbol: "circle", line: { width: 2, color: p.ink } }, hovertemplate: "Base case<extra></extra>", showlegend: false },
-    ], {
+    const traces = [];
+    grades.forEach((grade, gi) => {
+      const color = scaleColor(gi / Math.max(1, grades.length - 1));
+      rhos.forEach((rho, ri) => {
+        const cell = cellMap.get(`${grade}|${rho}`);
+        const isSelected = ri === selectedIndex;
+        const box = tailBox(gi, ri, tailValue(cell), 0.68, 0.46);
+        const cd = [grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)];
+        const trace = {
+          type: "mesh3d", x: box.vertices.map((v) => v[0]), y: box.vertices.map((v) => v[1]), z: box.vertices.map((v) => v[2]),
+          i: box.faces.map((f) => f[0]), j: box.faces.map((f) => f[1]), k: box.faces.map((f) => f[2]),
+          customdata: box.vertices.map(() => cd), hovertemplate: hoverTemplate,
+          color, opacity: isSelected ? 0.98 : 0.52, flatshading: true, showscale: false,
+          name: `Grade ${grade}`, lighting: { ambient: 0.72, diffuse: 0.72, specular: 0.18, roughness: 0.72 },
+        };
+        if (isSelected) trace.line = { color: p.ink, width: 3 };
+        traces.push(trace);
+      });
+    });
+
+    if (state.tailMetric === "diff") {
+      traces.push({
+        type: "surface", x: [0, grades.length - 1], y: [0, rhos.length - 1],
+        z: [[0, 0], [0, 0]], opacity: 0.18, showscale: false,
+        colorscale: [[0, p.ink], [1, p.ink]], hoverinfo: "skip", showlegend: false,
+      });
+      traces.push({
+        type: "scatter3d",
+        x: [-0.55, grades.length - 0.45, grades.length - 0.45, -0.55, -0.55],
+        y: [-0.45, -0.45, rhos.length - 0.55, rhos.length - 0.55, -0.45],
+        z: [0, 0, 0, 0, 0], mode: "lines",
+        line: { color: p.ink, width: 2 }, hoverinfo: "skip", showlegend: false,
+      });
+    }
+
+    grades.forEach((grade, gi) => {
+      const cell = cellMap.get(`${grade}|${selectedRho}`);
+      const box = tailBox(gi, selectedIndex, tailValue(cell), 0.68, 0.46);
+      const [x0, y0, z0] = box.vertices[0];
+      const [x1, , ] = box.vertices[1];
+      const [, y1, ] = box.vertices[2];
+      const zTop = box.vertices[4][2];
+      traces.push({
+        type: "scatter3d",
+        x: [x0, x1, x1, x0, x0], y: [y0, y0, y1, y1, y0], z: [zTop, zTop, zTop, zTop, zTop],
+        mode: "lines", line: { color: p.ink, width: 4 }, hoverinfo: "skip", showlegend: false,
+      });
+      for (const [edgeX, edgeY] of [[x0, y0], [x1, y0]]) {
+        traces.push({
+          type: "scatter3d", x: [edgeX, edgeX], y: [edgeY, edgeY], z: [0, zTop],
+          mode: "lines", line: { color: p.ink, width: 3 }, hoverinfo: "skip", showlegend: false,
+        });
+      }
+    });
+    const hoverX = []; const hoverY = []; const hoverZ = []; const hoverData = [];
+    rhos.forEach((rho, ri) => {
+      grades.forEach((grade, gi) => {
+        const cell = cellMap.get(`${grade}|${rho}`);
+        hoverX.push(gi); hoverY.push(ri); hoverZ.push(tailValue(cell));
+        hoverData.push([grade, fmtNum(rho, 2), fmtNum(cell.tail_share * 100, 2), fmtNum(cell.el_share * 100, 2), fmtSigned(tailDiff(cell), 2), fmtNum(cell.ratio, 2), fmtInt(cell.n_tail_paths), fmtNum(cell.tail_share_se * 100, 2)]);
+      });
+    });
+    traces.push({
+      type: "scatter3d", x: hoverX, y: hoverY, z: hoverZ, mode: "markers",
+      marker: { size: 10, color: p.ink, opacity: 0.001 },
+      customdata: hoverData, hovertemplate: hoverTemplate, showlegend: false,
+    });
+    const axisMarkZ = zRange[0];
+    traces.push({
+      type: "scatter3d", x: [-0.62, grades.length - 0.38], y: [selectedIndex, selectedIndex],
+      z: [axisMarkZ, axisMarkZ], mode: "lines", line: { color: p.ink, width: 2 },
+      hoverinfo: "skip", showlegend: false,
+    });
+
+    const zaxis = { title: { text: metricLabel, font: { size: 13 } }, tickfont: { size: 12 }, color: p.muted, range: zRange };
+    if (state.tailMetric === "diff") {
+      const hideLowTick = diffLow < 0;
+      zaxis.tickvals = hideLowTick ? diffTicks.filter((value) => value !== diffLow) : diffTicks;
+      zaxis.ticktext = hideLowTick ? diffTickText.filter((_, index) => diffTicks[index] !== diffLow) : diffTickText;
+    } else {
+      zaxis.tickformat = ".0f";
+    }
+    ok = plot(host, traces, {
       height,
       scene: {
-        xaxis: { title: { text: "ρ" } },
-        yaxis: { title: { text: "PD stress" } },
-        zaxis: { title: { text: `${SURFACE_METRICS[state.surfaceMetric]} (% of EAD)` }, tickformat: ".1f" },
-        camera: { eye: { x: 1.45, y: 1.45, z: 1.35 } },
-        aspectratio: { x: 1.2, y: 1, z: 0.78 },
+        domain: { x: [0.08, 0.995], y: [0.02, 1.0] },
+        xaxis: { title: { text: "Loan grade", font: { size: 13 } }, tickvals: grades.map((_, i) => i), ticktext: grades, tickfont: { size: 12 }, range: [-0.6, grades.length - 0.4], color: p.muted },
+        yaxis: { title: { text: "Asset correlation rho", font: { size: 13 } }, tickvals: rhoTicks3d.vals, ticktext: rhoTicks3d.text, tickfont: { size: 12 }, range: [-0.6, rhos.length - 0.4], color: p.muted },
+        zaxis,
+        camera: { eye: narrowChart ? { x: 1.7, y: 1.65, z: 1.2 } : { x: 1.55, y: 1.5, z: 1.08 } },
+        aspectratio: { x: narrowChart ? 0.85 : 0.95, y: 1, z: 0.9 },
       },
-      margin: { l: 48, r: 8, t: 8, b: 8 },
+      margin: { l: 8, r: 4, t: 0, b: 12 },
+      showlegend: false,
     });
     host.dataset.mode = "surface";
   }
-  if (!ok) { showFallback(host, "assets/risk_surface_static.png", "The surface could not be drawn; a static figure is shown."); return; }
-  if (!host.__surfaceResizeObserver && window.ResizeObserver) {
-    host.__surfaceResizeObserver = new ResizeObserver(() => {
-      if (!PLOTLY || !host.__plotted) return;
-      const target = surfaceHeight(host);
-      const current = Math.round(host._fullLayout?.height || 0);
-      if (Math.abs(target - current) > 1) PLOTLY.relayout(host, { height: target });
-    });
-    host.__surfaceResizeObserver.observe(host);
+  host.__tailNarrow = narrowChart;
+
+  if (!ok) {
+    showFallback(host, "assets/risk_surface_static.png", "The chart could not be drawn; a static over/under-representation heatmap is shown.");
+    return;
   }
+  if (!host.__tailResizeObserver && window.ResizeObserver) {
+    host.__tailResizeObserver = new ResizeObserver(() => {
+      if (!PLOTLY || !host.__plotted) return;
+      const narrowNow = host.clientWidth < 650;
+      if (host.__tailNarrow !== narrowNow) {
+        drawTailByGrade();
+        return;
+      }
+      syncTailHeight(host);
+    });
+    host.__tailResizeObserver.observe(host);
+  }
+  const syncSoon = () => requestAnimationFrame(() => syncTailHeight(host));
+  if (host.__plotPromise) Promise.resolve(host.__plotPromise).then(syncSoon, syncSoon);
+  syncSoon();
 }
 function nearestValue(values, target) {
   return values[nearestIndex(values, target)];

@@ -66,16 +66,10 @@
     "term": "var"
   },
   "surface": {
-    "title": "VaR surface",
-    "text": "The surface shows the selected risk metric across ρ and PD stress on the precomputed grid. The dark marker is the current scenario and the outlined marker is the base case. It does not change the sliders.",
-    "try": "Rotate the surface to a high-ρ, high-PD corner, then use the sliders and read the histogram.",
+    "title": "Tail loss by grade",
+    "text": "The difference view shows each grade's share of the worst 1% of simulated portfolio losses minus its share of expected loss, in percentage points. Bars above 0 are over-represented in the tail; bars below 0 are under-represented. The chart assumes one common asset correlation for all grades; under that assumption, low-PD grades gain relative weight in bad years, so the finding depends on the assumption. The result is a bucket-level simulation with LGD constant per bucket and base PD/LGD stress. The bootstrap SE over 1,000 tail paths is about 0.01-0.03 pp, below the chart's visual resolution; it is reported in the tooltip and is simulation noise, not model uncertainty. The chart does not change the sliders.",
+    "try": "Move the rho slider and compare grade A's over-representation with the under-represented grades; switch to Share of tail loss (%) to see the level.",
     "term": "vasicek"
-  },
-  "surface-metric": {
-    "title": "Surface metric",
-    "text": "All three options use the same simulation grid, so only the displayed metric changes.",
-    "try": "Compare the shape of EL with the shape of ES 99.9%.",
-    "term": "var"
   },
   "sim-dti": {
     "title": "Debt-to-income ratio",

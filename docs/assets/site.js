@@ -2074,9 +2074,9 @@ function renderTailLegend(tail) {
 function tailChartHeight(host) {
   if (window.innerWidth < 700) return 400;
   if (window.matchMedia("(min-width: 1001px)").matches) {
-    return Math.max(560, Math.round(host.clientHeight || 560));
+    return Math.max(540, Math.round(host.clientHeight || 540));
   }
-  return 560;
+  return 540;
 }
 function syncTailHeight(host) {
   if (!PLOTLY || !host || !host.__plotted || !host._fullLayout) return;

@@ -20,10 +20,16 @@ selection.
 
 ![Linked portfolio explorer and risk lab](docs/assets/dashboard.gif)
 
+![Tail loss by grade as the asset correlation rho changes](assets/readme/risklab-sweep.gif)
+
+Tail loss by grade as the asset correlation rho changes.
+
 The GIF is generated from the current local site (Total folder sheet 3, State map,
-Risk Lab top). Regenerate it with `npm ci`, `npx playwright install chromium`, then
+Risk Lab top, Tail loss by grade, Evidence model comparison). Regenerate it with
+`npm ci`, `npx playwright install chromium`, then
 `python scripts/make_dashboard_gif.py`; the script captures the frames with Playwright
-and assembles them with Pillow at `docs/assets/dashboard.gif`.
+and assembles them with Pillow at `docs/assets/dashboard.gif`. The optional rho-sweep
+GIF is generated with `python scripts/make_risklab_sweep_gif.py`.
 
 An end-to-end, reproducible credit-risk pipeline built on the public Lending Club
 loan book (2007–2018):

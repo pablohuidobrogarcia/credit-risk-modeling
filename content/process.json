@@ -40,7 +40,7 @@
       "label": "Simulation",
       "what": "Built a Vasicek single-factor Monte Carlo over grade x PD-decile buckets, swept asset correlation from 0.02 to 0.15 (including the Basel-implied {rho_basel}), added PD and LGD stress, and tested stratified, antithetic and importance-sampling variance reduction.",
       "why": "Correlation is a portfolio effect, so averaging PD first would hide the tail.",
-      "learned": "Importance sampling cuts the tail-VaR error by 5.11 times, while antithetic sampling gives almost nothing. Capital figures depend strongly on the correlation."
+      "learned": "Importance sampling cuts the tail-VaR error by {is_rmse_factor} times, while antithetic sampling gives almost nothing. Capital figures depend strongly on the correlation."
     }
   ]
 }

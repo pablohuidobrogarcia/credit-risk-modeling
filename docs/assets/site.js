@@ -3147,12 +3147,9 @@ function renderWelcome() {
             <p id="welcome-problem">${esc(resolveInfoText(WELCOME.problem.text))}</p>
           </section>
           <section>
-            <h3>${esc(WELCOME.why.heading)}</h3>
-            <p>${esc(resolveInfoText(WELCOME.why.text))}</p>
-          </section>
-          <section>
             <h3>${esc(WELCOME.what.heading)}</h3>
             <ol class="welcome-list">${items}</ol>
+            ${WELCOME.pointer ? `<p class="welcome-pointer">${esc(resolveInfoText(WELCOME.pointer))}</p>` : ""}
           </section>
         </div>
         <div class="welcome-side">
@@ -3171,6 +3168,20 @@ function renderWelcome() {
   return true;
 }
 
+function setWelcomeBackgroundInert(inert) {
+  const overlay = $("#welcome-overlay");
+  $$("body > *").forEach((element) => {
+    if (element === overlay || element.tagName === "SCRIPT") return;
+    if (inert) {
+      element.inert = true;
+      element.setAttribute("aria-hidden", "true");
+    } else {
+      element.inert = false;
+      element.removeAttribute("aria-hidden");
+    }
+  });
+}
+
 function openWelcome() {
   const overlay = $("#welcome-overlay");
   if (!overlay || welcomeOpen || !renderWelcome()) return;
@@ -3181,6 +3192,7 @@ function openWelcome() {
   welcomeOpen = true;
   overlay.hidden = false;
   document.body.classList.add("welcome-open");
+  setWelcomeBackgroundInert(true);
   $("#welcome-dialog").focus({ preventScroll: true });
 }
 
@@ -3190,6 +3202,7 @@ function closeWelcome(restoreFocus = true) {
   welcomeOpen = false;
   overlay.hidden = true;
   document.body.classList.remove("welcome-open");
+  setWelcomeBackgroundInert(false);
   if (restoreFocus && welcomeLastFocus && typeof welcomeLastFocus.focus === "function") welcomeLastFocus.focus();
   welcomeLastFocus = null;
 }

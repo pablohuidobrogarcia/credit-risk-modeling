@@ -2250,43 +2250,31 @@ test("1360, 1000 and 390px stay clean in light and dark", async ({ page }) => {
   await expectNoErrors(errors);
 });
 
-test("welcome overlay presents the introduction, fits both widths and traps focus", async ({ page }) => {
+test("welcome overlay presents the introduction, fits three widths and traps focus", async ({ page }) => {
   await page.setViewportSize({ width: 1360, height: 900 });
   await page.emulateMedia({ colorScheme: "light" });
   const errors = await open(page, { keepWelcome: true });
   const overlay = page.locator("#welcome-overlay");
   const dialog = page.locator("#welcome-dialog");
+  const forbidden = ["2014-2015", "2010-2013", "90%", "36-month"];
   await expect(overlay).toBeVisible();
   await expect(dialog).toHaveAttribute("role", "dialog");
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(page.locator("#welcome-title")).toHaveText("Credit Risk Studio");
-  await expect(page.locator("#welcome-problem")).toHaveText("When a bank lends money, some borrowers will not pay it back. The bank does not know which ones, but it must still decide who to approve, at what price, and how much capital to keep in reserve.");
-  await expect(dialog).toContainText("Underestimate the losses and the bank can run out of capital in a bad year. Overestimate them and it rejects good customers.");
+  await expect(page.locator("#welcome-problem")).toHaveText("When a bank lends money, some borrowers will not pay it back. The bank does not know which ones, but it must still decide who to approve, at what price and how much capital to keep. Underestimate the losses and it can run out of capital in a bad year; overestimate them and it rejects good customers.");
   await expect(page.locator(".welcome-list li")).toHaveText([
     "Who is likely to default? A scorecard turns a borrower's profile into a probability of default (PD).",
     "How much could we lose? That probability becomes expected loss, and a Monte Carlo simulation measures bad-year losses (VaR).",
-    "Can we trust it? Everything is tested on later loans the model never saw (2014-2015), not on the data it learned from.",
+    "Can we trust it? Everything is tested on later loans the model never saw, and the modest results are reported as they are.",
   ]);
+  await expect(page.locator(".welcome-pointer")).toHaveText("The choices behind every number are in Portfolio Explorer, under How this was built.");
+  await expect(dialog).not.toContainText("Why it matters");
+  for (const string of forbidden) await expect(dialog).not.toContainText(string);
   await expect(page.locator(".welcome-data")).toHaveCount(0);
   await expect(page.locator(".welcome-cards")).toHaveCount(0);
   await expect(page.locator("[data-welcome-target]")).toHaveCount(0);
   await expect(dialog).toBeFocused();
 
-  const desktop = await dialog.evaluate((el) => {
-    const box = el.getBoundingClientRect();
-    return { x: box.x, y: box.y, right: box.right, bottom: box.bottom, client: el.clientHeight, scroll: el.scrollHeight };
-  });
-  expect(desktop.x).toBeGreaterThanOrEqual(0);
-  expect(desktop.y).toBeGreaterThanOrEqual(0);
-  expect(desktop.right).toBeLessThanOrEqual(1360);
-  expect(desktop.bottom).toBeLessThanOrEqual(900);
-  expect(desktop.scroll).toBeLessThanOrEqual(desktop.client + 1);
-  const centers = await page.evaluate(() => {
-    const copy = document.querySelector(".welcome-copy").getBoundingClientRect();
-    const side = document.querySelector(".welcome-side").getBoundingClientRect();
-    return { copy: copy.top + copy.height / 2, side: side.top + side.height / 2 };
-  });
-  expect(Math.abs(centers.copy - centers.side)).toBeLessThanOrEqual(1);
   for (const button of await page.locator("#welcome-dialog button").all()) {
     const box = await button.boundingBox();
     expect(box.height).toBeGreaterThanOrEqual(44);
@@ -2300,24 +2288,41 @@ test("welcome overlay presents the introduction, fits both widths and traps focu
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   const lightOnDark = await dialog.evaluate((el) => getComputedStyle(el).backgroundColor);
   expect(lightOnDark).not.toBe(darkBg);
+  await page.emulateMedia({ colorScheme: "light" });
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(overlay).toBeVisible();
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
-  const mobile = await dialog.evaluate((el) => {
-    const box = el.getBoundingClientRect();
-    return { x: box.x, right: box.right, bottom: box.bottom };
-  });
-  expect(mobile.x).toBeGreaterThanOrEqual(0);
-  expect(mobile.right).toBeLessThanOrEqual(391);
-  expect(mobile.bottom).toBeLessThanOrEqual(845);
-  const startBox = await page.locator("#welcome-start").boundingBox();
-  expect(startBox.y).toBeGreaterThanOrEqual(0);
-  expect(startBox.y + startBox.height).toBeLessThanOrEqual(844);
-  for (const button of await page.locator("#welcome-dialog button").all()) {
-    const box = await button.boundingBox();
-    expect(box.height).toBeGreaterThanOrEqual(44);
+  for (const [width, height] of [[1360, 800], [1000, 800], [390, 844]]) {
+    await page.setViewportSize({ width, height });
+    await expect(overlay).toBeVisible();
+    const layout = await page.evaluate(() => {
+      const box = (selector) => {
+        const rect = document.querySelector(selector).getBoundingClientRect();
+        return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+      };
+      const card = document.querySelector("#welcome-dialog");
+      return {
+        dialog: box("#welcome-dialog"),
+        copy: box(".welcome-copy"),
+        pointer: box(".welcome-pointer"),
+        actions: box(".welcome-side"),
+        start: box("#welcome-start"),
+        check: box(".welcome-check"),
+        client: card.clientHeight,
+        scroll: card.scrollHeight,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+        font: getComputedStyle(document.querySelector("#welcome-problem")).fontSize,
+      };
+    });
+    expect(layout.overflow, `${width}px overflow`).toBeLessThanOrEqual(1);
+    expect(layout.scroll).toBeLessThanOrEqual(layout.client + 1);
+    expect(layout.actions.y).toBeGreaterThanOrEqual(layout.pointer.bottom - 1);
+    expect(Math.abs(layout.actions.x - layout.copy.x)).toBeLessThanOrEqual(1);
+    expect(layout.actions.x).toBeGreaterThanOrEqual(layout.dialog.x);
+    expect(layout.actions.right).toBeLessThanOrEqual(layout.dialog.right);
+    expect(layout.start.x).toBeGreaterThanOrEqual(layout.actions.x);
+    expect(layout.start.y + layout.start.height).toBeLessThanOrEqual(height);
+    expect(layout.check.right).toBeLessThanOrEqual(layout.dialog.right);
+    expect(layout.dialog.bottom).toBeLessThanOrEqual(height);
+    expect(layout.font).toBe("15px");
   }
 
   await page.keyboard.press("Escape");
@@ -2325,6 +2330,10 @@ test("welcome overlay presents the introduction, fits both widths and traps focu
   await expect(page.locator("#view-learn")).toBeVisible();
   await expect(page.locator("#view-learn")).toBeFocused();
   await expect(page).toHaveURL(/view=learn/);
+  for (const string of forbidden) await expect(page.locator("#learn-guide")).not.toContainText(string);
+  await expect(page.locator("#view-learn .section-lead")).toHaveText("This is a descriptive view of historical Lending Club data, not a lending decision system. Segment differences are correlations, not causal effects.");
+  await expect(page.locator("#learn-guide .guide-card").nth(2).locator("h3")).toHaveText("3. From probability to money");
+  await expect(page.locator("#learn-guide .guide-card").nth(4).locator("h3")).toHaveText("5. Why does the window matter?");
   await expectNoErrors(errors);
 });
 
@@ -2668,6 +2677,7 @@ test("Learn guide, glossary, categories, search and hash round-trip", async ({ p
 
 test("Learn guide cards use ribbon pastels with ink text and white buttons", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1360, height: 800 });
   const errors = await open(page);
   await page.locator("#view-tab-learn").click();
   const cards = page.locator("#learn-guide .guide-card");
@@ -2675,9 +2685,12 @@ test("Learn guide cards use ribbon pastels with ink text and white buttons", asy
   const expectedBackgrounds = ["rgb(214, 205, 245)", "rgb(195, 207, 246)", "rgb(182, 220, 243)", "rgb(172, 223, 214)", "rgb(201, 232, 180)"];
   const results = await cards.evaluateAll((elements) => elements.map((card) => {
     const style = getComputedStyle(card);
-    const title = getComputedStyle(card.querySelector("h3"));
-    const body = getComputedStyle(card.querySelector("p"));
-    const button = getComputedStyle(card.querySelector(".btn"));
+    const titleNode = card.querySelector("h3");
+    const bodyNode = card.querySelector("p");
+    const title = getComputedStyle(titleNode);
+    const body = getComputedStyle(bodyNode);
+    const buttonNode = card.querySelector(".btn");
+    const button = getComputedStyle(buttonNode);
     return {
       background: style.backgroundColor,
       titleColor: title.color,
@@ -2686,6 +2699,10 @@ test("Learn guide cards use ribbon pastels with ink text and white buttons", asy
       buttonBackground: button.backgroundColor,
       buttonBorderWidth: button.borderTopWidth,
       buttonBorderStyle: button.borderTopStyle,
+      titleHeight: titleNode.getBoundingClientRect().height,
+      titleLineHeight: parseFloat(title.lineHeight),
+      buttonTop: buttonNode.getBoundingClientRect().top,
+      bodyFont: body.fontSize,
     };
   }));
   results.forEach((result, index) => {
@@ -2696,7 +2713,10 @@ test("Learn guide cards use ribbon pastels with ink text and white buttons", asy
     expect(result.buttonBackground).toBe("rgb(255, 255, 255)");
     expect(result.buttonBorderWidth).toBe("1px");
     expect(result.buttonBorderStyle).toBe("solid");
+    expect(result.titleHeight).toBeLessThanOrEqual(result.titleLineHeight + 1);
+    expect(result.bodyFont).toBe("14px");
   });
+  expect(Math.max(...results.map((result) => result.buttonTop)) - Math.min(...results.map((result) => result.buttonTop))).toBeLessThanOrEqual(1);
   await expectNoErrors(errors);
 });
 

@@ -13,8 +13,8 @@
       "label": "Open the applicant simulator"
     },
     {
-      "title": "3. How do we turn probability into money?",
-      "text": "Expected loss combines probability of default, loss given default and exposure at default. A probability of default is not a loss rate: recoveries reduce the loss, and exposure determines how much money is at risk.",
+      "title": "3. From probability to money",
+      "text": "Expected loss combines probability of default, loss given default and exposure at default. A default probability is not a loss rate: recoveries reduce the loss.",
       "action": "el",
       "label": "Inspect expected loss"
     },
@@ -26,7 +26,7 @@
     },
     {
       "title": "5. Why does the window matter?",
-      "text": "A loan only has an outcome when it finishes. Recent vintages are incomplete, and measuring only resolved loans changes the sample. The primary window is the mature 2014-2015, 36-month test set.",
+      "text": "A loan only has an outcome when it finishes, so recent loans that are still open would flatter a model. How the test window was chosen is explained in How this was built.",
       "action": "validation",
       "label": "See the evidence"
     }

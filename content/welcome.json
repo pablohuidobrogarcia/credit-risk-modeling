@@ -2,20 +2,17 @@
   "title": "Credit Risk Studio",
   "problem": {
     "heading": "The problem",
-    "text": "When a bank lends money, some borrowers will not pay it back. The bank does not know which ones, but it must still decide who to approve, at what price, and how much capital to keep in reserve."
-  },
-  "why": {
-    "heading": "Why it matters",
-    "text": "Underestimate the losses and the bank can run out of capital in a bad year. Overestimate them and it rejects good customers."
+    "text": "When a bank lends money, some borrowers will not pay it back. The bank does not know which ones, but it must still decide who to approve, at what price and how much capital to keep. Underestimate the losses and it can run out of capital in a bad year; overestimate them and it rejects good customers."
   },
   "what": {
     "heading": "What this project does",
     "items": [
       "Who is likely to default? A scorecard turns a borrower's profile into a probability of default (PD).",
       "How much could we lose? That probability becomes expected loss, and a Monte Carlo simulation measures bad-year losses (VaR).",
-      "Can we trust it? Everything is tested on later loans the model never saw (2014-2015), not on the data it learned from."
+      "Can we trust it? Everything is tested on later loans the model never saw, and the modest results are reported as they are."
     ]
   },
+  "pointer": "The choices behind every number are in Portfolio Explorer, under How this was built.",
   "primary": "Start exploring",
   "dismiss": "Don't show again"
 }
